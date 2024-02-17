@@ -20,24 +20,19 @@ extern "C"
 }
 #endif
 
-#pragma region Globals
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 bool drawLines = false;
-#pragma endregion
 
 void processInput(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 int main(int argc, char* argv[])
 {
-#pragma region Init opengl
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#pragma endregion
 
-#pragma region Create window
 	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Opengl v4.6", NULL, NULL);
 	if (window == NULL)
 	{
@@ -51,9 +46,7 @@ int main(int argc, char* argv[])
 	gladLoadGL();
 
 	glViewport(0, 0, WIDTH, HEIGHT);
-#pragma endregion
 
-#pragma region Load Shader
 	glEnable(GL_DEPTH_TEST);
 
 	float vertices[] = {
@@ -146,7 +139,6 @@ int main(int argc, char* argv[])
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
-#pragma endregion
 
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -198,7 +190,6 @@ int main(int argc, char* argv[])
 		glfwPollEvents();
 	}
 
-#pragma region Clean up
 	glDeleteVertexArrays(1, &VAO);
 	glDeleteBuffers(1, &VBO);
 	glDeleteBuffers(1, &EBO);
@@ -206,7 +197,6 @@ int main(int argc, char* argv[])
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
-#pragma endregion
 
 	return 0;
 }

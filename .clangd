@@ -1,0 +1,6 @@
+CompileFlags:
+	Add:
+    - -IC:/Users/mahdiy/Desktop/work/c/MGEngine\Dependencies\glad\include
+    - -IC:/Users/mahdiy/Desktop/work/c/MGEngine\Dependencies\glfw\include
+    - -IC:/Users/mahdiy/Desktop/work/c/MGEngine\Dependencies\glm
+    - -IC:/Users/mahdiy/Desktop/work/c/MGEngine\include

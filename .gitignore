@@ -2,3 +2,4 @@ x64
 .vs
 Dependencies/glfw/docs
 Dependencies/glm/doc
+build
