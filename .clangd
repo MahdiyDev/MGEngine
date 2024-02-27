@@ -1,6 +1,0 @@
-CompileFlags:
-	Add:
-    - -I/home/linux/Desktop/programming/c/MGEngine/Dependencies/glad/include
-    - -I/home/linux/Desktop/programming/c/MGEngine/Dependencies/glfw/include
-    - -I/home/linux/Desktop/programming/c/MGEngine/Dependencies/glm
-    - -I/home/linux/Desktop/programming/c/MGEngine/Dependencies/stb
