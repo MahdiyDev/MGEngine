@@ -42,7 +42,7 @@ make_build_dir:
 	cp -r ./shaders $(BUILDDIR)
 
 gen_clangd:
-	@rm .clangd
+	@rm -rf .clangd
 	@printf "CompileFlags:\n" >> .clangd
 	@printf "\tAdd:\n" >> .clangd
 	@printf "    - -I$(CURRENT_DIR)/Dependencies/glad/include\n" >> .clangd
