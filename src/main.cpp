@@ -12,7 +12,7 @@
 
 #include "Shader.h"
 
-#ifdef __cplusplus
+#if defined(WIN32)
 extern "C"
 {
 	__declspec(dllexport) uint32_t NvOptimusEnablement = 1;
