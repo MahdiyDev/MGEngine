@@ -1,3 +1,6 @@
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+#include "mge.h"
 #include <glad/glad.h>
 #include <iostream>
 
@@ -10,7 +13,6 @@
 #include "stb_image.h"
 
 #include "Shader.h"
-#include "window.h"
 
 #if defined(WIN32)
 extern "C" {
@@ -22,15 +24,9 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
-void processInput(GLFWwindow* window, int key, int scancode, int action, int mods);
-
 int main(int argc, char* argv[])
 {
-    Window window;
-
-    window.Init();
-
-    window.CreateWindow(WIDTH, HEIGHT, "MGEngine v1.0");
+    Init_Window(WIDTH, HEIGHT, "MGEngine v1.0");
 
     gladLoadGL();
 
@@ -130,9 +126,7 @@ int main(int argc, char* argv[])
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    window.SwapBuffers();
-
-    while (!window.WindowShouldClose()) {
+    while (!Window_Should_Close()) {
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -166,10 +160,9 @@ int main(int argc, char* argv[])
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        window.SwapBuffers();
+        Poll_Input_Events();
+        // window.Update();
         // window.EnableVSync(); // v-sync
-
-        window.HandleEvents();
     }
 
     glDeleteVertexArrays(1, &VAO);
@@ -177,7 +170,7 @@ int main(int argc, char* argv[])
     glDeleteBuffers(1, &EBO);
     newShader.CleanUp();
 
-    window.CloseWindow();
+    Close_Window();
 
     return 0;
 }

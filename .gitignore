@@ -4,3 +4,4 @@ Dependencies/glfw/docs
 Dependencies/glm/doc
 build
 .clangd
+.out
