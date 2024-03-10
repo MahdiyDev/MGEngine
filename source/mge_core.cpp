@@ -1,10 +1,16 @@
 #include "mge.h"
+#include "mge_gl.h"
 #include "mge_utils.h"
 #include <cstdint>
+#include <cstdio>
 
 extern int Init_Platform(void);
 extern void Close_Platform(void);
 
+typedef struct {
+    int x;
+    int y;
+} Point;
 typedef struct {
     uint32_t width;
     uint32_t height;
@@ -25,6 +31,8 @@ CoreData CORE = { 0 };
 #include "platforms/mge_code_destop.cpp"
 #endif
 
+static void Setup_Viewport(uint32_t width, uint32_t height);
+
 void Init_Window(uint32_t width, uint32_t height, const char* title)
 {
     TRACE_LOG(LOG_INFO, "Initializing MGE %s", MGE_VERSION);
@@ -38,6 +46,8 @@ void Init_Window(uint32_t width, uint32_t height, const char* title)
 
     Init_Platform();
 
+    Setup_Viewport(CORE.Window.display.width, CORE.Window.display.height);
+
     CORE.Window.shouldClose = false;
 }
 
@@ -46,4 +56,25 @@ void Close_Window(void)
     Close_Platform();
     CORE.Window.ready = false;
     TRACE_LOG(LOG_INFO, "Window closed successfully");
+}
+
+void Clear_Background(Color color)
+{
+    MgeGL_Clear_Color(color.r, color.g, color.b, color.a);
+    MgeGL_Clear_Screen_Buffers();
+}
+
+void Begin_Drawing(void)
+{
+}
+
+void End_Drawing(void)
+{
+    Swap_Screen_Buffer();
+    Poll_Input_Events();
+}
+
+void Setup_Viewport(uint32_t width, uint32_t height)
+{
+    MgeGL_Viewport(0, 0, width, height);
 }

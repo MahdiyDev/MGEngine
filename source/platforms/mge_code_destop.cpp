@@ -1,4 +1,5 @@
 #include "mge.h"
+#include "mge_gl.h"
 #include "mge_utils.h"
 
 #define GLFW_INCLUDE_NONE
@@ -52,6 +53,7 @@ int Init_Platform(void)
         TRACE_LOG(LOG_WARNING, "GLFW: Failed to initialize Window");
         return EXIT_FAILURE;
     }
+    TRACE_LOG(LOG_INFO, "GLFW: Window Created");
 
     glfwMakeContextCurrent(platform.window);
     result = glfwGetError(NULL);
@@ -59,6 +61,8 @@ int Init_Platform(void)
     if ((result != GLFW_NO_WINDOW_CONTEXT) && (result != GLFW_PLATFORM_ERROR)) {
         CORE.Window.ready = true;
     }
+
+    MgeGL_Load_Extensions((void*)glfwGetProcAddress);
 
     return EXIT_SUCCESS;
 }
@@ -68,7 +72,6 @@ void Poll_Input_Events(void)
     glfwPollEvents();
     CORE.Window.shouldClose = glfwWindowShouldClose(platform.window);
     glfwSetWindowShouldClose(platform.window, GLFW_FALSE);
-	Swap_Screen_Buffer();
 }
 
 void Swap_Screen_Buffer(void)

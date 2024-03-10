@@ -20,9 +20,36 @@ typedef enum {
     LOG_NONE // Disable logging
 } TraceLogLevel;
 
+typedef struct Color {
+    unsigned char r; // Color red value
+    unsigned char g; // Color green value
+    unsigned char b; // Color blue value
+    unsigned char a; // Color alpha value
+} Color;
+
+#define RED \
+    (Color) { 255, 0, 0, 255 }
+#define GREEN \
+    (Color) { 0, 255, 0, 255 }
+#define BLUE \
+    (Color) { 0, 0, 255, 255 }
+#define BLACK \
+    (Color) { 0, 0, 0, 255 }
+#define BLACK \
+    (Color) { 0, 0, 0, 255 }
+#define LIGHTGRAY \
+    (Color) { 200, 200, 200, 255 }
+#define GRAY \
+    (Color) { 130, 130, 130, 255 }
+#define DARKGRAY \
+    (Color) { 80, 80, 80, 255 }
+
 void Trace_Log(int logType, const char* text, ...);
 
 void Init_Window(uint32_t width, uint32_t height, const char* title);
-void Poll_Input_Events(void);
 bool Window_Should_Close(void);
 void Close_Window(void);
+
+void Clear_Background(Color color);
+void Begin_Drawing(void);
+void End_Drawing(void);
