@@ -6,3 +6,4 @@ build
 .clangd
 *.out
 *.o
+*.exe

@@ -1,11 +1,14 @@
 CC = gcc
 CXX = g++
 
-CXXFLAGS=-Wall -Werror
+CFLAGS=
+CXXFLAGS=-Wall -Werror -pedantic
+
+LIB_LINKS+=-lglfw3
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
-LIB_LINKS+=-lgdi32
+LIB_LINKS+=-lwinmm -lgdi32
 else
 CURRENT_DIR += $(shell pwd)
 endif
@@ -14,8 +17,8 @@ INCLUDES+=-I./$(SOURCE_DIR)
 INCLUDES+=-I./Dependencies/glad/include
 INCLUDES+=-I./Dependencies/glm
 INCLUDES+=-I./Dependencies/stb
-
-LIB_LINKS+=-lglfw3 -lGL
+INCLUDES+=-I./Dependencies/glfw/include
+LIB_DIR+=-L./Dependencies/glfw/lib
 
 SOURCE_DIR = source
 BUILD_DIR = build
@@ -32,16 +35,19 @@ EXECUTABLE = MGEngine
 all: make_build_dir $(EXECUTABLE)
 
 $(EXECUTABLE): $(COBJECTS) $(CXXOBJECTS)
-	$(CXX) $(CXXFLAGS) $(COBJECTS) $(CXXOBJECTS) -o $(BUILD_DIR)/$@ $(LIB_LINKS)
+	$(CXX) $(CXXFLAGS) $(COBJECTS) $(CXXOBJECTS) -o $(BUILD_DIR)/$@ $(LIB_DIR) $(LIB_LINKS)
 
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c
-	$(CC) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 test:
-	$(CXX) test.cpp source/mge_utils.cpp source/mge_core.cpp source/glad.c $(CXXFLAGS) $(INCLUDES) $(LIB_LINKS)
+	$(CXX) test.cpp source/mge_utils.cpp source/mge_core.cpp source/glad.c \
+	$(CXXFLAGS) $(INCLUDES) $(LIB_LINKS) \
+	-I./Dependencies/glfw/include \
+	-L. -lwinmm -lgdi32
 
 make_build_dir:
 	mkdir -p $(BUILD_OBJ_DIR)
