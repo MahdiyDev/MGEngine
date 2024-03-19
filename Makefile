@@ -2,23 +2,23 @@ CC = gcc
 CXX = g++
 
 CFLAGS=
-CXXFLAGS=-Wall -Werror -pedantic
+CXXFLAGS=-Wall -Werror -pedantic -std=c++14
 
 LIB_LINKS+=-lglfw3
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
 LIB_LINKS+=-lwinmm -lgdi32
+LIB_DIR+=-L./3rdparty/glfw/lib
 else
 CURRENT_DIR += $(shell pwd)
 endif
 
 INCLUDES+=-I./$(SOURCE_DIR)
-INCLUDES+=-I./Dependencies/glad/include
-INCLUDES+=-I./Dependencies/glm
-INCLUDES+=-I./Dependencies/stb
-INCLUDES+=-I./Dependencies/glfw/include
-LIB_DIR+=-L./Dependencies/glfw/lib
+INCLUDES+=-I./3rdparty/glad/include
+INCLUDES+=-I./3rdparty/glm
+INCLUDES+=-I./3rdparty/stb
+INCLUDES+=-I./3rdparty/glfw/include
 
 SOURCE_DIR = source
 BUILD_DIR = build
@@ -45,9 +45,7 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 
 test:
 	$(CXX) test.cpp source/mge_utils.cpp source/mge_core.cpp source/glad.c \
-	$(CXXFLAGS) $(INCLUDES) $(LIB_LINKS) \
-	-I./Dependencies/glfw/include \
-	-L. -lwinmm -lgdi32
+	$(CXXFLAGS) $(INCLUDES) $(LIB_DIR) $(LIB_LINKS)
 
 make_build_dir:
 	mkdir -p $(BUILD_OBJ_DIR)
@@ -60,10 +58,10 @@ gen_clangd:
 	@printf "\tAdd:\n" >> .clangd
 	@printf "    - $(CXXFLAGS)\n" >> .clangd
 	@printf "    - -I$(CURRENT_DIR)/${SOURCE_DIR}\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/Dependencies/glad/include\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/Dependencies/glfw/include\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/Dependencies/glm\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/Dependencies/stb\n" >> .clangd
+	@printf "    - -I$(CURRENT_DIR)/3rdparty/glad/include\n" >> .clangd
+	@printf "    - -I$(CURRENT_DIR)/3rdparty/glfw/include\n" >> .clangd
+	@printf "    - -I$(CURRENT_DIR)/3rdparty/glm\n" >> .clangd
+	@printf "    - -I$(CURRENT_DIR)/3rdparty/stb\n" >> .clangd
 
 .PHONY: clean
 clean:

@@ -6,6 +6,12 @@
 
 #define MGE_VERSION "v0.1"
 
+#if defined(__cplusplus)
+    #define CLITERAL(type)      type
+#else
+    #define CLITERAL(type)      (type)
+#endif
+
 // Callbacks to hook some internal functions
 typedef void (*Trace_Log_Callback)(int logLevel, const char* text, va_list args); // Logging: Redirect trace log messages
 
@@ -28,21 +34,21 @@ typedef struct Color {
 } Color;
 
 #define RED \
-    (Color) { 255, 0, 0, 255 }
+    CLITERAL(Color) { 255, 0, 0, 255 }
 #define GREEN \
-    (Color) { 0, 255, 0, 255 }
+    CLITERAL(Color) { 0, 255, 0, 255 }
 #define BLUE \
-    (Color) { 0, 0, 255, 255 }
+    CLITERAL(Color) { 0, 0, 255, 255 }
 #define BLACK \
-    (Color) { 0, 0, 0, 255 }
+    CLITERAL(Color) { 0, 0, 0, 255 }
 #define BLACK \
-    (Color) { 0, 0, 0, 255 }
+    CLITERAL(Color) { 0, 0, 0, 255 }
 #define LIGHTGRAY \
-    (Color) { 200, 200, 200, 255 }
+    CLITERAL(Color) { 200, 200, 200, 255 }
 #define GRAY \
-    (Color) { 130, 130, 130, 255 }
+    CLITERAL(Color) { 130, 130, 130, 255 }
 #define DARKGRAY \
-    (Color) { 80, 80, 80, 255 }
+    CLITERAL(Color) { 80, 80, 80, 255 }
 
 void Trace_Log(int logType, const char* text, ...);
 

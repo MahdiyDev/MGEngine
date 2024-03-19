@@ -6,7 +6,7 @@ int main(int argc, char** argv)
 
     while (!Window_Should_Close()) {
         Begin_Drawing();
-        	Clear_Background((Color) { 255, 32, 82, 255 });
+        	Clear_Background(CLITERAL(Color) { 255, 32, 82, 255 });
         End_Drawing();
     }
 
