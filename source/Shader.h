@@ -20,7 +20,7 @@ private:
 public:
 	Shader(const char* vertexPath, const char* fragmnetPath);
 
-	void Set_Vertices(void* vertices, size_t each_size, size_t actual_each_size);
+	void Set_Vertices(float* vertices, size_t each_size, size_t actual_each_size);
 	void DrawArrays(void);
 	void Use();
 	void SetValue(const std::string& name, bool value) const;

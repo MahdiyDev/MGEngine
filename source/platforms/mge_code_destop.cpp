@@ -34,6 +34,11 @@ int Init_Platform(void)
     glfwSetErrorCallback(Error_Callback);
 
     int result = glfwInit();
+	glfwWindowHint(GLFW_RESIZABLE, 1);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, 0);
 
     if (result == GLFW_FALSE) {
         TRACE_LOG(LOG_ERROR, "GLFW: Failed to initialize GLFW");
@@ -65,6 +70,11 @@ int Init_Platform(void)
     MgeGL_Load_Extensions((void*)glfwGetProcAddress);
 
     return EXIT_SUCCESS;
+}
+
+float Platform_Get_Time(void)
+{
+	return glfwGetTime();
 }
 
 void Poll_Input_Events(void)

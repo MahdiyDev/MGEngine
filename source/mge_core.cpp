@@ -6,6 +6,7 @@
 
 extern int Init_Platform(void);
 extern void Close_Platform(void);
+extern float Platform_Get_Time(void);
 
 typedef struct {
     int x;
@@ -56,6 +57,11 @@ void Close_Window(void)
     Close_Platform();
     CORE.Window.ready = false;
     TRACE_LOG(LOG_INFO, "Window closed successfully");
+}
+
+float Get_Time(void)
+{
+	return Platform_Get_Time();
 }
 
 void Clear_Background(Color color)

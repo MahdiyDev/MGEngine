@@ -1,8 +1,7 @@
 #include "Shader.h"
-#include "mge.h"
-#include "mge_math.h"
 #include "mge_utils.h"
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -43,6 +42,7 @@ unsigned int Shader::LoadShader(const char* code, GLenum shaderType, std::string
     int success;
     char infoLog[512];
 
+	TRACE_LOG(LOG_INFO, "%d, %s", shaderType, typeName.c_str());
     shader = glCreateShader(shaderType);
     if (shader == 0) {
         TRACE_LOG(LOG_ERROR, "Unable to create shader: %s", typeName.c_str());
@@ -84,10 +84,11 @@ void Shader::CreateShaderProgram(unsigned int* vertex, unsigned int* fragment)
     glDeleteShader(*fragment);
 }
 
-void Shader::Set_Vertices(void* vertices, size_t each_size, size_t actual_each_size)
+void Shader::Set_Vertices(float* vertices, size_t each_size, size_t actual_each_size)
 {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
+	glBindVertexArray(VAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
