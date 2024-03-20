@@ -49,8 +49,8 @@ int Init_Platform(void)
         NULL, NULL);
 
     if (!platform.window) {
-        glfwTerminate();
         TRACE_LOG(LOG_WARNING, "GLFW: Failed to initialize Window");
+        Close_Platform();
         return EXIT_FAILURE;
     }
     TRACE_LOG(LOG_INFO, "GLFW: Window Created");

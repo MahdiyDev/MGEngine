@@ -1,15 +1,16 @@
 #pragma once
 
 #include "mge_config.h"
+#include "mge_math.h"
 #include <cstdint>
 #include <stdarg.h>
 
 #define MGE_VERSION "v0.1"
 
 #if defined(__cplusplus)
-    #define CLITERAL(type)      type
+#define CLITERAL(type) type
 #else
-    #define CLITERAL(type)      (type)
+#define CLITERAL(type) (type)
 #endif
 
 // Callbacks to hook some internal functions
@@ -59,3 +60,5 @@ void Close_Window(void);
 void Clear_Background(Color color);
 void Begin_Drawing(void);
 void End_Drawing(void);
+
+void Draw_Line(Vector3 startPos, Vector3 endPos, Color color);

@@ -93,8 +93,9 @@ int main(int argc, char* argv[])
     stbi_image_free(data);
 
     Shader newShader(
-        "shaders/shader.vs",
-        "shaders/shader.fs");
+        "shaders/shader.vert",
+        "shaders/shader.frag"
+	);
 
     GLuint VAO, VBO, EBO;
 
