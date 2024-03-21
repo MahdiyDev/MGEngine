@@ -1,4 +1,5 @@
 #include "mge.h"
+#define MGEGL_IMLEMENTATION
 #include "mge_gl.h"
 #include "mge_utils.h"
 #include <cstdint>
@@ -47,6 +48,8 @@ void Init_Window(uint32_t width, uint32_t height, const char* title)
 
     Init_Platform();
 
+	MgeGL_Init();
+
     Setup_Viewport(CORE.Window.display.width, CORE.Window.display.height);
 
     CORE.Window.shouldClose = false;
@@ -54,6 +57,7 @@ void Init_Window(uint32_t width, uint32_t height, const char* title)
 
 void Close_Window(void)
 {
+	MgeGL_Close();
     Close_Platform();
     CORE.Window.ready = false;
     TRACE_LOG(LOG_INFO, "Window closed successfully");
@@ -72,10 +76,12 @@ void Clear_Background(Color color)
 
 void Begin_Drawing(void)
 {
+	MgeGL_Begin();
 }
 
 void End_Drawing(void)
 {
+	MgeGL_End();
     Swap_Screen_Buffer();
     Poll_Input_Events();
 }

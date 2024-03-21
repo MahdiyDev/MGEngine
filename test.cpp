@@ -1,42 +1,27 @@
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/ext/vector_float3.hpp"
-#include "glm/trigonometric.hpp"
 #include "mge.h"
 #include "mge_math.h"
 
 int main(int argc, char** argv)
 {
-	int WIDTH = 800, HEIGHT = 600;
+    int WIDTH = 800, HEIGHT = 600;
     Init_Window(WIDTH, HEIGHT, "Hello this is test");
 
-	// Load_Shader(Vector3{0,0,0}, Vector3{100,100,0}, RED);
-	Line line_x(glm::vec3{0,0,0}, glm::vec3{0, 0.5, 0});
-	Line line_y(glm::vec3{0,0,0}, glm::vec3{0.5, 0, 0});
-	Line line_z(glm::vec3{0,0,0}, glm::vec3{0, 0, 0.5});
-	line_x.setColor(glm::vec3 {RED.r, RED.g, RED.b});
-	line_y.setColor(glm::vec3 {GREEN.r, GREEN.g, GREEN.b});
-	line_z.setColor(glm::vec3 {BLUE.r, BLUE.g, BLUE.b});
+    float angle1 = -0.5f*Get_Time();
+    float angle2 = angle1/4*Get_Time();
+	Vector3 line_start1 = Vector3 { 0, 0, 0 };
+	Vector3 line_end1 = Vector3 { 0.5f, 0.5f, 0 };
+	Vector3 line_start2 = line_start1;
+	Vector3 line_end2 = line_end1;
+
     while (!Window_Should_Close()) {
         Begin_Drawing();
-        	Clear_Background(GRAY);
-			line_x.draw();
-			line_y.draw();
-			line_z.draw();
-			glm::mat4 projection = glm::mat4(1.0f);
-			projection = glm::perspective(
-				glm::radians(45.0f),
-				(float)WIDTH / (float)HEIGHT,
-				0.1f, 100.0f);
-			glm::mat4 view = glm::mat4(1.0f);
-			view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
-			glm::mat4 model = glm::mat4(1.0f);
-			model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-			model = glm::rotate(model, Get_Time() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
-			line_x.setMVP(projection * view * model);
-			line_y.setMVP(projection * view * model);
-			line_z.setMVP(projection * view * model);
-			// Draw_Line();
+        Clear_Background(GRAY);
+			Vector2 result1 = Vector2_Rotate(Vector2 { line_end1.x, line_end1.y }, angle1);
+			line_end1 = Vector3{result1.x, result1.y, 0};
+			Vector2 result2 = Vector2_Rotate(Vector2 { line_end2.x, line_end2.y }, angle2);
+			line_end2 = Vector3{result2.x, result2.y, 0};
+			Draw_Line(line_start1, line_end1, RED);
+			Draw_Line(line_start2, line_end2, BLUE);
         End_Drawing();
     }
 
