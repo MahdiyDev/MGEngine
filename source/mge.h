@@ -1,7 +1,5 @@
 #pragma once
 
-#include "glm/ext/matrix_float4x4.hpp"
-#include "glm/ext/vector_float3.hpp"
 #include "mge_config.h"
 #include "mge_math.h"
 #include <cstdint>

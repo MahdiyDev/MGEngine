@@ -3,7 +3,6 @@
 #include "mge_gl.h"
 #include "mge_utils.h"
 #include <cstdint>
-#include <cstdio>
 
 extern int Init_Platform(void);
 extern void Close_Platform(void);

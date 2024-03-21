@@ -1,7 +1,6 @@
 #include "mge.h"
 #include "Shader.h"
 #include "mge_gl.h"
-#include <cstdio>
 
 extern MgeGL_Data glData;
 
@@ -15,10 +14,10 @@ void Draw_Line(Vector3 startPos, Vector3 endPos, Color color)
 		endPos.x, endPos.y, endPos.z,
 	};
 	
-	glData.lineShader->Set_Vertices(glData.vertices, 3, 3);
+	glData.lineShader->Set_Position_Buffer(glData.vertices);
 
 	glData.lineShader->Use();
-	glData.lineShader->SetMat4("MVP", MVP);
-	glData.lineShader->SetVec3("color", lineColor);
+	glData.lineShader->Set_Mat4("MVP", MVP);
+	glData.lineShader->Set_Vec3("color", lineColor);
 	glData.lineShader->DrawArrays();
 }

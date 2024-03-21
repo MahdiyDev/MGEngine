@@ -89,17 +89,33 @@ void Shader::CreateShaderProgram(unsigned int vertex, unsigned int fragment)
     glDeleteShader(fragment);
 }
 
-void Shader::Set_Vertices(std::vector<float>& vertices, size_t each_size, size_t line_size)
+void Shader::Set_Position_Buffer(std::vector<float>& vertices)
 {
 	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO);
 	glGenBuffers(1, &VBO);
-	glBindVertexArray(VAO);	
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices.data(), GL_STATIC_DRAW);	
-	glVertexAttribPointer(0, each_size, GL_FLOAT, GL_FALSE, line_size * sizeof(float), (void*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, 0, 0, 0);
 	glEnableVertexAttribArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0); 
-	glBindVertexArray(0); 
+	glBindVertexArray(0);
+
+/* TODO: implement btach render
+	glGenBuffers(1, &batch.vertexBuffer[i].vboId[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, batch.vertexBuffer[i].vboId[0]);
+	glBufferData(GL_ARRAY_BUFFER, *3*4*sizeof(float), batch.vertexBuffer[i].vertices, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(RLGL.State.currentbufferElementsShaderLocs[RL_SHADER_LOC_VERTEX_POSITION]);
+	glVertexAttribPointer(RLGL.State.currentShaderLocs[RL_SHADER_LOC_VERTEX_POSITION], 3, GL_FLOAT, 0, 0, 0);
+*/
+}
+
+void Shader::Set_Texcoord_Buffer(std::vector<float>& vertices)
+{
+}
+
+void Shader::Set_Color_Buffer(std::vector<float>& vertices)
+{
 }
 
 void Shader::DrawArrays(void)
@@ -113,27 +129,27 @@ void Shader::Use()
     glUseProgram(ID);
 }
 
-void Shader::SetValue(const std::string& name, bool value) const
+void Shader::Set_Bool(const std::string& name, bool value) const
 {
     glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
 }
 
-void Shader::SetValue(const std::string& name, int value) const
+void Shader::Set_Int(const std::string& name, int value) const
 {
     glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
 }
 
-void Shader::SetValue(const std::string& name, float value) const
+void Shader::Set_Float(const std::string& name, float value) const
 {
     glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
 }
 
-void Shader::SetMat4(const std::string& name, glm::mat4& value) const
+void Shader::Set_Mat4(const std::string& name, glm::mat4& value) const
 {
 	glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &value[0][0]);
 }
 
-void Shader::SetVec3(const std::string& name, glm::vec3& value) const
+void Shader::Set_Vec3(const std::string& name, glm::vec3& value) const
 {
 	glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
 }
