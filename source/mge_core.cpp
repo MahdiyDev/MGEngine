@@ -75,12 +75,10 @@ void Clear_Background(Color color)
 
 void Begin_Drawing(void)
 {
-	MgeGL_Begin();
 }
 
 void End_Drawing(void)
 {
-	MgeGL_End();
     Swap_Screen_Buffer();
     Poll_Input_Events();
 }

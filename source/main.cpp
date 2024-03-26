@@ -117,14 +117,12 @@ int main(int argc, char* argv[])
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    Clear_Background(Color {51, 76, 76, 255});
 
     while (!Window_Should_Close()) {
         Begin_Drawing();
 
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		Clear_Background(Color {51, 76, 76, 255});
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
@@ -141,16 +139,12 @@ int main(int argc, char* argv[])
         projection = glm::perspective(
             glm::radians(45.0f),
             (float)WIDTH / (float)HEIGHT,
-            0.1f, 100.0f);
+            0.1f, 100.0f
+		);
 
-        int modelLoc = glGetUniformLocation(newShader.ID, "model");
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-        int viewLoc = glGetUniformLocation(newShader.ID, "view");
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-
-        int projectionLoc = glGetUniformLocation(newShader.ID, "projection");
-        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        newShader.Set_Mat4("model", model);
+        newShader.Set_Mat4("view", view);
+        newShader.Set_Mat4("projection", projection);
 
         glBindTexture(GL_TEXTURE_2D, texture);
         glBindVertexArray(VAO);

@@ -44,7 +44,11 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 test:
-	$(CXX) test.cpp source/mge_utils.cpp source/mge_core.cpp source/mge_shapes.cpp source/Shader.cpp source/glad.c \
+	$(CXX) \
+		test.cpp source/mge_utils.cpp \
+		source/mge_core.cpp source/mge_shapes.cpp \
+		source/Shader.cpp source/glad.c \
+		source/mge_math.cpp \
 	$(CXXFLAGS) $(INCLUDES) $(LIB_DIR) $(LIB_LINKS) -g
 
 make_build_dir:

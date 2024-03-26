@@ -1,5 +1,5 @@
-#include "mge_utils.h"
 #include "mge.h"
+#include "mge_utils.h"
 
 #include <stddef.h>
 #include <stdio.h>

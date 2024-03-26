@@ -66,4 +66,4 @@ void Clear_Background(Color color);
 void Begin_Drawing(void);
 void End_Drawing(void);
 
-void Draw_Line(Vector3 startPos, Vector3 endPos, Color color);
+void Draw_Line(Vector2 startPos, Vector2 endPos, Color color);
