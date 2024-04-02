@@ -22,6 +22,9 @@ void MgeGL_Begin(int mode)
 {
 	glData.State.mode = mode;
 	glData.State.vertexCount = 0;
+	for (int i = 0; i < MAX_VERTICES; i++) {
+		glData.State.vertices[i] = 0.0f;
+	}
 }
 
 void MgeGL_End(void)
