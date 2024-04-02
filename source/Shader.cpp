@@ -1,10 +1,8 @@
 #include "Shader.h"
+#include "mge_math.h"
 #include "mge_utils.h"
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <vector>
+#include <fstream>
+#include <sstream>
 
 Shader::Shader(const char* vertexPath, const char* fragmnetPath)
 {
@@ -46,22 +44,21 @@ unsigned int Shader::LoadShader(const char* code, GLenum shaderType, std::string
     char infoLog[512];
 
     shader = glCreateShader(shaderType);
-	TRACE_LOG(LOG_INFO, "Shader: %s shader created", typeName.c_str());
+    TRACE_LOG(LOG_INFO, "Shader: %s shader created", typeName.c_str());
     if (shader == 0) {
         TRACE_LOG(LOG_ERROR, "Shader: Unable to create shader: %s", typeName.c_str());
         return EXIT_FAILURE;
     }
     glShaderSource(shader, 1, &code, NULL);
     glCompileShader(shader);
-	TRACE_LOG(LOG_INFO, "Shader: %s shader compiled", typeName.c_str());
+    TRACE_LOG(LOG_INFO, "Shader: %s shader compiled", typeName.c_str());
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        TRACE_LOG(LOG_ERROR, 
-            "Shader: %s shader not compiled Error: %s", 
-            typeName.c_str(), infoLog
-        );
+        TRACE_LOG(LOG_ERROR,
+            "Shader: %s shader not compiled Error: %s",
+            typeName.c_str(), infoLog);
     }
     return shader;
 }
@@ -79,49 +76,46 @@ void Shader::CreateShaderProgram(unsigned int vertex, unsigned int fragment)
     glGetProgramiv(ID, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(ID, 512, NULL, infoLog);
-        TRACE_LOG(LOG_ERROR, 
-            "Shader: program not created\n%s", infoLog
-        );
+        TRACE_LOG(LOG_ERROR,
+            "Shader: program not created\n%s", infoLog);
     }
-	TRACE_LOG(LOG_INFO, "Shader: program created");
+    TRACE_LOG(LOG_INFO, "Shader: program created");
 
+	// Deleting shaders
     glDeleteShader(vertex);
     glDeleteShader(fragment);
+
+	// Gen VAO to contain VBO
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+	// Gen and fill vertex buffer (VBO)
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
 }
 
-void Shader::Set_Position_Buffer(std::vector<float>& vertices)
+void Shader::Set_Position_Buffer(float* vertices, int size)
 {
-	glGenVertexArrays(1, &VAO);
-	glBindVertexArray(VAO);
-	glGenBuffers(1, &VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices.data(), GL_STATIC_DRAW);	
-	glVertexAttribPointer(0, 3, GL_FLOAT, 0, 0, 0);
+    glBufferData(GL_ARRAY_BUFFER, size*sizeof(float), vertices, GL_STATIC_DRAW);
+
+	// Bind vertex attributes (position)
 	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0); 
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void *)0); // Positions
+}
+
+void Shader::Set_Texcoord_Buffer(float* vertices, int size)
+{
+}
+
+void Shader::Set_Color_Buffer(float* vertices, int size)
+{
+}
+
+void Shader::DrawArrays(int mode, int count)
+{
+    glBindVertexArray(VAO);
+    glDrawArrays(mode, 0, count);
 	glBindVertexArray(0);
-
-/* TODO: implement btach render
-	glGenBuffers(1, &batch.vertexBuffer[i].vboId[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, batch.vertexBuffer[i].vboId[0]);
-	glBufferData(GL_ARRAY_BUFFER, *3*4*sizeof(float), batch.vertexBuffer[i].vertices, GL_DYNAMIC_DRAW);
-	glEnableVertexAttribArray(RLGL.State.currentbufferElementsShaderLocs[RL_SHADER_LOC_VERTEX_POSITION]);
-	glVertexAttribPointer(RLGL.State.currentShaderLocs[RL_SHADER_LOC_VERTEX_POSITION], 3, GL_FLOAT, 0, 0, 0);
-*/
-}
-
-void Shader::Set_Texcoord_Buffer(std::vector<float>& vertices)
-{
-}
-
-void Shader::Set_Color_Buffer(std::vector<float>& vertices)
-{
-}
-
-void Shader::DrawArrays(void)
-{
-	glBindVertexArray(VAO);
-	glDrawArrays(GL_LINES, 0, 2);
 }
 
 void Shader::Use()
@@ -129,32 +123,51 @@ void Shader::Use()
     glUseProgram(ID);
 }
 
-void Shader::Set_Bool(const std::string& name, bool value) const
+void Shader::Set_Bool(const std::string& name, const bool value) const
 {
     glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
 }
 
-void Shader::Set_Int(const std::string& name, int value) const
+void Shader::Set_Int(const std::string& name, const int value) const
 {
     glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
 }
 
-void Shader::Set_Float(const std::string& name, float value) const
+void Shader::Set_Float(const std::string& name, const float value) const
 {
     glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
 }
 
-void Shader::Set_Mat4(const std::string& name, glm::mat4& value) const
+void Shader::Set_Mat4(const std::string& name, const Matrix& value) const
 {
-	glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &value[0][0]);
+    float matValue[16] = {
+        value.m0, value.m1, value.m2, value.m3,
+        value.m4, value.m5, value.m6, value.m7,
+        value.m8, value.m9, value.m10, value.m11,
+        value.m12, value.m13, value.m14, value.m15
+    };
+    glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, matValue);
 }
 
-void Shader::Set_Vec3(const std::string& name, glm::vec3& value) const
+void Shader::Set_Vec3(const std::string& name, const Vector3& value) const
 {
-	glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
+    float vectorValue[3] = {
+        value.x, value.y, value.z
+    };
+    glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, vectorValue);
+}
+
+void Shader::Set_Vec4(const std::string& name, const Vector4& value) const
+{
+    float vectorValue[4] = {
+        value.x, value.y, value.z, value.w
+    };
+    glUniform4fv(glGetUniformLocation(ID, name.c_str()), 1, vectorValue);
 }
 
 void Shader::CleanUp()
 {
     glDeleteProgram(ID);
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
 }

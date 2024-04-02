@@ -48,8 +48,8 @@ test:
 		test.cpp source/mge_utils.cpp \
 		source/mge_core.cpp source/mge_shapes.cpp \
 		source/Shader.cpp source/glad.c \
-		source/mge_math.cpp \
-	$(CXXFLAGS) $(INCLUDES) $(LIB_DIR) $(LIB_LINKS) -g
+		source/mge_math.cpp source/mge_gl.cpp \
+	 $(INCLUDES) $(LIB_DIR) $(LIB_LINKS)
 
 make_build_dir:
 	mkdir -p $(BUILD_OBJ_DIR)

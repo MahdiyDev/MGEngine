@@ -14,6 +14,18 @@ Vector2 Vector2_Rotate(Vector2 v, float angle)
     return result;
 }
 
+Matrix Matrix_Identity(void)
+{
+	Matrix result = {
+		1.0f, 0.0f, 0.0f, 0.0f,
+		0.0f, 1.0f, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f
+	};
+
+	return result;
+}
+
 Matrix Matrix_Multiply(Matrix left, Matrix right)
 {
     Matrix result = { 0 };

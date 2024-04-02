@@ -86,4 +86,5 @@ void End_Drawing(void)
 void Setup_Viewport(uint32_t width, uint32_t height)
 {
     MgeGL_Viewport(0, 0, width, height);
+	MgeGL_Ortho(0, width, height, 0, 0.0f, 1.0f);
 }
