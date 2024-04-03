@@ -7,6 +7,11 @@
 
 #include <cstdlib>
 
+#if defined(_WIN32)
+	unsigned int __stdcall timeBeginPeriod(unsigned int uPeriod);
+	unsigned int __stdcall timeEndPeriod(unsigned int uPeriod);
+#endif
+
 typedef struct {
     GLFWwindow* window; // GLFW window (graphic device)
 } PlatformData;
@@ -68,6 +73,10 @@ int Init_Platform(void)
     }
 
     MgeGL_Load_Extensions((void*)glfwGetProcAddress);
+
+	glfwSwapInterval(0); // No v-sync by default
+
+	Init_Timer();
 
     return EXIT_SUCCESS;
 }

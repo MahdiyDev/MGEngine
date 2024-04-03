@@ -2,6 +2,7 @@
 #include "mge_math.h"
 #include "mge_utils.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <signal.h>
 
@@ -18,8 +19,8 @@ void signal_handler(int sig)
 
 int main(int argc, char** argv)
 {
-    int WIDTH = 800, HEIGHT = 600;
-    Init_Window(WIDTH, HEIGHT, "Hello this is test");
+	int WIDTH = 800, HEIGHT = 600;
+	Init_Window(WIDTH, HEIGHT, "Hello this is test");
 
 	signal(SIGSEGV, signal_handler);
 	signal(SIGINT, signal_handler);
@@ -32,18 +33,20 @@ int main(int argc, char** argv)
 	};
 	Vector2 origin = { 0, 0 };
 
-	// float angle = -10.0f*Get_Time();
-    while (!Window_Should_Close()) {
+	Set_Target_FPS(60);
 
-        Begin_Drawing();
-        	Clear_Background(GRAY);
+	while (!Window_Should_Close()) {
+		Begin_Drawing();
+			float angle = -100.0f*Get_Time();
+			Clear_Background(GRAY);
 			Draw_Line(rec.x, rec.y, rec.x-0, rec.y-100, RED);
 			Draw_Line(rec.x, rec.y, rec.x-100, rec.y-0, BLUE);
-			Draw_RectanglePro(rec, origin, 0, WHITE);
+			Draw_RectanglePro(rec, origin, angle, WHITE);
 			Draw_RectangleLines(rec.x, rec.y, 100, 100, BLUE);
-        End_Drawing();
-    }
+			printf("fps: %d\n", Get_Fps());
+		End_Drawing();
+	}
 
-    Close_Window();
-    return 0;
+	Close_Window();
+	return 0;
 }

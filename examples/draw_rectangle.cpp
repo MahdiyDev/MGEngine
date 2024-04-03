@@ -39,7 +39,7 @@ int main(int argc, char** argv)
         	Clear_Background(GRAY);
 			Draw_Line(rec.x, rec.y, rec.x-0, rec.y-100, RED);
 			Draw_Line(rec.x, rec.y, rec.x+100, rec.y-0, BLUE);
-			Draw_Rectangle_Pro(rec, origin, 1*angle, WHITE);
+			Draw_RectanglePro(rec, origin, 1*angle, WHITE);
         End_Drawing();
     }
 

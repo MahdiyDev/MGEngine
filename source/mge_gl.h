@@ -20,6 +20,7 @@ typedef struct MgeGL_Data {
         Matrix projection;
         float vertices[MAX_VERTICES];
 		float currentDepth;
+		int drawCounter;
         Shader* current_shader;
     } State;
 } MgeGL_Data;

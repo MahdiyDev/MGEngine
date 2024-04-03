@@ -69,6 +69,8 @@ void Init_Window(uint32_t width, uint32_t height, const char* title);
 bool Window_Should_Close(void);
 void Close_Window(void);
 float Get_Time(void);
+int Get_Fps(void);
+void Set_Target_FPS(int fps);
 
 // Draw
 void Begin_Drawing(void);
