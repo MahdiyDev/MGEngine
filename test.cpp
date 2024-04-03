@@ -30,16 +30,17 @@ int main(int argc, char** argv)
 		.width = 100,
 		.height = 100,
 	};
-	Vector2 origin = { rec.width/2, rec.height/2 };
+	Vector2 origin = { 0, 0 };
 
+	// float angle = -10.0f*Get_Time();
     while (!Window_Should_Close()) {
-		float angle = -10.0f*Get_Time();
 
         Begin_Drawing();
         	Clear_Background(GRAY);
 			Draw_Line(rec.x, rec.y, rec.x-0, rec.y-100, RED);
-			Draw_Line(rec.x, rec.y, rec.x+100, rec.y-0, BLUE);
-			Draw_Rectangle_Pro(rec, origin, 1*angle, WHITE);
+			Draw_Line(rec.x, rec.y, rec.x-100, rec.y-0, BLUE);
+			Draw_RectanglePro(rec, origin, 0, WHITE);
+			Draw_RectangleLines(rec.x, rec.y, 100, 100, BLUE);
         End_Drawing();
     }
 

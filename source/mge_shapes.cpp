@@ -28,15 +28,15 @@ void Draw_Rectangle(int posX, int posY, int width, int height, Color color)
 
 void Draw_RectangleV(Vector2 position, Vector2 size, Color color)
 {
-    Draw_Rectangle_Pro((Rectangle){ position.x, position.y, size.x, size.y }, (Vector2){ 0.0f, 0.0f }, 0.0f, color);
+    Draw_RectanglePro((Rectangle){ position.x, position.y, size.x, size.y }, (Vector2){ 0.0f, 0.0f }, 0.0f, color);
 }
 
 void Draw_RectangleRec(Rectangle rec, Color color)
 {
-    Draw_Rectangle_Pro(rec, (Vector2){ 0.0f, 0.0f }, 0.0f, color);
+    Draw_RectanglePro(rec, (Vector2){ 0.0f, 0.0f }, 0.0f, color);
 }
 
-void Draw_Rectangle_Pro(Rectangle rec, Vector2 origin, float rotation, Color color)
+void Draw_RectanglePro(Rectangle rec, Vector2 origin, float rotation, Color color)
 {
 	Vector2 topLeft = { 0 };
 	Vector2 topRight = { 0 };
@@ -84,5 +84,23 @@ void Draw_Rectangle_Pro(Rectangle rec, Vector2 origin, float rotation, Color col
 		MgeGL_Vertex2f(topRight.x, topRight.y);
 		MgeGL_Vertex2f(bottomLeft.x, bottomLeft.y);
 		MgeGL_Vertex2f(bottomRight.x, bottomRight.y);
+	MgeGL_End();
+}
+
+void Draw_RectangleLines(int posX, int posY, int width, int height, Color color)
+{
+	MgeGL_Begin(MGEGL_LINES);
+		MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+		MgeGL_Vertex2f(posX + 1, posY);
+		MgeGL_Vertex2f(posX + width, posY + 1);
+
+		MgeGL_Vertex2f(posX + width, posY + 1);
+		MgeGL_Vertex2f(posX + width, posY + height);
+
+		MgeGL_Vertex2f(posX + width, posY + height);
+		MgeGL_Vertex2f(posX + 1, posY + height);
+
+		MgeGL_Vertex2f(posX + 1, posY + height);
+		MgeGL_Vertex2f(posX + 1, posY);
 	MgeGL_End();
 }

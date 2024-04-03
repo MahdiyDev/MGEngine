@@ -8,7 +8,7 @@
 #define MGEGL_TRIANGLES		0x0004
 #define MGEGL_QUADS			0x0007
 
-#define MAX_VERTICES		6*3
+#define MAX_VERTICES		8*3
 
 typedef struct MgeGL_Data {
     struct {
@@ -19,6 +19,7 @@ typedef struct MgeGL_Data {
         Matrix view;
         Matrix projection;
         float vertices[MAX_VERTICES];
+		float currentDepth;
         Shader* current_shader;
     } State;
 } MgeGL_Data;

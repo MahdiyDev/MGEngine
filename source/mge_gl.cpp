@@ -5,10 +5,14 @@ MgeGL_Data glData = { 0 };
 
 void MgeGL_Init(void)
 {
-    glData.State.current_shader = new Shader("shaders/line_shader.vert", "shaders/line_shader.frag");
+	glData.State.current_shader = new Shader("shaders/line_shader.vert", "shaders/line_shader.frag");
 	glData.State.model		= Matrix_Identity();
 	glData.State.view		= Matrix_Identity();
 	glData.State.projection	= Matrix_Identity();
+	for (int i = 0; i < MAX_VERTICES; i++) {
+		glData.State.vertices[i] = 0.0f;
+	}
+	glData.State.currentDepth = -1.0f;         // Reset depth value
 	TRACE_LOG(LOG_INFO, "MGE_GL: initialized");
 }
 
@@ -22,9 +26,6 @@ void MgeGL_Begin(int mode)
 {
 	glData.State.mode = mode;
 	glData.State.vertexCount = 0;
-	for (int i = 0; i < MAX_VERTICES; i++) {
-		glData.State.vertices[i] = 0.0f;
-	}
 }
 
 void MgeGL_End(void)
@@ -35,12 +36,13 @@ void MgeGL_End(void)
     glData.State.current_shader->Set_Mat4("view", glData.State.view);
     glData.State.current_shader->Set_Mat4("projection", glData.State.projection);
     glData.State.current_shader->Set_Vec4("color",
-		Vector4 { 
+		(Vector4) { 
 			(float)glData.State.colorr, (float)glData.State.colorg, 
 			(float)glData.State.colorb, (float)glData.State.colora
 		}
 	);
-    glData.State.current_shader->DrawArrays(glData.State.mode, 6);
+    glData.State.current_shader->DrawArrays(glData.State.mode, MAX_VERTICES/3);
+	glData.State.currentDepth += (1.0f/20000.0f);
 	glData.State.vertexCount = 0;
 }
 
@@ -54,12 +56,12 @@ void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned 
 
 void MgeGL_Vertex2i(int x, int y)
 {
-    MgeGL_Vertex3f((float)x, (float)y, 0);
+    MgeGL_Vertex3f((float)x, (float)y, glData.State.currentDepth);
 }
 
 void MgeGL_Vertex2f(float x, float y)
 {
-    MgeGL_Vertex3f(x, y, 0);
+    MgeGL_Vertex3f(x, y, glData.State.currentDepth);
 }
 
 void MgeGL_Vertex3f(float x, float y, float z)
@@ -123,6 +125,12 @@ void MgeGL_Load_Extensions(void* loader)
     } else {
         TRACE_LOG(LOG_INFO, "GLAD: OpenGL extensions loaded successfully");
     }
+
+	TRACE_LOG(LOG_INFO, "GL: OpenGL device information:");
+	TRACE_LOG(LOG_INFO, "    > Vendor:   %s", glGetString(GL_VENDOR));
+	TRACE_LOG(LOG_INFO, "    > Renderer: %s", glGetString(GL_RENDERER));
+	TRACE_LOG(LOG_INFO, "    > Version:  %s", glGetString(GL_VERSION));
+	TRACE_LOG(LOG_INFO, "    > GLSL:     %s", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
     MgeGL_Enable_Depth_Test();
 }
