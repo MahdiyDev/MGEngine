@@ -15,6 +15,15 @@
 #define CLITERAL(type) (type)
 #endif
 
+#ifdef ENABLE_DUAL_GPU
+	#if defined(WIN32)
+	extern "C" {
+	__declspec(dllexport) uint32_t NvOptimusEnablement = 1;
+	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+	}
+	#endif
+#endif
+
 // Callbacks to hook some internal functions
 typedef void (*Trace_Log_Callback)(int logLevel, const char* text, va_list args); // Logging: Redirect trace log messages
 

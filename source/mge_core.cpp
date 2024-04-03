@@ -4,7 +4,13 @@
 
 #include <cmath>
 #include <cstdint>
+
+#if defined(_WIN32)
+#include <synchapi.h>
+// void __stdcall Sleep(unsigned long msTimeout);              // Required for: WaitTime()
+#elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__EMSCRIPTEN__)
 #include <time.h>
+#endif
 
 extern int Init_Platform(void);
 extern void Close_Platform(void);

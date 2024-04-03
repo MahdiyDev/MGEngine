@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <signal.h>
 
+#define ENABLE_DUAL_GPU
+
 void signal_handler(int sig)
 {
 	Close_Window();

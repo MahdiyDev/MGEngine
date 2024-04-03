@@ -13,12 +13,7 @@
 
 #include "Shader.h"
 
-#if defined(WIN32)
-extern "C" {
-__declspec(dllexport) uint32_t NvOptimusEnablement = 1;
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
-#endif
+#define ENABLE_DUAL_GPU
 
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;

@@ -8,8 +8,8 @@
 #include <cstdlib>
 
 #if defined(_WIN32)
-	unsigned int __stdcall timeBeginPeriod(unsigned int uPeriod);
-	unsigned int __stdcall timeEndPeriod(unsigned int uPeriod);
+#include <minwindef.h>
+#include <timeapi.h>
 #endif
 
 typedef struct {

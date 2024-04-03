@@ -8,7 +8,7 @@ LIB_LINKS+=-lglfw3
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
-LIB_LINKS+=-lwinmm -lgdi32
+LIB_LINKS+=-lwinmm -lgdi32 -lkernel32
 LIB_DIR+=-L./3rdparty/glfw/lib
 else
 CURRENT_DIR += $(shell pwd)
