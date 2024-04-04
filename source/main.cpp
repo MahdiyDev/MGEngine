@@ -1,12 +1,12 @@
-#define GLFW_INCLUDE_NONE
 #include "mge.h"
+#include "mge_math.h"
+#include <cstdio>
+
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -17,6 +17,16 @@
 
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
+
+Matrix glm_mat_to_mge_mat(glm::mat4& mat)
+{
+	Matrix mge_mat = { 0 };
+	mge_mat.m0 = mat[0][0]; mge_mat.m4 = mat[1][0]; mge_mat.m8 =  mat[2][0]; mge_mat.m12 = mat[3][0];
+	mge_mat.m1 = mat[0][1]; mge_mat.m5 = mat[1][1]; mge_mat.m9 =  mat[2][1]; mge_mat.m13 = mat[3][1];
+	mge_mat.m2 = mat[0][2]; mge_mat.m6 = mat[1][2]; mge_mat.m10 = mat[2][2]; mge_mat.m14 = mat[3][2];
+	mge_mat.m3 = mat[0][3]; mge_mat.m7 = mat[1][3]; mge_mat.m11 = mat[2][3]; mge_mat.m15 = mat[3][3];
+	return mge_mat;
+}
 
 int main(int argc, char* argv[])
 {
@@ -114,6 +124,31 @@ int main(int argc, char* argv[])
 
     Clear_Background(Color {51, 76, 76, 255});
 
+//-------------For testing----------------//
+    glm::mat4 _view = glm::mat4(1.0f);
+	printf("glm::mat4\n");
+	for (int i = 0; i < 4; i++) {
+		printf("{");
+		for (int j = 0; j < 4; j++) {
+			printf(" %f, ", -_view[i][j]);
+		}
+		printf("},\n");
+	}
+	Matrix _mat = glm_mat_to_mge_mat(_view);
+	printf("Matrix\n"
+		"{ %f, %f, %f, %f, },\n"
+		"{ %f, %f, %f, %f, },\n"
+		"{ %f, %f, %f, %f, },\n"
+		"{ %f, %f, %f, %f, },\n",
+		_mat.m0,  _mat.m1,  _mat.m2,  _mat.m3,
+		_mat.m4,  _mat.m5,  _mat.m6,  _mat.m7,
+		_mat.m8,  _mat.m9,  _mat.m10, _mat.m11,
+		_mat.m12, _mat.m13, _mat.m14, _mat.m15
+	);
+//-------------For testing----------------//
+
+	Set_Target_FPS(60);
+
     while (!Window_Should_Close()) {
         Begin_Drawing();
 
@@ -137,9 +172,9 @@ int main(int argc, char* argv[])
             0.1f, 100.0f
 		);
 
-        newShader.Set_Mat4("model", model);
-        newShader.Set_Mat4("view", view);
-        newShader.Set_Mat4("projection", projection);
+        newShader.Set_Mat4("model", glm_mat_to_mge_mat(model));
+        newShader.Set_Mat4("view", glm_mat_to_mge_mat(view));
+        newShader.Set_Mat4("projection", glm_mat_to_mge_mat(projection));
 
         glBindTexture(GL_TEXTURE_2D, texture);
         glBindVertexArray(VAO);

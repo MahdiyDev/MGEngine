@@ -10,26 +10,8 @@
 
 #define MAX_VERTICES		8*3
 
-typedef struct MgeGL_RendererBatch {
-	int mode;
-	int vertexCount;
-    float vertices[MAX_VERTICES];
-	float currentDepth;
-	int drawCounter;
-
-    Shader* current_shader;
-} MgeGL_RendererBatch;
-
-typedef struct MgeGL_Data {
-	MgeGL_RendererBatch batch;
-
-    struct {
-        unsigned char colorr, colorg, colorb, colora;
-        Matrix model;
-        Matrix view;
-        Matrix projection;
-    } State;
-} MgeGL_Data;
+typedef struct MgeGL_RendererBatch MgeGL_RendererBatch;
+typedef struct MgeGL_Data MgeGL_Data;
 
 void MgeGL_Clear_Color(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 void MgeGL_Clear_Screen_Buffers(void);

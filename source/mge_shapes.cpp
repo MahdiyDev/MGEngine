@@ -23,17 +23,17 @@ void Draw_LineV(Vector2 startPos, Vector2 endPos, Color color)
 
 void Draw_Rectangle(int posX, int posY, int width, int height, Color color)
 {
-    Draw_RectangleV((Vector2){ (float)posX, (float)posY }, (Vector2){ (float)width, (float)height }, color);
+    Draw_RectangleV(CLITERAL(Vector2){ (float)posX, (float)posY }, CLITERAL(Vector2){ (float)width, (float)height }, color);
 }
 
 void Draw_RectangleV(Vector2 position, Vector2 size, Color color)
 {
-    Draw_RectanglePro((Rectangle){ position.x, position.y, size.x, size.y }, (Vector2){ 0.0f, 0.0f }, 0.0f, color);
+    Draw_RectanglePro(CLITERAL(Rectangle){ position.x, position.y, size.x, size.y }, CLITERAL(Vector2){ 0.0f, 0.0f }, 0.0f, color);
 }
 
 void Draw_RectangleRec(Rectangle rec, Color color)
 {
-    Draw_RectanglePro(rec, (Vector2){ 0.0f, 0.0f }, 0.0f, color);
+    Draw_RectanglePro(rec, CLITERAL(Vector2){ 0.0f, 0.0f }, 0.0f, color);
 }
 
 void Draw_RectanglePro(Rectangle rec, Vector2 origin, float rotation, Color color)
@@ -47,10 +47,10 @@ void Draw_RectanglePro(Rectangle rec, Vector2 origin, float rotation, Color colo
 	{
 		float x = rec.x - origin.x;
 		float y = rec.y - origin.y;
-		topLeft = (Vector2){ x, y };
-		topRight = (Vector2){ x + rec.width, y };
-		bottomLeft = (Vector2){ x, y + rec.height };
-		bottomRight = (Vector2){ x + rec.width, y + rec.height };
+		topLeft = CLITERAL(Vector2){ x, y };
+		topRight = CLITERAL(Vector2){ x + rec.width, y };
+		bottomLeft = CLITERAL(Vector2){ x, y + rec.height };
+		bottomRight = CLITERAL(Vector2){ x + rec.width, y + rec.height };
 	}
 	else
     {

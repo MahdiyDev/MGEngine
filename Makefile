@@ -43,12 +43,12 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-test:
+test: all
 	$(CXX) \
-		test.cpp source/mge_utils.cpp \
-		source/mge_core.cpp source/mge_shapes.cpp \
-		source/Shader.cpp source/glad.c \
-		source/mge_math.cpp source/mge_gl.cpp \
+		test.cpp build/obj/mge_utils.o \
+		build/obj/mge_core.o build/obj/mge_shapes.o \
+		build/obj/Shader.o build/obj/glad.o \
+		build/obj/mge_math.o build/obj/mge_gl.o \
 	 $(INCLUDES) $(LIB_DIR) $(LIB_LINKS)
 
 make_build_dir:

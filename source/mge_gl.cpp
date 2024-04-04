@@ -1,5 +1,27 @@
 #include "mge_gl.h"
+#include "mge.h"
 #include <cstdio>
+
+typedef struct MgeGL_RendererBatch {
+	int mode;
+	int vertexCount;
+    float vertices[MAX_VERTICES];
+	float currentDepth;
+	int drawCounter;
+
+    Shader* current_shader;
+} MgeGL_RendererBatch;
+
+typedef struct MgeGL_Data {
+	MgeGL_RendererBatch batch;
+
+    struct {
+        unsigned char colorr, colorg, colorb, colora;
+        Matrix model;
+        Matrix view;
+        Matrix projection;
+    } State;
+} MgeGL_Data;
 
 MgeGL_Data glData = { 0 };
 
@@ -7,7 +29,7 @@ MgeGL_Data glData = { 0 };
 
 void MgeGL_Init(void)
 {
-	glData.batch.current_shader = new Shader("shaders/line_shader.vert", "shaders/line_shader.frag");
+	glData.batch.current_shader = new Shader("shaders/core_shader.vert", "shaders/core_shader.frag");
 	glData.State.model		= Matrix_Identity();
 	glData.State.view		= Matrix_Identity();
 	glData.State.projection	= Matrix_Identity();
@@ -45,7 +67,7 @@ void MgeGL_End(void)
 	glData.batch.current_shader->Set_Mat4("view", glData.State.view);
 	glData.batch.current_shader->Set_Mat4("projection", glData.State.projection);
 	glData.batch.current_shader->Set_Vec4("color",
-		(Vector4) { 
+		CLITERAL(Vector4) { 
 			(float)glData.State.colorr, (float)glData.State.colorg, 
 			(float)glData.State.colorb, (float)glData.State.colora
 		}
