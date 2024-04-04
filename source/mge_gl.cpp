@@ -7,52 +7,53 @@ MgeGL_Data glData = { 0 };
 
 void MgeGL_Init(void)
 {
-	glData.State.current_shader = new Shader("shaders/line_shader.vert", "shaders/line_shader.frag");
+	glData.batch.current_shader = new Shader("shaders/line_shader.vert", "shaders/line_shader.frag");
 	glData.State.model		= Matrix_Identity();
 	glData.State.view		= Matrix_Identity();
 	glData.State.projection	= Matrix_Identity();
 	for (int i = 0; i < MAX_VERTICES; i++) {
-		glData.State.vertices[i] = 0.0f;
+		glData.batch.vertices[i] = 0.0f;
 	}
-	glData.State.currentDepth = -1.0f;         // Reset depth value
-	glData.State.drawCounter = 0;
+	glData.batch.currentDepth = -1.0f;         // Reset depth value
+	glData.batch.drawCounter = 0;
 	TRACE_LOG(LOG_INFO, "MGE_GL: initialized");
 }
 
 void MgeGL_Close(void)
 {
-	glData.State.current_shader->CleanUp();
+	glData.batch.current_shader->CleanUp();
 	TRACE_LOG(LOG_INFO, "MGE_GL: clean up");
 }
 
 void MgeGL_Begin(int mode)
 {
-	glData.State.mode = mode;
-	glData.State.vertexCount = 0;
-	if (glData.State.drawCounter >= MAX_DRAW_COUNT)
+	glData.batch.mode = mode;
+	glData.batch.vertexCount = 0;
+	if (glData.batch.drawCounter >= MAX_DRAW_COUNT)
 	{
-		glData.State.currentDepth = -1.0f;         // Reset depth value
-		glData.State.drawCounter = 0;
+		glData.batch.current_shader->DrawArrays(glData.batch.mode, MAX_VERTICES/3);
+		glData.batch.currentDepth = -1.0f;         // Reset depth value
+		glData.batch.drawCounter = 0;
 	}
 }
 
 void MgeGL_End(void)
 {
-	glData.State.current_shader->Set_Position_Buffer(glData.State.vertices, MAX_VERTICES);
-	glData.State.current_shader->Use();
-	glData.State.current_shader->Set_Mat4("model", glData.State.model);
-	glData.State.current_shader->Set_Mat4("view", glData.State.view);
-	glData.State.current_shader->Set_Mat4("projection", glData.State.projection);
-	glData.State.current_shader->Set_Vec4("color",
+	glData.batch.current_shader->Set_Position_Buffer(glData.batch.vertices, MAX_VERTICES);
+	glData.batch.current_shader->Use();
+	glData.batch.current_shader->Set_Mat4("model", glData.State.model);
+	glData.batch.current_shader->Set_Mat4("view", glData.State.view);
+	glData.batch.current_shader->Set_Mat4("projection", glData.State.projection);
+	glData.batch.current_shader->Set_Vec4("color",
 		(Vector4) { 
 			(float)glData.State.colorr, (float)glData.State.colorg, 
 			(float)glData.State.colorb, (float)glData.State.colora
 		}
 	);
-	glData.State.current_shader->DrawArrays(glData.State.mode, MAX_VERTICES/3);
-	glData.State.currentDepth += (1.0f/20000.0f);
-	glData.State.vertexCount = 0;
-	glData.State.drawCounter++;
+	glData.batch.current_shader->DrawArrays(glData.batch.mode, MAX_VERTICES/3);
+	glData.batch.currentDepth += (1.0f/20000.0f);
+	glData.batch.vertexCount = 0;
+	glData.batch.drawCounter++;
 }
 
 void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned char w)
@@ -65,20 +66,20 @@ void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned 
 
 void MgeGL_Vertex2i(int x, int y)
 {
-	MgeGL_Vertex3f((float)x, (float)y, glData.State.currentDepth);
+	MgeGL_Vertex3f((float)x, (float)y, glData.batch.currentDepth);
 }
 
 void MgeGL_Vertex2f(float x, float y)
 {
-	MgeGL_Vertex3f(x, y, glData.State.currentDepth);
+	MgeGL_Vertex3f(x, y, glData.batch.currentDepth);
 }
 
 void MgeGL_Vertex3f(float x, float y, float z)
 {
-	glData.State.vertices[3*glData.State.vertexCount+0] = x;
-	glData.State.vertices[3*glData.State.vertexCount+1] = y;
-	glData.State.vertices[3*glData.State.vertexCount+2] = z;
-	glData.State.vertexCount++;
+	glData.batch.vertices[3*glData.batch.vertexCount+0] = x;
+	glData.batch.vertices[3*glData.batch.vertexCount+1] = y;
+	glData.batch.vertices[3*glData.batch.vertexCount+2] = z;
+	glData.batch.vertexCount++;
 }
 
 

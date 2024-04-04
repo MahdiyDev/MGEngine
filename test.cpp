@@ -45,7 +45,7 @@ int main(int argc, char** argv)
 			Draw_Line(rec.x, rec.y, rec.x-100, rec.y-0, BLUE);
 			Draw_RectanglePro(rec, origin, angle, WHITE);
 			Draw_RectangleLines(rec.x, rec.y, 100, 100, BLUE);
-			printf("fps: %d\n", Get_Fps());
+			// printf("fps: %d\n", Get_Fps());
 		End_Drawing();
 	}
 
