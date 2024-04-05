@@ -95,3 +95,8 @@ void Draw_RectangleV(Vector2 position, Vector2 size, Color color);
 void Draw_RectangleRec(Rectangle rec, Color color);
 void Draw_RectanglePro(Rectangle rec, Vector2 origin, float rotation, Color color);
 void Draw_RectangleLines(int posX, int posY, int width, int height, Color color);
+void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
+void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
+void Draw_TriangleLines(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
+void Draw_TriangleFan(Vector2 *points, int pointCount, Color color);
+void Draw_TriangleStrip(Vector2 *points, int pointCount, Color color);

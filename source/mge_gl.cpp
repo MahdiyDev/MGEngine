@@ -1,6 +1,5 @@
 #include "mge_gl.h"
 #include "mge.h"
-#include <cstdio>
 
 typedef struct MgeGL_RendererBatch {
 	int mode;

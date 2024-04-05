@@ -8,7 +8,7 @@
 #define MGEGL_TRIANGLES		0x0004
 #define MGEGL_QUADS			0x0007
 
-#define MAX_VERTICES		8*3
+#define MAX_VERTICES		128*3
 
 typedef struct MgeGL_RendererBatch MgeGL_RendererBatch;
 typedef struct MgeGL_Data MgeGL_Data;
