@@ -32,17 +32,19 @@ int main(int argc, char** argv)
 		.width = 100,
 		.height = 100,
 	};
-	Vector2 origin = { 0, 0 };
+	Vector2 origin = { 100, 100 };
 
 	Set_Target_FPS(60);
 
+	float radius = 20.0f;
+
 	Vector2 points[] = {
-		Vector2 {100+origin.x, 100+origin.y}, Vector2 {200+origin.x, 150+origin.y}, Vector2 {200+origin.x, 50+origin.y},
-		Vector2 {100+origin.x, 100+origin.y}, Vector2 {200+origin.x, 50+origin.y}, Vector2 {100+origin.x, 0+origin.y},
-		Vector2 {100+origin.x, 100+origin.y}, Vector2 {100+origin.x, 0+origin.y}, Vector2 {0+origin.x, 50+origin.y},
-		Vector2 {100+origin.x, 100+origin.y}, Vector2 {0+origin.x, 50+origin.y}, Vector2 {0+origin.x, 150+origin.y},
-		Vector2 {100+origin.x, 100+origin.y}, Vector2 {0+origin.x, 150+origin.y}, Vector2 {100+origin.x, 200+origin.y},
-		Vector2 {100+origin.x, 100+origin.y}, Vector2 {100+origin.x, 200+origin.y}, Vector2 {200+origin.x, 150+origin.y},
+		Vector2 {origin.x, origin.y}, Vector2 {radius+origin.x, (radius/2)+origin.y}, Vector2 {radius+origin.x, -(radius/2)+origin.y},
+		Vector2 {origin.x, origin.y}, Vector2 {radius+origin.x, -(radius/2)+origin.y}, Vector2 {origin.x, -radius+origin.y},
+		Vector2 {origin.x, origin.y}, Vector2 {origin.x, -radius+origin.y}, Vector2 {-radius+origin.x, -(radius/2)+origin.y},
+		Vector2 {origin.x, origin.y}, Vector2 {-radius+origin.x, -(radius/2)+origin.y}, Vector2 {-radius+origin.x, (radius/2)+origin.y},
+		Vector2 {origin.x, origin.y}, Vector2 {-radius+origin.x, (radius/2)+origin.y}, Vector2 {origin.x, radius+origin.y},
+		Vector2 {origin.x, origin.y}, Vector2 {origin.x, radius+origin.y}, Vector2 {radius+origin.x, (radius/2)+origin.y},
 	};
 
 	while (!Window_Should_Close()) {
