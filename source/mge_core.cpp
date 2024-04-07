@@ -51,7 +51,7 @@ typedef struct CoreData {
 CoreData CORE = { 0 };
 
 #if defined(PLATFORM_DESKTOP)
-#include "platforms/mge_code_destop.cpp"
+	#include "platforms/mge_code_destop.cpp"
 #endif
 
 void Init_Window(uint32_t width, uint32_t height, const char* title)

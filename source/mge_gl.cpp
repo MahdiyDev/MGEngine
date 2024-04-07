@@ -1,12 +1,28 @@
-#include "mge_gl.h"
 #include "mge.h"
+#include "mge_gl.h"
+#include <cstddef>
+#include <cstdio>
+#include <vector>
 
-typedef struct MgeGL_RendererBatch {
+typedef struct MgeGL_VertexBuffer {
+	int elementCount;
+    float vertices[MAX_BUFFER_ELEMENTS*3];
+	unsigned char colors[MAX_BUFFER_ELEMENTS*4];
+} MgeGL_VertexBuffer;
+
+typedef struct MgeGL_DrawCall {
 	int mode;
 	int vertexCount;
-    float vertices[MAX_VERTICES];
+	int vertexAlignment;
+} MgeGL_DrawCall;
+
+typedef struct MgeGL_RendererBatch {
 	float currentDepth;
 	int drawCounter;
+	int currentBuffer;
+	MgeGL_VertexBuffer vertexBuffer[MAX_DRAW_COUNT];
+
+	MgeGL_DrawCall draws[MAX_DRAW_COUNT];
 
     Shader* current_shader;
 } MgeGL_RendererBatch;
@@ -19,6 +35,7 @@ typedef struct MgeGL_Data {
         Matrix model;
         Matrix view;
         Matrix projection;
+		int vertexCounter;
     } State;
 } MgeGL_Data;
 
@@ -32,11 +49,14 @@ void MgeGL_Init(void)
 	glData.State.model		= Matrix_Identity();
 	glData.State.view		= Matrix_Identity();
 	glData.State.projection	= Matrix_Identity();
-	for (int i = 0; i < MAX_VERTICES; i++) {
-		glData.batch.vertices[i] = 0.0f;
+	for (int i = 0; i < MAX_DRAW_COUNT; i++)
+	{
+		glData.batch.vertexBuffer[i].elementCount = MAX_BUFFER_ELEMENTS;
+		for (int v = 0; v < MAX_BUFFER_ELEMENTS*3; v++) glData.batch.vertexBuffer[i].vertices[v] = 0;
+		for (int c = 0; c < MAX_BUFFER_ELEMENTS*4; c++) glData.batch.vertexBuffer[i].colors[c] = 0;
 	}
-	glData.batch.currentDepth = -1.0f;         // Reset depth value
-	glData.batch.drawCounter = 0;
+	glData.batch.currentDepth = -1.0f;			// Reset depth value
+	glData.batch.drawCounter = 1;				// Reste draw count
 	TRACE_LOG(LOG_INFO, "MGE_GL: initialized");
 }
 
@@ -48,33 +68,43 @@ void MgeGL_Close(void)
 
 void MgeGL_Begin(int mode)
 {
-	glData.batch.mode = mode;
-	glData.batch.vertexCount = 0;
-	if (glData.batch.drawCounter >= MAX_DRAW_COUNT)
+	MgeGL_DrawCall* drawCall = &glData.batch.draws[glData.batch.drawCounter - 1];
+	if (drawCall->mode != mode)
 	{
-		glData.batch.current_shader->DrawArrays(glData.batch.mode, MAX_VERTICES/3);
-		glData.batch.currentDepth = -1.0f;         // Reset depth value
-		glData.batch.drawCounter = 0;
+		if (drawCall->vertexCount > 0)
+		{
+			if (drawCall->mode == MGEGL_LINES) {
+				drawCall->vertexAlignment = drawCall->vertexCount < 4 ? drawCall->vertexCount : drawCall->vertexCount%4;
+			}
+			else if (drawCall->mode == MGEGL_TRIANGLES)
+			{
+				drawCall->vertexAlignment = drawCall->vertexCount < 4 ? 1 : drawCall->vertexCount%4;
+			}
+			else
+			{
+				drawCall->vertexAlignment = 0;
+			}
+
+			if (!MgeGL_Check_RenderBatch_Limit(drawCall->vertexAlignment))
+			{
+				glData.State.vertexCounter += drawCall->vertexAlignment;
+				glData.batch.drawCounter++;
+			}
+		}
+
+		if (glData.batch.drawCounter >= MAX_DRAW_COUNT)
+		{
+			MgeGL_Draw_RenderBatch(glData.batch);
+		}
+
+		drawCall->mode = mode;
+		drawCall->vertexCount = 0;
 	}
 }
 
 void MgeGL_End(void)
 {
-	glData.batch.current_shader->Set_Position_Buffer(glData.batch.vertices, MAX_VERTICES);
-	glData.batch.current_shader->Use();
-	glData.batch.current_shader->Set_Mat4("model", glData.State.model);
-	glData.batch.current_shader->Set_Mat4("view", glData.State.view);
-	glData.batch.current_shader->Set_Mat4("projection", glData.State.projection);
-	glData.batch.current_shader->Set_Vec4("color",
-		CLITERAL(Vector4) { 
-			(float)glData.State.colorr, (float)glData.State.colorg, 
-			(float)glData.State.colorb, (float)glData.State.colora
-		}
-	);
-	glData.batch.current_shader->DrawArrays(glData.batch.mode, MAX_VERTICES/3);
 	glData.batch.currentDepth += (1.0f/20000.0f);
-	glData.batch.vertexCount = 0;
-	glData.batch.drawCounter++;
 }
 
 void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned char w)
@@ -97,12 +127,83 @@ void MgeGL_Vertex2f(float x, float y)
 
 void MgeGL_Vertex3f(float x, float y, float z)
 {
-	glData.batch.vertices[3*glData.batch.vertexCount+0] = x;
-	glData.batch.vertices[3*glData.batch.vertexCount+1] = y;
-	glData.batch.vertices[3*glData.batch.vertexCount+2] = z;
-	glData.batch.vertexCount++;
+	if (glData.State.vertexCounter > (glData.batch.vertexBuffer[glData.batch.currentBuffer].elementCount*4 - 4))
+	{
+		if ((glData.batch.draws[glData.batch.drawCounter - 1].mode == MGEGL_LINES) &&
+			(glData.batch.draws[glData.batch.drawCounter - 1].vertexCount%2 == 0))
+		{
+			MgeGL_Check_RenderBatch_Limit(2 + 1);
+		}
+		else if ((glData.batch.draws[glData.batch.drawCounter - 1].mode == MGEGL_TRIANGLES) &&
+			(glData.batch.draws[glData.batch.drawCounter - 1].vertexCount%3 == 0))
+		{
+			MgeGL_Check_RenderBatch_Limit(3 + 1);
+		}
+		else if ((glData.batch.draws[glData.batch.drawCounter - 1].mode == MGEGL_QUADS) &&
+			(glData.batch.draws[glData.batch.drawCounter - 1].vertexCount%4 == 0))
+		{
+			MgeGL_Check_RenderBatch_Limit(4 + 1);
+		}
+	}
+
+	glData.batch.vertexBuffer[glData.batch.currentBuffer].vertices[3*glData.State.vertexCounter+0] = x;
+	glData.batch.vertexBuffer[glData.batch.currentBuffer].vertices[3*glData.State.vertexCounter+1] = y;
+	glData.batch.vertexBuffer[glData.batch.currentBuffer].vertices[3*glData.State.vertexCounter+2] = z;
+
+	glData.batch.vertexBuffer[glData.batch.drawCounter].colors[4*glData.State.vertexCounter+0] = glData.State.colorr;
+	glData.batch.vertexBuffer[glData.batch.drawCounter].colors[4*glData.State.vertexCounter+1] = glData.State.colorg;
+	glData.batch.vertexBuffer[glData.batch.drawCounter].colors[4*glData.State.vertexCounter+2] = glData.State.colorb;
+	glData.batch.vertexBuffer[glData.batch.drawCounter].colors[4*glData.State.vertexCounter+3] = glData.State.colora;
+
+	glData.State.vertexCounter++;
 }
 
+void MgeGL_Draw_RenderBatch(MgeGL_RendererBatch batch)
+{
+	
+	// if (glData.State.vertexCounter > 0)
+	// {
+	// 	glData.batch.current_shader->Set_Position_Buffer(
+	// 		batch.vertexBuffer[batch.currentBuffer].vertices,
+	// 		glData.State.vertexCounter*3
+	// 	);
+	// 	glData.batch.current_shader->Set_Color_Buffer(
+	// 		batch.vertexBuffer[batch.currentBuffer].colors,
+	// 		glData.State.vertexCounter*4
+	// 	);
+	// 	glData.batch.current_shader->Use();
+	// 	glData.batch.current_shader->Set_Mat4("model", glData.State.model);
+	// 	glData.batch.current_shader->Set_Mat4("view", glData.State.view);
+	// 	glData.batch.current_shader->Set_Mat4("projection", glData.State.projection);
+	// 	for (int i = 0, vertexOffset = 0; i < batch.drawCounter; i++)
+	// 	{
+	// 		glData.batch.current_shader->DrawArrays(
+	// 			batch.draws[i].mode,
+	// 			vertexOffset,
+	// 			batch.draws[i].vertexCount
+	// 		);
+	// 		vertexOffset += (batch.draws[i].vertexCount + batch.draws[i].vertexAlignment);
+	// 	}
+	// }
+}
+
+bool MgeGL_Check_RenderBatch_Limit(int vCount)
+{
+	bool overflow = false;
+
+	if ((glData.State.vertexCounter+vCount) >= (glData.batch.vertexBuffer[glData.batch.currentBuffer].elementCount*4))
+	{
+		overflow = true;
+
+		int currentMode = glData.batch.draws[glData.batch.drawCounter - 1].mode;
+
+		MgeGL_RendererBatch(glData.batch);
+
+		glData.batch.draws[glData.batch.drawCounter - 1].mode = currentMode;
+	}
+
+	return overflow;
+}
 
 void MgeGL_Ortho(double left, double right, double bottom, double top, double znear, double zfar)
 {

@@ -100,22 +100,32 @@ void Shader::Set_Position_Buffer(float* vertices, int size)
 
 	// Bind vertex attributes (position)
 	glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void *)0); // Positions
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), 0); // Positions
 }
 
 void Shader::Set_Texcoord_Buffer(float* vertices, int size)
 {
 }
 
-void Shader::Set_Color_Buffer(float* vertices, int size)
+void Shader::Set_Color_Buffer(unsigned char* vertices, int size)
 {
+	glBufferData(GL_ARRAY_BUFFER, size*sizeof(unsigned char), vertices, GL_STATIC_DRAW);
+
+	// Bind vertex attributes (color)
+	glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); // Colors
 }
 
-void Shader::DrawArrays(int mode, int count)
+void Shader::DrawArrays(unsigned int mode, int offset, int count)
 {
     glBindVertexArray(VAO);
-    glDrawArrays(mode, 0, count);
+    glDrawArrays(mode, offset, count);
 	glBindVertexArray(0);
+}
+
+void Shader::DrawElements(unsigned int mode, int count, unsigned int type, const void *indices)
+{
+	glDrawElements(mode, count, type, (GLvoid*)indices);
 }
 
 void Shader::Use()
