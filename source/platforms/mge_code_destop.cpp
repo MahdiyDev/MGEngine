@@ -1,9 +1,12 @@
+#include <cstdio>
+#define CORE_INCLUDE
 #include "mge.h"
 #include "mge_gl.h"
 #include "mge_utils.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include <glad//glad.h>
 
 #include <cstdlib>
 
@@ -18,11 +21,13 @@ typedef struct {
 
 extern CoreData CORE;
 
-int Init_Platform(void);
+void InitPlatform(void);
 void Close_Platform(void);
 void Poll_Input_Events(void);
-bool Window_Should_Close(void);
+bool Mge_WindowShouldClose(void);
 void Swap_Screen_Buffer(void);
+void InitTimer(void);
+// void SetFramebufferSizeCallback(int width, int height);
 
 static PlatformData platform = { 0 };
 
@@ -34,7 +39,7 @@ static void Error_Callback(int error, const char* description)
     TRACE_LOG(LOG_WARNING, "GLFW: Error: %i Description: %s", error, description);
 }
 
-int Init_Platform(void)
+void InitPlatform(void)
 {
     glfwSetErrorCallback(Error_Callback);
 
@@ -47,21 +52,21 @@ int Init_Platform(void)
 
     if (result == GLFW_FALSE) {
         TRACE_LOG(LOG_ERROR, "GLFW: Failed to initialize GLFW");
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
     TRACE_LOG(LOG_INFO, "GLFW: Initialized successfuly");
-    glfwDefaultWindowHints();
+    // glfwDefaultWindowHints();
 
     platform.window = glfwCreateWindow(
-        CORE.Window.display.width,
-        CORE.Window.display.height,
+        CORE.Window.screen.width,
+        CORE.Window.screen.height,
         CORE.Window.title,
-        NULL, NULL);
+        glfwGetPrimaryMonitor(), NULL);
 
     if (!platform.window) {
         TRACE_LOG(LOG_WARNING, "GLFW: Failed to initialize Window");
         Close_Platform();
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
     TRACE_LOG(LOG_INFO, "GLFW: Window Created");
 
@@ -76,12 +81,18 @@ int Init_Platform(void)
 
 	glfwSwapInterval(0); // No v-sync by default
 
-	Init_Timer();
+	InitTimer();
 
-    return EXIT_SUCCESS;
+	CORE.Window.render.width = CORE.Window.screen.width;
+    CORE.Window.render.height = CORE.Window.screen.height;
+
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+	CORE.Window.display.width = mode->width;
+	CORE.Window.display.height = mode->height;
 }
 
-float Platform_Get_Time(void)
+double Platform_GetTime(void)
 {
 	return glfwGetTime();
 }
@@ -98,7 +109,7 @@ void Swap_Screen_Buffer(void)
     glfwSwapBuffers(platform.window);
 }
 
-bool Window_Should_Close(void)
+bool Mge_WindowShouldClose(void)
 {
     if (CORE.Window.ready) {
         return CORE.Window.shouldClose;
@@ -111,4 +122,10 @@ void Close_Platform(void)
     glfwDestroyWindow(platform.window);
     glfwTerminate();
     TRACE_LOG(LOG_INFO, "GLFW: terminated");
+}
+
+void Mge_ProcessInput(void)
+{
+    if(glfwGetKey(platform.window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(platform.window, true);
 }

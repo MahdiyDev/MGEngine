@@ -1,7 +1,8 @@
 #pragma once
 
-// Show TRACELOG() output messages
-// NOTE: By default LOG_DEBUG traces not shown
-#define SUPPORT_TRACELOG 1
-
-#define PLATFORM_DESKTOP 1
+#ifndef SUPPORT_TRACELOG
+	#define SUPPORT_TRACELOG
+#endif
+#ifndef PLATFORM_DESKTOP
+	#define PLATFORM_DESKTOP
+#endif

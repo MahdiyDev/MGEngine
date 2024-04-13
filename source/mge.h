@@ -2,31 +2,19 @@
 
 #include "mge_config.h"
 #include "mge_math.h"
+#include <cstdarg>
 #include <cstdint>
-#include <glad/glad.h>
-#include <stdarg.h>
-#include <vector>
 
-#define MGE_VERSION "v0.1"
+#define MGE_VERSION "v0.0.1"
 
 #if defined(__cplusplus)
-#define CLITERAL(type) type
+	#define CLITERAL(type) type
 #else
-#define CLITERAL(type) (type)
+	#define CLITERAL(type) (type)
 #endif
 
-#ifdef ENABLE_DUAL_GPU
-	#if defined(WIN32)
-	extern "C" {
-	__declspec(dllexport) uint32_t NvOptimusEnablement = 1;
-	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-	}
-	#endif
-#endif
-
-// Callbacks to hook some internal functions
+void Trace_Log(int logType, const char* text, ...);
 typedef void (*Trace_Log_Callback)(int logLevel, const char* text, va_list args); // Logging: Redirect trace log messages
-
 typedef enum {
     LOG_ALL = 0,		// Display all logs
     LOG_TRACE,			// Trace logging, intended for internal use only
@@ -52,40 +40,62 @@ typedef struct Rectangle {
 	float height;		// Rectangle height
 } Rectangle;
 
-#define RED \
-    CLITERAL(Color) { 255, 0, 0, 255 }
-#define GREEN \
-    CLITERAL(Color) { 0, 255, 0, 255 }
-#define BLUE \
-    CLITERAL(Color) { 0, 0, 255, 255 }
-#define BLACK \
-    CLITERAL(Color) { 0, 0, 0, 255 }
-#define BLACK \
-    CLITERAL(Color) { 0, 0, 0, 255 }
-#define LIGHTGRAY \
-    CLITERAL(Color) { 200, 200, 200, 255 }
-#define GRAY \
-    CLITERAL(Color) { 130, 130, 130, 255 }
-#define DARKGRAY \
-    CLITERAL(Color) { 80, 80, 80, 255 }
-#define WHITE \
-    CLITERAL(Color) { 255, 255, 255, 255 }
+#define RED			CLITERAL(Color) { 255, 0, 0, 255 }
+#define GREEN		CLITERAL(Color) { 0, 255, 0, 255 }
+#define BLUE		CLITERAL(Color) { 0, 0, 255, 255 }
+#define DARKGREEN	CLITERAL(Color) { 51, 77, 77, 255 }
+#define BLACK		CLITERAL(Color) { 0, 0, 0, 255 }
+#define GRAY		CLITERAL(Color) { 130, 130, 130, 255 }
+#define LIGHTGRAY	CLITERAL(Color) { 200, 200, 200, 255 }
+#define DARKGRAY	CLITERAL(Color) { 80, 80, 80, 255 }
+#define WHITE		CLITERAL(Color) { 255, 255, 255, 255 }
+#define YELLOW		CLITERAL(Color) { 255, 255, 0, 255 }
 
-void Trace_Log(int logType, const char* text, ...);
+#ifdef CORE_INCLUDE
+typedef struct {
+    int x;
+    int y;
+} Point;
+typedef struct {
+    uint32_t width;
+    uint32_t height;
+} Size;
+
+typedef struct CoreData {
+    struct {
+        const char* title;
+        Size display;
+        Size screen;
+        Size render;
+        bool ready;
+        bool shouldClose;
+    } Window;
+
+	struct {
+		double frame;
+		unsigned int frameCounter;
+		unsigned long long int base;
+		double current;
+		double draw;
+		double previous;
+		double target;
+		double update;
+	} Time;
+} CoreData;
+#endif
 
 // Core
-void Init_Window(uint32_t width, uint32_t height, const char* title);
-bool Window_Should_Close(void);
-void Close_Window(void);
-float Get_Time(void);
-int Get_Fps(void);
-void Set_Target_FPS(int fps);
+void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
+bool Mge_WindowShouldClose(void);
+void Mge_CloseWindow(void);
+double Mge_GetTime(void);
+int Mge_GetFps(void);
+void Mge_SetTargetFPS(int fps);
 
-// Draw
-void Begin_Drawing(void);
-void End_Drawing(void);
-void Clear_Background(Color color);
-void MgeGL_Ortho(double left, double right, double bottom, double top, double znear, double zfar);
+void Mge_ProcessInput();
+void Mge_ClearBackground(Color color);
+void Mge_BeginDrawing();
+void Mge_EndDrawing();
 
 // Shapes
 void Draw_Line(int startPosX, int startPosY, int endPosX, int endPosY, Color color);

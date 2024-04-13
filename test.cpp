@@ -51,11 +51,13 @@ int main(int argc, char** argv)
 		Begin_Drawing();
 			float angle = -100.0f*Get_Time();
 			Clear_Background(GRAY);
-			Draw_TriangleLines(Vector2 {100, 100}, Vector2 {150, 200}, Vector2 {50, 200}, GREEN);
-			Draw_TriangleLines(Vector2 {100, 100+80}, Vector2 {150, 200+80}, Vector2 {50, 200+80}, GREEN);
-			Draw_TriangleLines(Vector2 {100, 100+160}, Vector2 {150, 200+160}, Vector2 {50, 200+160}, GREEN);
-			// printf("fps: %d\n", Get_Fps());
-			Draw_TriangleStrip(points, 18, BLUE);
+			// Draw_TriangleLines(Vector2 {100, 100}, Vector2 {150, 200}, Vector2 {50, 200}, GREEN);
+			// Draw_TriangleLines(Vector2 {100+100, 100}, Vector2 {150+100, 200}, Vector2 {50+100, 200}, GREEN);
+			// Draw_TriangleLines(Vector2 {100+50, 100+100}, Vector2 {150+50, 200+100}, Vector2 {50+50, 200+100}, GREEN);
+			// // printf("fps: %d\n", Get_Fps());
+			// Draw_TriangleStrip(points, 18, BLUE);
+			Draw_Rectangle(300, 300, 100, 100, RED);
+			Draw_RectangleLines(300, 300, 100, 100, RED);
 		End_Drawing();
 	}
 

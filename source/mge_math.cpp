@@ -49,3 +49,109 @@ Matrix Matrix_Multiply(Matrix left, Matrix right)
 
     return result;
 }
+
+Matrix Matrix_Translate(float x, float y, float z)
+{
+	Matrix result = { 1.0f, 0.0f, 0.0f, x,
+					  0.0f, 1.0f, 0.0f, y,
+					  0.0f, 0.0f, 1.0f, z,
+					  0.0f, 0.0f, 0.0f, 1.0f };
+
+	return result;
+}
+
+Matrix Matrix_Rotate(Vector3 axis, float angle)
+{
+    Matrix result = { 0 };
+
+    float x = axis.x, y = axis.y, z = axis.z;
+
+    float lengthSquared = x*x + y*y + z*z;
+
+    if ((lengthSquared != 1.0f) && (lengthSquared != 0.0f))
+    {
+        float ilength = 1.0f/sqrtf(lengthSquared);
+        x *= ilength;
+        y *= ilength;
+        z *= ilength;
+    }
+
+    float sinres = sinf(angle);
+    float cosres = cosf(angle);
+    float t = 1.0f - cosres;
+
+    result.m0 = x*x*t + cosres;
+    result.m1 = y*x*t + z*sinres;
+    result.m2 = z*x*t - y*sinres;
+    result.m3 = 0.0f;
+
+    result.m4 = x*y*t - z*sinres;
+    result.m5 = y*y*t + cosres;
+    result.m6 = z*y*t + x*sinres;
+    result.m7 = 0.0f;
+
+    result.m8 = x*z*t + y*sinres;
+    result.m9 = y*z*t - x*sinres;
+    result.m10 = z*z*t + cosres;
+    result.m11 = 0.0f;
+
+    result.m12 = 0.0f;
+    result.m13 = 0.0f;
+    result.m14 = 0.0f;
+    result.m15 = 1.0f;
+
+    return result;
+}
+
+Matrix MatrixOrtho(double left, double right, double bottom, double top, double nearPlane, double farPlane)
+{
+    Matrix result = { 0 };
+
+    float rl = (float)(right - left);
+    float tb = (float)(top - bottom);
+    float fn = (float)(farPlane - nearPlane);
+
+    result.m0 = 2.0f/rl;
+    result.m1 = 0.0f;
+    result.m2 = 0.0f;
+    result.m3 = 0.0f;
+    result.m4 = 0.0f;
+    result.m5 = 2.0f/tb;
+    result.m6 = 0.0f;
+    result.m7 = 0.0f;
+    result.m8 = 0.0f;
+    result.m9 = 0.0f;
+    result.m10 = -2.0f/fn;
+    result.m11 = 0.0f;
+    result.m12 = -((float)left + (float)right)/rl;
+    result.m13 = -((float)top + (float)bottom)/tb;
+    result.m14 = -((float)farPlane + (float)nearPlane)/fn;
+    result.m15 = 1.0f;
+
+    return result;
+}
+
+Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double farPlane)
+{
+    Matrix result = { 0 };
+
+    double top = nearPlane*tan(fovY*0.5);
+    double bottom = -top;
+    double right = top*aspect;
+    double left = -right;
+
+    // MatrixFrustum(-right, right, -top, top, near, far);
+    float rl = (float)(right - left);
+    float tb = (float)(top - bottom);
+    float fn = (float)(farPlane - nearPlane);
+
+    result.m0 = ((float)nearPlane*2.0f)/rl;
+    result.m5 = ((float)nearPlane*2.0f)/tb;
+    result.m8 = ((float)right + (float)left)/rl;
+    result.m9 = ((float)top + (float)bottom)/tb;
+    result.m10 = -((float)farPlane + (float)nearPlane)/fn;
+    result.m11 = -1.0f;
+    result.m14 = -((float)farPlane*(float)nearPlane*2.0f)/fn;
+
+    return result;
+}

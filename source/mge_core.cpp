@@ -1,7 +1,7 @@
+#define CORE_INCLUDE
 #include "mge.h"
 #include "mge_gl.h"
 #include "mge_utils.h"
-
 #include <cmath>
 #include <cstdint>
 
@@ -12,41 +12,12 @@
 #include <time.h>
 #endif
 
-extern int Init_Platform(void);
+extern void InitPlatform(void);
 extern void Close_Platform(void);
-extern float Platform_Get_Time(void);
+extern double Platform_GetTime(void);
 
-static void Setup_Viewport(uint32_t width, uint32_t height);
-static void Init_Timer(void);
-
-typedef struct {
-    int x;
-    int y;
-} Point;
-typedef struct {
-    uint32_t width;
-    uint32_t height;
-} Size;
-
-typedef struct CoreData {
-    struct {
-        const char* title;
-        Size display;
-        bool ready;
-        bool shouldClose;
-    } Window;
-
-	struct {
-		double frame;
-		unsigned int frameCounter;
-		unsigned long long int base;
-		double current;
-		double draw;
-		double previous;
-		double target;
-		double update;
-	} Time;
-} CoreData;
+static void SetupViewport(uint32_t width, uint32_t height);
+static void InitTimer(void);
 
 CoreData CORE = { 0 };
 
@@ -54,28 +25,41 @@ CoreData CORE = { 0 };
 	#include "platforms/mge_code_destop.cpp"
 #endif
 
-void Init_Window(uint32_t width, uint32_t height, const char* title)
+void Mge_InitWindow(uint32_t width, uint32_t height, const char* title)
 {
     TRACE_LOG(LOG_INFO, "Initializing MGE %s", MGE_VERSION);
 #if defined(PLATFORM_DESKTOP)
     TRACE_LOG(LOG_INFO, "Platform backend: DESKTOP (GLFW)");
 #endif
 
-    CORE.Window.display.width = width;
-    CORE.Window.display.height = height;
+    CORE.Window.screen.width = width;
+    CORE.Window.screen.height = height;
     CORE.Window.title = title;
 
-    Init_Platform();
+    InitPlatform();
 
-	MgeGL_Init();
+	MgeGL_Init(CORE.Window.screen.width, CORE.Window.screen.height);
 
-    Setup_Viewport(CORE.Window.display.width, CORE.Window.display.height);
+    SetupViewport(CORE.Window.screen.width, CORE.Window.screen.height);
 
     CORE.Window.shouldClose = false;
 	CORE.Time.frameCounter = 0;
 }
 
-void Init_Timer(void)
+static void SetupViewport(uint32_t width, uint32_t height)
+{
+	MgeGL_Viewport(0, 0, width, height);
+
+	// MgeGL_MatrixMode(MGEGL_PROJECTION);        // Switch to projection matrix
+	// MgeGL_LoadIdentity();                      // Reset current matrix (projection)
+
+	// MgeGL_Ortho(0, width, height, 0, 0.0f, 2.0f);
+
+	// MgeGL_MatrixMode(MGEGL_MODELVIEW);         // Switch back to modelview matrix
+	// MgeGL_LoadIdentity();                      // Reset current matrix (modelview)
+}
+
+void InitTimer(void)
 {
     // Setting a higher resolution can improve the accuracy of time-out intervals in wait functions.
     // However, it can also reduce overall system performance, because the thread scheduler switches tasks more often.
@@ -96,14 +80,14 @@ void Init_Timer(void)
 	}
 #endif
 
-    CORE.Time.previous = Get_Time();     // Get time as double
+    CORE.Time.previous = Mge_GetTime();     // Get time as double
 }
 
-void Wait_Time(double seconds)
+void WaitTime(double seconds)
 {
 	if (seconds < 0) return;
 
-	double destinationTime = Get_Time() + seconds;
+	double destinationTime = Mge_GetTime() + seconds;
 
 	double sleepSeconds = seconds - seconds*0.05;  // NOTE: We reserve a percentage of the time for busy waiting
 
@@ -125,10 +109,10 @@ void Wait_Time(double seconds)
         usleep(sleepSeconds*1000000.0);
     #endif
 
-	while (Get_Time() < destinationTime) { }
+	while (Mge_GetTime() < destinationTime) { }
 }
 
-void Close_Window(void)
+void Mge_CloseWindow(void)
 {
 	MgeGL_Close();
     Close_Platform();
@@ -136,29 +120,30 @@ void Close_Window(void)
     TRACE_LOG(LOG_INFO, "Window closed successfully");
 }
 
-float Get_Time(void)
+double Mge_GetTime(void)
 {
-	return Platform_Get_Time();
+	return Platform_GetTime();
 }
 
-void Clear_Background(Color color)
+void Mge_ClearBackground(Color color)
 {
-    MgeGL_Clear_Color(color.r, color.g, color.b, color.a);
-    MgeGL_Clear_Screen_Buffers();
+    MgeGL_ClearColor(color);
+    MgeGL_ClearScreenBuffers();
 }
 
-void Begin_Drawing(void)
+void Mge_BeginDrawing(void)
 {
-	CORE.Time.current = Get_Time();
+	CORE.Time.current = Mge_GetTime();
 	CORE.Time.update = CORE.Time.current - CORE.Time.previous;
 	CORE.Time.previous = CORE.Time.current;
+	Mge_ProcessInput();
 }
 
-void End_Drawing(void)
+void Mge_EndDrawing(void)
 {
 	Swap_Screen_Buffer();
 
-	CORE.Time.current = Get_Time();
+	CORE.Time.current = Mge_GetTime();
 	CORE.Time.draw = CORE.Time.current - CORE.Time.previous;
 	CORE.Time.previous = CORE.Time.current;
 
@@ -167,9 +152,9 @@ void End_Drawing(void)
 	// Wait for some milliseconds...
 	if (CORE.Time.frame < CORE.Time.target)
 	{
-		Wait_Time(CORE.Time.target - CORE.Time.frame);
+		WaitTime(CORE.Time.target - CORE.Time.frame);
 
-		CORE.Time.current = Get_Time();
+		CORE.Time.current = Mge_GetTime();
 		double waitTime = CORE.Time.current - CORE.Time.previous;
 		CORE.Time.previous = CORE.Time.current;
 
@@ -179,25 +164,19 @@ void End_Drawing(void)
 	Poll_Input_Events();
 }
 
-void Setup_Viewport(uint32_t width, uint32_t height)
-{
-    MgeGL_Viewport(0, 0, width, height);
-	MgeGL_Ortho(0, width, height, 0, 0.0f, 1.0f);
-}
-
 float Get_Frame_Time(void)
 {
     return (float)CORE.Time.frame;
 }
 
-void Set_Target_FPS(int fps)
+void Mge_SetTargetFPS(int fps)
 {
 	if (fps < 1) { CORE.Time.target = 0.0; }
 	else { CORE.Time.target = 1.0/(double)fps; }
 	TRACE_LOG(LOG_INFO, "TIMER: Target time per frame: %02.03f milliseconds", (float)CORE.Time.target*1000.0f);
 }
 
-int Get_Fps(void)
+int Mge_GetFps(void)
 {
 	int fps = 0;
 
@@ -222,9 +201,9 @@ int Get_Fps(void)
 
 	if (fpsFrame == 0) return 0;
 
-	if ((Get_Time() - last) > FPS_STEP)
+	if ((Mge_GetTime() - last) > FPS_STEP)
 	{
-		last = (float)Platform_Get_Time();
+		last = (float)Platform_GetTime();
 		index = (index + 1)%FPS_CAPTURE_FRAMES_COUNT;
 		average -= history[index];
 		history[index] = fpsFrame/FPS_CAPTURE_FRAMES_COUNT;
@@ -235,3 +214,105 @@ int Get_Fps(void)
 
 	return fps;
 }
+/*
+#include <cstdio>
+#include <cstdlib>
+
+#define GLFW_INCLUDE_NONE
+#include "GLFW/glfw3.h"
+#include "glad/glad.h"
+#include "mge.h"
+#include "mge_gl.h"
+#include "mge_utils.h"
+
+typedef struct CoreData {
+	struct {
+		GLFWwindow* handle;
+	} window;
+} CoreData;
+
+CoreData CORE = { 0 };
+
+static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+// static void Error_Callback(int error, const char* description);
+
+// // GLFW3 Error Callback, runs on GLFW3 error
+// static void Error_Callback(int error, const char* description)
+// {
+//     TRACE_LOG(LOG_WARNING, "GLFW: Error: %i Description: %s", error, description);
+// }
+
+void Mge_InitWindow(uint32_t width, uint32_t height, const char* title)
+{
+	int result = glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, 0);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+	if (result == GLFW_FALSE)
+	{
+		TRACE_LOG(LOG_ERROR, "GLFW: Failed to initialize GLFW");
+		exit(EXIT_FAILURE);
+	}
+	TRACE_LOG(LOG_INFO, "GLFW: Initialized successfuly");
+
+	CORE.window.handle = glfwCreateWindow(800, 600, title, NULL, NULL);
+	if (CORE.window.handle == NULL)
+	{
+		printf("Failed to create GLFW window");
+		glfwTerminate();
+		exit(1);
+	}
+	glfwMakeContextCurrent(CORE.window.handle);
+
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		printf("Failed to initialize GLAD");
+		exit(1);
+	}
+
+	glfwSetFramebufferSizeCallback(CORE.window.handle, framebuffer_size_callback);
+
+	MgeGL_Init();
+}
+
+void Mge_CloseWindow()
+{
+	MgeGL_Close();
+	glfwTerminate();
+}
+
+void Mge_BeginDrawing()
+{
+	Mge_ProcessInput();
+}
+
+void Mge_EndDrawing()
+{
+	glfwSwapBuffers(CORE.window.handle);
+	glfwPollEvents();
+}
+
+double Mge_GetTime()
+{
+	return glfwGetTime();
+}
+
+bool Mge_WindowShouldClose()
+{
+	return glfwWindowShouldClose(CORE.window.handle);
+}
+
+static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+}
+
+void Mge_ProcessInput()
+{
+    if(glfwGetKey(CORE.window.handle, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(CORE.window.handle, true);
+}
+*/

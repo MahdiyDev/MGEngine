@@ -16,7 +16,7 @@ endif
 
 INCLUDES+=-I./$(SOURCE_DIR)
 INCLUDES+=-I./3rdparty/glad/include
-INCLUDES+=-I./3rdparty/glm
+# INCLUDES+=-I./3rdparty/glm
 INCLUDES+=-I./3rdparty/stb
 INCLUDES+=-I./3rdparty/glfw/include
 
@@ -42,14 +42,6 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c
 
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-test: all
-	$(CXX) \
-		test.cpp build/obj/mge_utils.o \
-		build/obj/mge_core.o build/obj/mge_shapes.o \
-		build/obj/Shader.o build/obj/glad.o \
-		build/obj/mge_math.o build/obj/mge_gl.o \
-	 $(INCLUDES) $(LIB_DIR) $(LIB_LINKS)
 
 make_build_dir:
 	mkdir -p $(BUILD_OBJ_DIR)
