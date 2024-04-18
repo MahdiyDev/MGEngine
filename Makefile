@@ -4,7 +4,8 @@ CXX = g++
 CFLAGS=
 CXXFLAGS=-Wall -Werror -pedantic -std=c++14
 
-LIB_LINKS+=-lglfw3
+LIB_DIR+=-L./3rdparty/imgui/lib
+LIB_LINKS+=-lglfw3 -limgui
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
@@ -19,6 +20,7 @@ INCLUDES+=-I./3rdparty/glad/include
 # INCLUDES+=-I./3rdparty/glm
 INCLUDES+=-I./3rdparty/stb
 INCLUDES+=-I./3rdparty/glfw/include
+INCLUDES+=-I./3rdparty/imgui/include
 
 SOURCE_DIR = source
 BUILD_DIR = build
@@ -56,7 +58,7 @@ gen_clangd:
 	@printf "    - -I$(CURRENT_DIR)/${SOURCE_DIR}\n" >> .clangd
 	@printf "    - -I$(CURRENT_DIR)/3rdparty/glad/include\n" >> .clangd
 	@printf "    - -I$(CURRENT_DIR)/3rdparty/glfw/include\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/3rdparty/glm\n" >> .clangd
+	@printf "    - -I$(CURRENT_DIR)/3rdparty/imgui/include\n" >> .clangd
 	@printf "    - -I$(CURRENT_DIR)/3rdparty/stb\n" >> .clangd
 
 .PHONY: clean

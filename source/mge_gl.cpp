@@ -1,11 +1,15 @@
 #include "mge_gl.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 #include "mge.h"
 #include "mge_math.h"
 #include "mge_utils.h"
+#include <cstdio>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include <stb_image.h>
 #include <glad/glad.h>
+#include <imgui.h>
 #include <fstream>
 #include <math.h>
 #include <sstream>
@@ -40,6 +44,8 @@ typedef struct GlData {
 		unsigned int AttribLoc[MAX_ATTRIB_LOCATION];
 		unsigned char colorr, colorg, colorb, colora;
 		float texcoordx, texcoordy;
+
+		Matrix model, view, projection;
 
 		VertexData vertexBuffer;
 		float currentDepth;
@@ -119,6 +125,20 @@ void MgeGL_Init(int width, int height)
 
 		k++;
 	}
+
+	MGEGL.State.model = Matrix_Identity();
+	MGEGL.State.view = Matrix_Identity();
+	MGEGL.State.view = Matrix_Multiply(MGEGL.State.view, Matrix_Translate(0.0f, 0.0f, -6.0f));
+	MGEGL.State.model = Matrix_Rotate(Vector3 {1.0f, 1.0f, 0.0f}, -45.0f*DEG2RAD);
+	MGEGL.State.projection = MatrixPerspective(
+		45.0f*DEG2RAD,
+		(float)MGEGL.State.framebufferWidth / (float)MGEGL.State.framebufferHeight,
+		0.1f, 1000.0f
+	);
+	// float aspect = (float)MGEGL.State.framebufferWidth / (float)MGEGL.State.framebufferHeight;
+	// double top = 45.0f/20.0;
+	// double right = top*aspect;
+	// MGEGL.State.projection = MatrixOrtho(-right, right, -top, top, 0.01, 1000.0);
 
 	// unsigned char pixels[4] = { 255, 255, 255, 255 };
 	int texWidth, texHeight;
@@ -230,25 +250,13 @@ void MgeGL_End()
 	MGEGL.State.currentDepth += (1.0f/20000.0f);
 }
 
-
-Matrix model = Matrix_Identity();
 void MgeGL_Draw(int mode)
 {
-	model = Matrix_Rotate(Vector3 {1.0f, 1.0f, 0.0f}, -55.0f*Mge_GetTime()*DEG2RAD);
-	Matrix view = Matrix_Identity();
-	view = Matrix_Multiply(view, Matrix_Translate(0.0f, 0.0f, -6.0f));
-	Matrix projection = MatrixPerspective(
-		45.0f*DEG2RAD,
-		(float)MGEGL.State.framebufferWidth / (float)MGEGL.State.framebufferHeight,
-		0.1f, 100.0f
-	);
-	// Matrix projection = MatrixOrtho(0.0f, 800.0f, 600.0f, 0.0f, 0.0f, 1.0f);
+	// MGEGL.State.model = Matrix_Rotate(Vector3 {1.0f, 1.0f, 0.0f}, -55.0f*Mge_GetTime()*DEG2RAD);
 
-	// projection = Matrix_Multiply(projection, MatrixOrtho(0.0f, 800.0f, 0.0f, 600.0f, 0.1f, 100.0f));
-
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "model", model);
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "view", view);
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "projection", projection);
+	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "model", MGEGL.State.model);
+	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "view", MGEGL.State.view);
+	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "projection", MGEGL.State.projection);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, MGEGL.State.defaultTexture);

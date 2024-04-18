@@ -7,6 +7,9 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glad//glad.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 #include <cstdlib>
 
@@ -61,7 +64,7 @@ void InitPlatform(void)
         CORE.Window.screen.width,
         CORE.Window.screen.height,
         CORE.Window.title,
-        glfwGetPrimaryMonitor(), NULL);
+        NULL, NULL);
 
     if (!platform.window) {
         TRACE_LOG(LOG_WARNING, "GLFW: Failed to initialize Window");
@@ -90,6 +93,14 @@ void InitPlatform(void)
 	const GLFWvidmode *mode = glfwGetVideoMode(monitor);
 	CORE.Window.display.width = mode->width;
 	CORE.Window.display.height = mode->height;
+
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	// ImGuiIO io = ImGui::GetIO();
+	ImGui::StyleColorsDark();
+	ImGui_ImplGlfw_InitForOpenGL(platform.window, true);
+	ImGui_ImplOpenGL3_Init("#version 460");
 }
 
 double Platform_GetTime(void)
@@ -119,6 +130,10 @@ bool Mge_WindowShouldClose(void)
 
 void Close_Platform(void)
 {
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
     glfwDestroyWindow(platform.window);
     glfwTerminate();
     TRACE_LOG(LOG_INFO, "GLFW: terminated");

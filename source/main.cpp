@@ -49,8 +49,7 @@ float vertices[] = {
 
 int main(int argc, char** argv)
 {
-	// Mge_InitWindow(800, 600, "OpenGL engine v1.0");
-	Mge_InitWindow(2560, 1600, "OpenGL engine v1.0");
+	Mge_InitWindow(800, 600, "OpenGL engine v1.0");
 	Mge_SetTargetFPS(60);
 	while(!Mge_WindowShouldClose())
 	{
