@@ -26,6 +26,12 @@ typedef enum {
     LOG_NONE			// Disable logging
 } TraceLogLevel;
 
+// Camera projection
+typedef enum {
+	CAMERA_PERSPECTIVE = 0,  // Perspective projection
+	CAMERA_ORTHOGRAPHIC      // Orthographic projection
+} CameraProjection;
+
 typedef struct Color {
     unsigned char r;	// Color red value
     unsigned char g;	// Color green value
@@ -50,6 +56,14 @@ typedef struct Rectangle {
 #define DARKGRAY	CLITERAL(Color) { 80, 80, 80, 255 }
 #define WHITE		CLITERAL(Color) { 255, 255, 255, 255 }
 #define YELLOW		CLITERAL(Color) { 255, 255, 0, 255 }
+
+typedef struct Camera3D {
+	Vector3 position;       // Camera position
+	Vector3 target;         // Camera target it looks-at
+	Vector3 up;             // Camera up vector (rotation over its axis)
+	float fovy;             // Camera field-of-view aperture in Y (degrees) in perspective, used as near plane width in orthographic
+	int projection;         // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+} Camera3D;
 
 #ifdef CORE_INCLUDE
 typedef struct {
@@ -96,6 +110,8 @@ void Mge_ProcessInput();
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing();
 void Mge_EndDrawing();
+void Mge_BeginMode3D(Camera3D camera);
+void Mge_EndMode3D(void);
 
 // Shapes
 void Draw_Line(int startPosX, int startPosY, int endPosX, int endPosY, Color color);

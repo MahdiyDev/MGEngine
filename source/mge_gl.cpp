@@ -45,13 +45,17 @@ typedef struct GlData {
 		unsigned char colorr, colorg, colorb, colora;
 		float texcoordx, texcoordy;
 
-		Matrix model, view, projection;
+		Matrix modelview, projection;
+		Matrix* currentMatrix;
+		int currentMatrixMode;
 
 		VertexData vertexBuffer;
 		float currentDepth;
 
 		int framebufferWidth;
 		int framebufferHeight;
+
+		int mode; // removed soon
 	} State;
 } GlData;
 
@@ -62,12 +66,11 @@ const char* vertexShaderCode =
 	"in vec2 aTexCoord;\n"
 	"out vec4 vertexColor;\n"
 	"out vec2 texCoord;\n"
-	"uniform mat4 model;\n"
-	"uniform mat4 view;\n"
+	"uniform mat4 modelview;\n"
 	"uniform mat4 projection;\n"
 	"void main()\n"
 	"{\n"
-	"	gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
+	"	gl_Position = modelview * projection * vec4(aPos, 1.0);\n"
 	"	vertexColor = aColor;\n"
 	"	texCoord = aTexCoord;\n"
 	"}\n\0";
@@ -82,17 +85,6 @@ const char* fragmentShaderCode =
 	"{\n"
 	"	FragColor = texture(sampleTex, texCoord) * vertexColor;\n"
 	"}\n\0";
-
-// float texCoords[] = {
-//	0.0f, 0.0f,  // lower-left corner  
-//	1.0f, 0.0f,  // lower-right corner
-//	0.5f, 1.0f   // top-center corner
-// };
-
-// unsigned int indices[] = {
-// 	0, 1, 3, // first triangle
-// 	1, 2, 3  // second triangle
-// };
 
 GlData MGEGL = { 0 };
 
@@ -126,19 +118,9 @@ void MgeGL_Init(int width, int height)
 		k++;
 	}
 
-	MGEGL.State.model = Matrix_Identity();
-	MGEGL.State.view = Matrix_Identity();
-	MGEGL.State.view = Matrix_Multiply(MGEGL.State.view, Matrix_Translate(0.0f, 0.0f, -6.0f));
-	MGEGL.State.model = Matrix_Rotate(Vector3 {1.0f, 1.0f, 0.0f}, -45.0f*DEG2RAD);
-	MGEGL.State.projection = MatrixPerspective(
-		45.0f*DEG2RAD,
-		(float)MGEGL.State.framebufferWidth / (float)MGEGL.State.framebufferHeight,
-		0.1f, 1000.0f
-	);
-	// float aspect = (float)MGEGL.State.framebufferWidth / (float)MGEGL.State.framebufferHeight;
-	// double top = 45.0f/20.0;
-	// double right = top*aspect;
-	// MGEGL.State.projection = MatrixOrtho(-right, right, -top, top, 0.01, 1000.0);
+	MGEGL.State.modelview = Matrix_Identity();
+	MGEGL.State.projection = Matrix_Identity();
+	MGEGL.State.currentMatrix = &MGEGL.State.modelview;
 
 	// unsigned char pixels[4] = { 255, 255, 255, 255 };
 	int texWidth, texHeight;
@@ -157,11 +139,6 @@ void MgeGL_Init(int width, int height)
 
 	glGenVertexArrays(1, &MGEGL.State.VAO);
 	glBindVertexArray(MGEGL.State.VAO);
-
-	// unsigned int EBO;
-	// glGenBuffers(1, &EBO);
-	// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	// glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 	// positions
 	glGenBuffers(1, &MGEGL.State.VBO[0]);
@@ -240,7 +217,8 @@ void MgeGL_Close()
 
 void MgeGL_Begin(int mode)
 {
-	MgeGL_Draw(mode);
+	MGEGL.State.mode = mode;
+	MgeGL_Draw();
 	MGEGL.State.vertexCounter = 0;
 	MGEGL.State.currentDepth = -1.0f;
 }
@@ -250,12 +228,11 @@ void MgeGL_End()
 	MGEGL.State.currentDepth += (1.0f/20000.0f);
 }
 
-void MgeGL_Draw(int mode)
+void MgeGL_Draw()
 {
-	// MGEGL.State.model = Matrix_Rotate(Vector3 {1.0f, 1.0f, 0.0f}, -55.0f*Mge_GetTime()*DEG2RAD);
+	// MgeGL_Rotatef(-55.0f*Mge_GetTime(), 1.0f, 1.0f, 0.0f);
 
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "model", MGEGL.State.model);
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "view", MGEGL.State.view);
+	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "modelview", MGEGL.State.modelview);
 	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "projection", MGEGL.State.projection);
 
 	glActiveTexture(GL_TEXTURE0);
@@ -276,15 +253,99 @@ void MgeGL_Draw(int mode)
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
 
-	if (mode == MGEGL_LINES || mode == MGEGL_TRIANGLES)
+	if (MGEGL.State.mode == MGEGL_LINES || MGEGL.State.mode == MGEGL_TRIANGLES)
 	{
-		glDrawArrays(mode, 0, MGEGL.State.vertexCounter);
+		int offset = 0;
+		glDrawArrays(MGEGL.State.mode, offset, MGEGL.State.vertexCounter);
 	}
 	else
 	{
 		glDrawElements(GL_TRIANGLES, MGEGL.State.vertexCounter/4*6, GL_UNSIGNED_INT, 0);
 	}
 	glBindVertexArray(0);
+}
+
+
+void MgeGL_MatrixMode(int mode)
+{
+	if (mode == MGEGL_PROJECTION) MGEGL.State.currentMatrix = &MGEGL.State.projection;
+	else if (mode == MGEGL_MODELVIEW) MGEGL.State.currentMatrix = &MGEGL.State.modelview;
+
+	MGEGL.State.currentMatrixMode = mode;
+}
+
+void MgeGL_LoadIdentity(void)
+{
+	*MGEGL.State.currentMatrix = Matrix_Identity();
+}
+
+void MgeGL_Translatef(float x, float y, float z)
+{
+	Matrix matTranslation = {
+		1.0f, 0.0f, 0.0f, x,
+		0.0f, 1.0f, 0.0f, y,
+		0.0f, 0.0f, 1.0f, z,
+		0.0f, 0.0f, 0.0f, 1.0f
+	};
+
+	// NOTE: We transpose matrix with multiplication order
+	*MGEGL.State.currentMatrix = Matrix_Multiply(matTranslation, *MGEGL.State.currentMatrix);
+}
+
+void MgeGL_Rotatef(float angle, float x, float y, float z)
+{
+	Matrix matRotation = Matrix_Identity();
+
+	// Axis vector (x, y, z) normalization
+	float lengthSquared = x*x + y*y + z*z;
+	if ((lengthSquared != 1.0f) && (lengthSquared != 0.0f))
+	{
+		float inverseLength = 1.0f/sqrtf(lengthSquared);
+		x *= inverseLength;
+		y *= inverseLength;
+		z *= inverseLength;
+	}
+
+	// Rotation matrix generation
+	float sinres = sinf(DEG2RAD*angle);
+	float cosres = cosf(DEG2RAD*angle);
+	float t = 1.0f - cosres;
+
+	matRotation.m0 = x*x*t + cosres;
+	matRotation.m1 = y*x*t + z*sinres;
+	matRotation.m2 = z*x*t - y*sinres;
+	matRotation.m3 = 0.0f;
+
+	matRotation.m4 = x*y*t - z*sinres;
+	matRotation.m5 = y*y*t + cosres;
+	matRotation.m6 = z*y*t + x*sinres;
+	matRotation.m7 = 0.0f;
+
+	matRotation.m8 = x*z*t + y*sinres;
+	matRotation.m9 = y*z*t - x*sinres;
+	matRotation.m10 = z*z*t + cosres;
+	matRotation.m11 = 0.0f;
+
+	matRotation.m12 = 0.0f;
+	matRotation.m13 = 0.0f;
+	matRotation.m14 = 0.0f;
+	matRotation.m15 = 1.0f;
+
+	// NOTE: We transpose matrix with multiplication order
+	*MGEGL.State.currentMatrix = Matrix_Multiply(matRotation, *MGEGL.State.currentMatrix);
+}
+
+void MgeGL_MultMatrixf(const float *matf)
+{
+	// Matrix creation from array
+	Matrix mat = {
+		matf[0], matf[4], matf[8], matf[12],
+		matf[1], matf[5], matf[9], matf[13],
+		matf[2], matf[6], matf[10], matf[14],
+		matf[3], matf[7], matf[11], matf[15]
+	};
+
+	*MGEGL.State.currentMatrix = Matrix_Multiply(*MGEGL.State.currentMatrix, mat);
 }
 
 void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned char w)
@@ -327,6 +388,65 @@ void MgeGL_Vertex3f(float x, float y, float z)
 	MGEGL.State.vertexBuffer.texcoords[2*MGEGL.State.vertexCounter+1] = MGEGL.State.texcoordy;
 
 	MGEGL.State.vertexCounter++;
+}
+
+void MgeGL_Frustum(double left, double right, double bottom, double top, double znear, double zfar)
+{
+	Matrix matFrustum = { 0 };
+
+	float rl = (float)(right - left);
+	float tb = (float)(top - bottom);
+	float fn = (float)(zfar - znear);
+
+	matFrustum.m0 = ((float) znear*2.0f)/rl;
+	matFrustum.m1 = 0.0f;
+	matFrustum.m2 = 0.0f;
+	matFrustum.m3 = 0.0f;
+
+	matFrustum.m4 = 0.0f;
+	matFrustum.m5 = ((float) znear*2.0f)/tb;
+	matFrustum.m6 = 0.0f;
+	matFrustum.m7 = 0.0f;
+
+	matFrustum.m8 = ((float)right + (float)left)/rl;
+	matFrustum.m9 = ((float)top + (float)bottom)/tb;
+	matFrustum.m10 = -((float)zfar + (float)znear)/fn;
+	matFrustum.m11 = -1.0f;
+
+	matFrustum.m12 = 0.0f;
+	matFrustum.m13 = 0.0f;
+	matFrustum.m14 = -((float)zfar*(float)znear*2.0f)/fn;
+	matFrustum.m15 = 0.0f;
+
+	*MGEGL.State.currentMatrix = Matrix_Multiply(*MGEGL.State.currentMatrix, matFrustum);
+}
+
+void MgeGL_Ortho(double left, double right, double bottom, double top, double znear, double zfar)
+{
+	Matrix matOrtho = { 0 };
+
+	float rl = (float)(right - left);
+	float tb = (float)(top - bottom);
+	float fn = (float)(zfar - znear);
+
+	matOrtho.m0 = 2.0f/rl;
+	matOrtho.m1 = 0.0f;
+	matOrtho.m2 = 0.0f;
+	matOrtho.m3 = 0.0f;
+	matOrtho.m4 = 0.0f;
+	matOrtho.m5 = 2.0f/tb;
+	matOrtho.m6 = 0.0f;
+	matOrtho.m7 = 0.0f;
+	matOrtho.m8 = 0.0f;
+	matOrtho.m9 = 0.0f;
+	matOrtho.m10 = -2.0f/fn;
+	matOrtho.m11 = 0.0f;
+	matOrtho.m12 = -((float)left + (float)right)/rl;
+	matOrtho.m13 = -((float)top + (float)bottom)/tb;
+	matOrtho.m14 = -((float)zfar + (float)znear)/fn;
+	matOrtho.m15 = 1.0f;
+
+	*MGEGL.State.currentMatrix = Matrix_Multiply(*MGEGL.State.currentMatrix, matOrtho);
 }
 
 int MgeGL_GetAttribLoc(const char* name)
@@ -467,8 +587,7 @@ void MgeGL_Load_Extensions(void* loader)
 	TRACE_LOG(LOG_INFO, "	> Renderer: %s", glGetString(GL_RENDERER));
 	TRACE_LOG(LOG_INFO, "	> Version:  %s", glGetString(GL_VERSION));
 	TRACE_LOG(LOG_INFO, "	> GLSL:	 %s", glGetString(GL_SHADING_LANGUAGE_VERSION));
-
-	MgeGL_EnableDepthTest();
 }
 
 void MgeGL_EnableDepthTest(void) { glEnable(GL_DEPTH_TEST); }
+void MgeGL_DisableDepthTest(void) { glDisable(GL_DEPTH_TEST); }

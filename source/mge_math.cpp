@@ -155,3 +155,81 @@ Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double fa
 
     return result;
 }
+
+float16 MatrixToFloatV(Matrix mat)
+{
+	float16 result = { 0 };
+
+	result.v[0] = mat.m0;
+	result.v[1] = mat.m1;
+	result.v[2] = mat.m2;
+	result.v[3] = mat.m3;
+	result.v[4] = mat.m4;
+	result.v[5] = mat.m5;
+	result.v[6] = mat.m6;
+	result.v[7] = mat.m7;
+	result.v[8] = mat.m8;
+	result.v[9] = mat.m9;
+	result.v[10] = mat.m10;
+	result.v[11] = mat.m11;
+	result.v[12] = mat.m12;
+	result.v[13] = mat.m13;
+	result.v[14] = mat.m14;
+	result.v[15] = mat.m15;
+
+	return result;
+}
+
+Matrix MatrixLookAt(Vector3 eye, Vector3 target, Vector3 up)
+{
+	Matrix result = { 0 };
+
+	float length = 0.0f;
+	float ilength = 0.0f;
+
+	// Vector3Subtract(eye, target)
+	Vector3 vz = { eye.x - target.x, eye.y - target.y, eye.z - target.z };
+
+	// Vector3Normalize(vz)
+	Vector3 v = vz;
+	length = sqrtf(v.x*v.x + v.y*v.y + v.z*v.z);
+	if (length == 0.0f) length = 1.0f;
+	ilength = 1.0f/length;
+	vz.x *= ilength;
+	vz.y *= ilength;
+	vz.z *= ilength;
+
+	// Vector3CrossProduct(up, vz)
+	Vector3 vx = { up.y*vz.z - up.z*vz.y, up.z*vz.x - up.x*vz.z, up.x*vz.y - up.y*vz.x };
+
+	// Vector3Normalize(x)
+	v = vx;
+	length = sqrtf(v.x*v.x + v.y*v.y + v.z*v.z);
+	if (length == 0.0f) length = 1.0f;
+	ilength = 1.0f/length;
+	vx.x *= ilength;
+	vx.y *= ilength;
+	vx.z *= ilength;
+
+	// Vector3CrossProduct(vz, vx)
+	Vector3 vy = { vz.y*vx.z - vz.z*vx.y, vz.z*vx.x - vz.x*vx.z, vz.x*vx.y - vz.y*vx.x };
+
+	result.m0 = vx.x;
+	result.m1 = vy.x;
+	result.m2 = vz.x;
+	result.m3 = 0.0f;
+	result.m4 = vx.y;
+	result.m5 = vy.y;
+	result.m6 = vz.y;
+	result.m7 = 0.0f;
+	result.m8 = vx.z;
+	result.m9 = vy.z;
+	result.m10 = vz.z;
+	result.m11 = 0.0f;
+	result.m12 = -(vx.x*eye.x + vx.y*eye.y + vx.z*eye.z);   // Vector3DotProduct(vx, eye)
+	result.m13 = -(vy.x*eye.x + vy.y*eye.y + vy.z*eye.z);   // Vector3DotProduct(vy, eye)
+	result.m14 = -(vz.x*eye.x + vz.y*eye.y + vz.z*eye.z);   // Vector3DotProduct(vz, eye)
+	result.m15 = 1.0f;
+
+	return result;
+}

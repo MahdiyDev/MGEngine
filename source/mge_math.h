@@ -10,6 +10,14 @@
     #define RAD2DEG (180.0f/PI)
 #endif
 
+typedef struct float16 {
+    float v[16];
+} float16;
+
+#ifndef MatrixToFloat
+    #define MatrixToFloat(mat) (MatrixToFloatV(mat).v)
+#endif
+
 typedef struct Vector2 { float x; float y; } Vector2;
 typedef struct Vector3 { float x; float y; float z; } Vector3;
 typedef struct Vector4 { float x; float y; float z; float w; } Vector4;
@@ -27,3 +35,5 @@ Matrix Matrix_Translate(float x, float y, float z);
 Matrix Matrix_Rotate(Vector3 axis, float angle);
 Matrix MatrixOrtho(double left, double right, double bottom, double top, double nearPlane, double farPlane);
 Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double farPlane);
+Matrix MatrixLookAt(Vector3 eye, Vector3 target, Vector3 up);
+float16 MatrixToFloatV(Matrix mat);

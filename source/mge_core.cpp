@@ -50,13 +50,13 @@ static void SetupViewport(uint32_t width, uint32_t height)
 {
 	MgeGL_Viewport(0, 0, width, height);
 
-	// MgeGL_MatrixMode(MGEGL_PROJECTION);        // Switch to projection matrix
-	// MgeGL_LoadIdentity();                      // Reset current matrix (projection)
+	MgeGL_MatrixMode(MGEGL_PROJECTION);        // Switch to projection matrix
+	MgeGL_LoadIdentity();                      // Reset current matrix (projection)
 
-	// MgeGL_Ortho(0, width, height, 0, 0.0f, 2.0f);
+	MgeGL_Ortho(0, width, height, 0, 0.0f, 1.0f);
 
-	// MgeGL_MatrixMode(MGEGL_MODELVIEW);         // Switch back to modelview matrix
-	// MgeGL_LoadIdentity();                      // Reset current matrix (modelview)
+	MgeGL_MatrixMode(MGEGL_MODELVIEW);         // Switch back to modelview matrix
+	MgeGL_LoadIdentity();                      // Reset current matrix (modelview)
 }
 
 void InitTimer(void)
@@ -162,6 +162,47 @@ void Mge_EndDrawing(void)
 	}
 	CORE.Time.frameCounter++;
 	Poll_Input_Events();
+}
+
+#define MGE_CULL_DISTANCE_NEAR		0.01
+#define MGE_CULL_DISTANCE_FAR		1000.0
+
+void Mge_BeginMode3D(Camera3D camera)
+{
+	// MgeGL_Draw();
+	// MgeGL_MatrixMode(MGEGL_PROJECTION);
+	// MgeGL_LoadIdentity();
+
+	// float aspect = (float)CORE.Window.screen.width/(float)CORE.Window.screen.height;
+
+	// if (camera.projection == CAMERA_PERSPECTIVE)
+	// {
+	// 	double top = MGE_CULL_DISTANCE_NEAR*tan(camera.fovy*0.5*DEG2RAD);
+	// 	double right = top*aspect;
+
+	// 	MgeGL_Frustum(-right, right, -top, top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
+	// }
+	// else if (camera.projection == CAMERA_ORTHOGRAPHIC)
+    // {
+	// 	// Setup orthographic projection
+	// 	double top = camera.fovy/2.0;
+	// 	double right = top*aspect;
+
+	// 	MgeGL_Ortho(-right, right, -top,top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
+    // }
+
+	// MgeGL_MatrixMode(MGEGL_MODELVIEW);
+	// MgeGL_LoadIdentity();
+
+	// Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
+	// MgeGL_MultMatrixf(MatrixToFloat(matView));      // Multiply modelview matrix by view matrix (camera)
+
+	MgeGL_EnableDepthTest();
+}
+
+void Mge_EndMode3D(void)
+{
+	MgeGL_DisableDepthTest();
 }
 
 float Get_Frame_Time(void)

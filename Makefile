@@ -45,6 +45,10 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
+test: make_build_dir $(COBJECTS) $(CXXOBJECTS)
+	$(CXX) $(INCLUDES) -c test.cpp -o $(BUILD_OBJ_DIR)/test.o
+	$(CXX) $(CXXFLAGS) $(COBJECTS) $(filter-out $(BUILD_OBJ_DIR)/main.o,$(CXXOBJECTS)) $(BUILD_OBJ_DIR)/test.o $(LIB_DIR) $(LIB_LINKS)
+
 make_build_dir:
 	mkdir -p $(BUILD_OBJ_DIR)
 	cp -r ./assests $(BUILD_DIR)
