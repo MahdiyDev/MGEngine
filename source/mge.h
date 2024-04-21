@@ -117,7 +117,7 @@ void Mge_ProcessInput();
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing();
 void Mge_EndDrawing();
-void Mge_BeginMode3D(Camera3D camera);
+void Mge_BeginMode3D(Camera3D& camera);
 void Mge_EndMode3D(void);
 
 // Shapes

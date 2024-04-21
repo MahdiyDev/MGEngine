@@ -1,8 +1,6 @@
 #include "mge.h"
 #include "mge_gl.h"
 #include "mge_math.h"
-#include <cstddef>
-#include <cstdio>
 
 float vertices[] = {
     1.0f, 0.0f,   0.5f, -0.5f, -0.5f,
@@ -50,12 +48,12 @@ float vertices[] = {
 
 int main(int argc, char** argv)
 {
-	Mge_InitWindow(800, 600, "OpenGL engine v1.0");
+	Mge_InitWindow(800*2, 600*2, "OpenGL engine v1.0");
 	Mge_SetTargetFPS(60);
 
 	Camera3D camera = {0};
-	camera.position = Vector3 {0.0f, 0.0f, 1.0f};
-	camera.target = Vector3 {0.0f, 0.0f, 0.0f};
+	camera.position = Vector3 {0.0f, 0.0f, 3.0f};
+	camera.target = Vector3 {0.0f, 0.0f, -1.0f};
 	camera.up = Vector3 {0.0f, 1.0f, 0.0f};
 	camera.fovy = 60.0f;
 	camera.projection = CAMERA_PERSPECTIVE;
@@ -63,9 +61,8 @@ int main(int argc, char** argv)
 	while(!Mge_WindowShouldClose())
 	{
 		Mge_BeginDrawing();
-		Mge_BeginMode3D(camera);
 			Mge_ClearBackground(DARKGREEN);
-
+		Mge_BeginMode3D(camera);
 			MgeGL_Begin(MGEGL_TRIANGLES);
 				MgeGL_Color4ub(255, 255, 255, 255);
 				for (size_t i = 0; i < sizeof(vertices) / sizeof(float); i++) {

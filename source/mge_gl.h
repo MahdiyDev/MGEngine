@@ -14,6 +14,8 @@
 #define MGEGL_TRIANGLES		0x0004 // GL_TRIANGLES
 #define MGEGL_QUADS			0x0007 // GL_QUADS
 
+#define MGEGL_MAX_MATRIX_STACK_SIZE 32
+
 void MgeGL_Init(int width, int height);
 void MgeGL_Close();
 void MgeGL_Draw();
@@ -42,6 +44,8 @@ void MgeGL_Ortho(double left, double right, double bottom, double top, double zn
 void MgeGL_Translatef(float x, float y, float z);
 void MgeGL_Rotatef(float angle, float x, float y, float z);
 void MgeGL_MultMatrixf(const float *matf);
+void MgeGL_PushMatrix(void);
+void MgeGL_PopMatrix(void);
 
 void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned char w);
 void MgeGL_Vertex2i(int x, int y);

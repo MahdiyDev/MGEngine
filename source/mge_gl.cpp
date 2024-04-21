@@ -45,9 +45,12 @@ typedef struct GlData {
 		unsigned char colorr, colorg, colorb, colora;
 		float texcoordx, texcoordy;
 
-		Matrix modelview, projection;
+		Matrix modelview, projection, transform;
 		Matrix* currentMatrix;
 		int currentMatrixMode;
+		Matrix stack[MGEGL_MAX_MATRIX_STACK_SIZE];
+		int stackCounter;
+		bool transformRequired;
 
 		VertexData vertexBuffer;
 		float currentDepth;
@@ -70,7 +73,7 @@ const char* vertexShaderCode =
 	"uniform mat4 projection;\n"
 	"void main()\n"
 	"{\n"
-	"	gl_Position = modelview * projection * vec4(aPos, 1.0);\n"
+	"	gl_Position = projection * modelview  * vec4(aPos, 1.0);\n"
 	"	vertexColor = aColor;\n"
 	"	texCoord = aTexCoord;\n"
 	"}\n\0";
@@ -348,6 +351,38 @@ void MgeGL_MultMatrixf(const float *matf)
 	*MGEGL.State.currentMatrix = Matrix_Multiply(*MGEGL.State.currentMatrix, mat);
 }
 
+// Push the current matrix into MGEGL.State.stack
+void MgeGL_PushMatrix(void)
+{
+	if (MGEGL.State.stackCounter >= MGEGL_MAX_MATRIX_STACK_SIZE) TRACE_LOG(LOG_ERROR, "RLGL: Matrix stack overflow (MGEGL_MAX_MATRIX_STACK_SIZE)");
+
+	if (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW)
+	{
+		MGEGL.State.transformRequired = true;
+		MGEGL.State.currentMatrix = &MGEGL.State.transform;
+	}
+
+	MGEGL.State.stack[MGEGL.State.stackCounter] = *MGEGL.State.currentMatrix;
+	MGEGL.State.stackCounter++;
+}
+
+// Pop lattest inserted matrix from MGEGL.State.stack
+void MgeGL_PopMatrix(void)
+{
+	if (MGEGL.State.stackCounter > 0)
+	{
+		Matrix mat = MGEGL.State.stack[MGEGL.State.stackCounter - 1];
+		*MGEGL.State.currentMatrix = mat;
+		MGEGL.State.stackCounter--;
+	}
+
+	if ((MGEGL.State.stackCounter == 0) && (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW))
+	{
+		MGEGL.State.currentMatrix = &MGEGL.State.modelview;
+		MGEGL.State.transformRequired = false;
+	}
+}
+
 void MgeGL_Color4ub(unsigned char x, unsigned char y, unsigned char z, unsigned char w)
 {
 	MGEGL.State.colorr = x;
@@ -374,10 +409,21 @@ void MgeGL_Vertex2f(float x, float y)
 
 void MgeGL_Vertex3f(float x, float y, float z)
 {
+	float tx = x;
+	float ty = y;
+	float tz = z;
+
+	// Transform provided vector if required
+	if (MGEGL.State.transformRequired)
+	{
+		tx = MGEGL.State.transform.m0*x + MGEGL.State.transform.m4*y + MGEGL.State.transform.m8*z + MGEGL.State.transform.m12;
+		ty = MGEGL.State.transform.m1*x + MGEGL.State.transform.m5*y + MGEGL.State.transform.m9*z + MGEGL.State.transform.m13;
+		tz = MGEGL.State.transform.m2*x + MGEGL.State.transform.m6*y + MGEGL.State.transform.m10*z + MGEGL.State.transform.m14;
+	}
 	// Adding position
-	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+0] = x;
-	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+1] = y;
-	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+2] = z;
+	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+0] = tx;
+	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+1] = ty;
+	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+2] = tz;
 	// Adding color
 	MGEGL.State.vertexBuffer.colors[4*MGEGL.State.vertexCounter+0] = MGEGL.State.colorr;
 	MGEGL.State.vertexBuffer.colors[4*MGEGL.State.vertexCounter+1] = MGEGL.State.colorg;
