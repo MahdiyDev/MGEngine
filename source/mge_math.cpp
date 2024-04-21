@@ -1,6 +1,15 @@
 #include "mge_math.h"
 #include <math.h>
 
+float Clamp(float value, float min, float max)
+{
+	float result = (value < min) ? min : value;
+
+	if (result > max) result = max;
+
+	return result;
+}
+
 Vector2 Vector2_Rotate(Vector2 v, float angle)
 {
 	Vector2 result = { 0 };
@@ -14,16 +23,9 @@ Vector2 Vector2_Rotate(Vector2 v, float angle)
 	return result;
 }
 
-Vector3 Vector3Subtract(Vector3 v1, Vector3 v2)
+Vector3 Vector3Cross(Vector3 v1, Vector3 v2)
 {
-	Vector3 result = { v1.x - v2.x, v1.y - v2.y, v1.z - v2.z };
-
-	return result;
-}
-
-Vector3 Vector3Add(Vector3 v1, Vector3 v2)
-{
-	Vector3 result = { v1.x + v2.x, v1.y + v2.y, v1.z + v2.z };
+	Vector3 result = { v1.y*v2.z - v1.z*v2.y, v1.z*v2.x - v1.x*v2.z, v1.x*v2.y - v1.y*v2.x };
 
 	return result;
 }

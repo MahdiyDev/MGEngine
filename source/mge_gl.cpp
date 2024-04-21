@@ -233,8 +233,6 @@ void MgeGL_End()
 
 void MgeGL_Draw()
 {
-	// MgeGL_Rotatef(-55.0f*Mge_GetTime(), 1.0f, 1.0f, 0.0f);
-
 	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "modelview", MGEGL.State.modelview);
 	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "projection", MGEGL.State.projection);
 

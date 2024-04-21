@@ -1,6 +1,7 @@
 #include "imgui.h"
 #include "mge_math.h"
 #include <math.h>
+#include <stdio.h>
 #define CORE_INCLUDE
 #include "mge.h"
 #include "mge_gl.h"
@@ -45,8 +46,11 @@ void Mge_InitWindow(uint32_t width, uint32_t height, const char* title)
 
 	SetupViewport(CORE.Window.screen.width, CORE.Window.screen.height);
 
+	CORE.Input.Mouse.scale = Vector2 { 1.0f, 1.0f };
+
 	CORE.Window.shouldClose = false;
 	CORE.Time.frameCounter = 0;
+	CORE.Time.deltaTime = 0;
 }
 
 static void SetupViewport(uint32_t width, uint32_t height)
@@ -128,6 +132,11 @@ double Mge_GetTime(void)
 	return Platform_GetTime();
 }
 
+double Mge_GetDeltaTime(void)
+{
+	return CORE.Time.deltaTime;
+}
+
 void Mge_ClearBackground(Color color)
 {
 	MgeGL_ClearColor(color);
@@ -136,10 +145,14 @@ void Mge_ClearBackground(Color color)
 
 void Mge_BeginDrawing(void)
 {
+	// Fps calculation
 	CORE.Time.current = Mge_GetTime();
 	CORE.Time.update = CORE.Time.current - CORE.Time.previous;
 	CORE.Time.previous = CORE.Time.current;
-	Mge_ProcessInput();
+
+	// Delta time calculation
+	CORE.Time.deltaTime = CORE.Time.current - CORE.Time.lastFrame;
+	CORE.Time.lastFrame = CORE.Time.current;
 }
 
 void Mge_EndDrawing(void)
@@ -209,7 +222,7 @@ void Mge_BeginMode3D(Camera3D& camera)
 	MgeGL_MatrixMode(MGEGL_MODELVIEW);
 	MgeGL_LoadIdentity();
 
-	Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
+	Matrix matView = MatrixLookAt(camera.position, camera.position + camera.target, camera.up);
 	MgeGL_MultMatrixf(MatrixToFloat(matView));	  // Multiply modelview matrix by view matrix (camera)
 
 	MgeGL_EnableDepthTest();
@@ -217,11 +230,11 @@ void Mge_BeginMode3D(Camera3D& camera)
 
 void Mge_EndMode3D(void)
 {
-	MgeGL_MatrixMode(MGEGL_PROJECTION);    // Switch to projection matrix
-	MgeGL_PopMatrix();                     // Restore previous matrix (projection) from matrix stack
+	MgeGL_MatrixMode(MGEGL_PROJECTION);	// Switch to projection matrix
+	MgeGL_PopMatrix();					 // Restore previous matrix (projection) from matrix stack
 
-	MgeGL_MatrixMode(MGEGL_MODELVIEW);     // Switch back to modelview matrix
-	MgeGL_LoadIdentity();                  // Reset current matrix (modelview)
+	MgeGL_MatrixMode(MGEGL_MODELVIEW);	 // Switch back to modelview matrix
+	MgeGL_LoadIdentity();				  // Reset current matrix (modelview)
 
 	MgeGL_DisableDepthTest();
 }
@@ -275,4 +288,96 @@ int Mge_GetFps(void)
 	fps = (int)std::roundf(1.0f/average);
 
 	return fps;
+}
+
+bool IsKeyPressed(int key)
+{
+	bool pressed = false;
+
+	if ((key > 0) && (key < MAX_KEYBOARD_KEYS))
+	{
+		if (
+			(CORE.Input.Keyboard.previousKeyState[key] == 0) && 
+			(CORE.Input.Keyboard.currentKeyState[key] == 1)
+		) {
+			pressed = true;
+		};
+	}
+
+	return pressed;
+}
+
+// Check if a key has been pressed again
+bool IsKeyPressedRepeat(int key)
+{
+	bool repeat = false;
+
+	if ((key > 0) && (key < MAX_KEYBOARD_KEYS))
+	{
+		if (CORE.Input.Keyboard.keyRepeatInFrame[key] == 1) repeat = true;
+	}
+
+	return repeat;
+}
+
+// Check if a key is being pressed (key held down)
+bool IsKeyDown(int key)
+{
+	bool down = false;
+
+	if ((key > 0) && (key < MAX_KEYBOARD_KEYS))
+	{
+		if (CORE.Input.Keyboard.currentKeyState[key] == 1) down = true;
+	}
+
+	return down;
+}
+
+// Check if a key has been released once
+bool IsKeyReleased(int key)
+{
+	bool released = false;
+
+	if ((key > 0) && (key < MAX_KEYBOARD_KEYS))
+	{
+		if ((CORE.Input.Keyboard.previousKeyState[key] == 1) && (CORE.Input.Keyboard.currentKeyState[key] == 0)) released = true;
+	}
+
+	return released;
+}
+
+// Check if a key is NOT being pressed (key not held down)
+bool IsKeyUp(int key)
+{
+	bool up = false;
+
+	if ((key > 0) && (key < MAX_KEYBOARD_KEYS))
+	{
+		if (CORE.Input.Keyboard.currentKeyState[key] == 0) up = true;
+	}
+
+	return up;
+}
+
+// Get mouse position X
+float GetMouseX(void)
+{
+	return (CORE.Input.Mouse.currentPosition.x + CORE.Input.Mouse.offset.x)*CORE.Input.Mouse.scale.x;
+}
+
+// Get mouse position Y
+float GetMouseY(void)
+{
+	return (CORE.Input.Mouse.currentPosition.y + CORE.Input.Mouse.offset.y)*CORE.Input.Mouse.scale.y;
+}
+
+// Get mouse position XY
+Vector2 GetMousePosition(void)
+{
+	Vector2 position = { 0 };
+
+	position.x = (CORE.Input.Mouse.currentPosition.x + CORE.Input.Mouse.offset.x)*CORE.Input.Mouse.scale.x;
+	position.y = (CORE.Input.Mouse.currentPosition.y + CORE.Input.Mouse.offset.y)*CORE.Input.Mouse.scale.y;
+
+	return position;
 }
