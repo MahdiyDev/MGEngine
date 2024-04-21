@@ -1,6 +1,4 @@
 #include "mge_gl.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
 #include "mge.h"
 #include "mge_math.h"
 #include "mge_utils.h"

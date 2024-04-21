@@ -1,7 +1,6 @@
 #include "imgui.h"
 #include "mge_math.h"
 #include <math.h>
-#include <stdio.h>
 #define CORE_INCLUDE
 #include "mge.h"
 #include "mge_gl.h"

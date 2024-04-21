@@ -100,7 +100,7 @@ void InitPlatform(void)
 	glfwSetCursorPosCallback(platform.window, MouseCursorPosCallback);
 	glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-	IMGUI_CHECKVERSION();
+	// IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	// ImGuiIO io = ImGui::GetIO();
 	ImGui::StyleColorsDark();

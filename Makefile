@@ -4,15 +4,17 @@ CXX = g++
 CFLAGS=
 CXXFLAGS=-Wall -Werror -pedantic -std=c++14
 
-LIB_DIR+=-L./3rdparty/imgui/lib
+
 LIB_LINKS+=-lglfw3 -limgui
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
 LIB_LINKS+=-lwinmm -lgdi32 -lkernel32
 LIB_DIR+=-L./3rdparty/glfw/lib
+LIB_DIR+=-L./3rdparty/imgui/lib/win32
 else
 CURRENT_DIR += $(shell pwd)
+LIB_DIR+=-L./3rdparty/imgui/lib/linux/
 endif
 
 INCLUDES+=-I./$(SOURCE_DIR)
