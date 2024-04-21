@@ -29,6 +29,10 @@ typedef struct Matrix {
 } Matrix;
 
 Vector2 Vector2_Rotate(Vector2 v, float angle);
+
+Vector3 Vector3Subtract(Vector3 v1, Vector3 v2);
+Vector3 Vector3Normalize(Vector3 v);
+
 Matrix Matrix_Identity(void);
 Matrix Matrix_Multiply(Matrix left, Matrix right);
 Matrix Matrix_Translate(float x, float y, float z);

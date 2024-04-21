@@ -1,3 +1,5 @@
+#include "mge_math.h"
+#include <math.h>
 #define CORE_INCLUDE
 #include "mge.h"
 #include "mge_gl.h"
@@ -164,38 +166,47 @@ void Mge_EndDrawing(void)
 	Poll_Input_Events();
 }
 
-#define MGE_CULL_DISTANCE_NEAR		0.01
-#define MGE_CULL_DISTANCE_FAR		1000.0
-
 void Mge_BeginMode3D(Camera3D camera)
 {
 	// MgeGL_Draw();
-	// MgeGL_MatrixMode(MGEGL_PROJECTION);
-	// MgeGL_LoadIdentity();
+	MgeGL_MatrixMode(MGEGL_PROJECTION);
+	MgeGL_LoadIdentity();
 
-	// float aspect = (float)CORE.Window.screen.width/(float)CORE.Window.screen.height;
+	float aspect = (float)CORE.Window.screen.width/(float)CORE.Window.screen.height;
 
-	// if (camera.projection == CAMERA_PERSPECTIVE)
-	// {
-	// 	double top = MGE_CULL_DISTANCE_NEAR*tan(camera.fovy*0.5*DEG2RAD);
-	// 	double right = top*aspect;
+	if (camera.projection == CAMERA_PERSPECTIVE)
+	{
+		double top = MGE_CULL_DISTANCE_NEAR*tan(camera.fovy*0.5*DEG2RAD);
+		double right = top*aspect;
 
-	// 	MgeGL_Frustum(-right, right, -top, top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
-	// }
-	// else if (camera.projection == CAMERA_ORTHOGRAPHIC)
-    // {
-	// 	// Setup orthographic projection
-	// 	double top = camera.fovy/2.0;
-	// 	double right = top*aspect;
+		MgeGL_Frustum(-right, right, -top, top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
+	}
+	else if (camera.projection == CAMERA_ORTHOGRAPHIC)
+    {
+		// Setup orthographic projection
+		double top = camera.fovy/2.0;
+		double right = top*aspect;
 
-	// 	MgeGL_Ortho(-right, right, -top,top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
-    // }
+		MgeGL_Ortho(-right, right, -top,top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
+    }
+	MgeGL_Translatef(0, 0, -6.0f);
+	// MgeGL_Rotatef(45.0f*Mge_GetTime(), 1.0f, 1.0f, 0);
 
-	// MgeGL_MatrixMode(MGEGL_MODELVIEW);
-	// MgeGL_LoadIdentity();
+	MgeGL_MatrixMode(MGEGL_MODELVIEW);
+	MgeGL_LoadIdentity();
 
+	// Vector3 direction = Vector3Normalize(Vector3Subtract(camera.position, camera.target));
+	float radius = 10.0f;
+	float camX = sin(Mge_GetTime()) * radius;
+	float camZ = cos(Mge_GetTime()) * radius;
+
+	Matrix matView = MatrixLookAt(
+		Vector3 {camX, 0.0f, camZ},
+		Vector3 {0.0f, 0.0f, 0.0f},
+		Vector3 {0.0f, 1.0f, 0.0f}
+	);
 	// Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
-	// MgeGL_MultMatrixf(MatrixToFloat(matView));      // Multiply modelview matrix by view matrix (camera)
+	MgeGL_MultMatrixf(MatrixToFloat(matView));      // Multiply modelview matrix by view matrix (camera)
 
 	MgeGL_EnableDepthTest();
 }

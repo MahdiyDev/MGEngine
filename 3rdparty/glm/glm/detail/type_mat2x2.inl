@@ -46,7 +46,7 @@ namespace glm
 	template<typename T, qualifier Q>
 	GLM_FUNC_QUALIFIER GLM_CONSTEXPR mat<2, 2, T, Q>::mat
 	(
-		T const& x0, T const& y0,
+		T const& x0, T co,nst& y0,
 		T const& x1, T const& y1
 	)
 #		if GLM_HAS_INITIALIZER_LISTS

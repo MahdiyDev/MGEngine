@@ -13,6 +13,13 @@
 	#define CLITERAL(type) (type)
 #endif
 
+#ifndef MGE_CULL_DISTANCE_NEAR
+	#define MGE_CULL_DISTANCE_NEAR		0.01
+#endif
+#ifndef MGE_CULL_DISTANCE_FAR
+	#define MGE_CULL_DISTANCE_FAR		1000.0
+#endif
+
 void Trace_Log(int logType, const char* text, ...);
 typedef void (*Trace_Log_Callback)(int logLevel, const char* text, va_list args); // Logging: Redirect trace log messages
 typedef enum {
