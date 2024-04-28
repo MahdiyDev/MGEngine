@@ -1,5 +1,8 @@
 #include "imgui.h"
 #include "mge_math.h"
+#include <cstddef>
+#include <cstdlib>
+#include <limits.h>
 #include <math.h>
 #define CORE_INCLUDE
 #include "mge.h"

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <string>
 #include "mge.h"
 #include "mge_math.h"
 
@@ -14,7 +13,35 @@
 #define MGEGL_TRIANGLES		0x0004 // GL_TRIANGLES
 #define MGEGL_QUADS			0x0007 // GL_QUADS
 
-#define MGEGL_MAX_MATRIX_STACK_SIZE 32
+#ifndef MGEGL_MAX_MATRIX_STACK_SIZE
+	#define MGEGL_MAX_MATRIX_STACK_SIZE 32
+#endif
+
+// Shader limits
+#ifndef MGEGL_MAX_SHADER_LOCATIONS
+	#define MGEGL_MAX_SHADER_LOCATIONS                 32      // Maximum number of shader locations supported
+#endif
+
+#ifndef MAX_ATTRIB_LOCATION
+	#define MAX_ATTRIB_LOCATION		3
+#endif
+
+#ifndef MAX_BUFFER_ELEMENTS
+	#define MAX_BUFFER_ELEMENTS		256
+#endif
+
+typedef enum {
+	VERTICE_LOCATION = 0,
+	COLOR_LOCATION,
+	TEXTURE_LOCATION,
+} AttribLocations;
+
+typedef struct VertexData {
+	float* vertices;
+	unsigned char* colors;
+	float* texcoords;
+	unsigned int* indices;
+} VertexData;
 
 void MgeGL_Init(int width, int height);
 void MgeGL_Close();
@@ -30,9 +57,9 @@ void MgeGL_LoadIdentity(void);
 void MgeGL_EnableDepthTest(void);
 void MgeGL_DisableDepthTest(void);
 
-std::string MgeGL_ReadShaderFromFile(const char* file_path);
-unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, std::string typeName);
+unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName);
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);
+void MgeGL_SetTexture(unsigned int id);
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(int programID, const char* name, const int value);
 void MgeGL_Uniform3fv(int programID, const char* name, const Vector3& value);

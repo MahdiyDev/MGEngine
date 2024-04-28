@@ -3,6 +3,7 @@
 #include "mge_config.h"
 #include "mge_math.h"
 #include <cstdarg>
+#include <cstddef>
 #include <cstdint>
 
 #define MGE_VERSION "v0.0.1"
@@ -156,10 +157,37 @@ typedef enum {
 	KEY_VOLUME_DOWN	 		= 25      // Key: Android volume down button
 } KeyboardKey;
 
+typedef enum {
+	PIXELFORMAT_UNCOMPRESSED_GRAYSCALE = 1, // 8 bit per pixel (no alpha)
+	PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA,    // 8*2 bpp (2 channels)
+	PIXELFORMAT_UNCOMPRESSED_R5G6B5,        // 16 bpp
+	PIXELFORMAT_UNCOMPRESSED_R8G8B8,        // 24 bpp
+	PIXELFORMAT_UNCOMPRESSED_R5G5B5A1,      // 16 bpp (1 bit alpha)
+	PIXELFORMAT_UNCOMPRESSED_R4G4B4A4,      // 16 bpp (4 bit alpha)
+	PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,      // 32 bpp
+	PIXELFORMAT_UNCOMPRESSED_R32,           // 32 bpp (1 channel - float)
+	PIXELFORMAT_UNCOMPRESSED_R32G32B32,     // 32*3 bpp (3 channels - float)
+	PIXELFORMAT_UNCOMPRESSED_R32G32B32A32,  // 32*4 bpp (4 channels - float)
+	PIXELFORMAT_UNCOMPRESSED_R16,           // 16 bpp (1 channel - half float)
+	PIXELFORMAT_UNCOMPRESSED_R16G16B16,     // 16*3 bpp (3 channels - half float)
+	PIXELFORMAT_UNCOMPRESSED_R16G16B16A16,  // 16*4 bpp (4 channels - half float)
+	PIXELFORMAT_COMPRESSED_DXT1_RGB,        // 4 bpp (no alpha)
+	PIXELFORMAT_COMPRESSED_DXT1_RGBA,       // 4 bpp (1 bit alpha)
+	PIXELFORMAT_COMPRESSED_DXT3_RGBA,       // 8 bpp
+	PIXELFORMAT_COMPRESSED_DXT5_RGBA,       // 8 bpp
+	PIXELFORMAT_COMPRESSED_ETC1_RGB,        // 4 bpp
+	PIXELFORMAT_COMPRESSED_ETC2_RGB,        // 4 bpp
+	PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA,   // 8 bpp
+	PIXELFORMAT_COMPRESSED_PVRT_RGB,        // 4 bpp
+	PIXELFORMAT_COMPRESSED_PVRT_RGBA,       // 4 bpp
+	PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA,   // 8 bpp
+	PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA    // 2 bpp
+} PixelFormat;
+
 // Camera projection
 typedef enum {
 	CAMERA_PERSPECTIVE = 0,  // Perspective projection
-	CAMERA_ORTHOGRAPHIC	  // Orthographic projection
+	CAMERA_ORTHOGRAPHIC	     // Orthographic projection
 } CameraProjection;
 
 typedef struct Color {
@@ -175,6 +203,32 @@ typedef struct Rectangle {
 	float width;		// Rectangle width
 	float height;		// Rectangle height
 } Rectangle;
+
+typedef struct Shader {
+	unsigned int id;        // Shader program id
+	int *locs;              // Shader locations array (MGE_MAX_SHADER_LOCATIONS)
+} Shader;
+
+// Texture, tex data stored in GPU memory (VRAM)
+typedef struct Texture {
+	unsigned int id;        // OpenGL texture id
+	int width;              // Texture base width
+	int height;             // Texture base height
+	int mipmaps;            // Mipmap levels, 1 by default
+	int format;             // Data format (PixelFormat type)
+} Texture;
+
+// Texture2D, same as Texture
+typedef Texture Texture2D;
+
+// Image, pixel data stored in CPU memory (RAM)
+typedef struct Image {
+    void *data;             // Image raw data
+    int width;              // Image base width
+    int height;             // Image base height
+    int mipmaps;            // Mipmap levels, 1 by default
+    int format;             // Data format (PixelFormat type)
+} Image;
 
 #define RED			CLITERAL(Color) { 255, 0, 0, 255 }
 #define GREEN		CLITERAL(Color) { 0, 255, 0, 255 }
@@ -258,6 +312,11 @@ typedef struct CoreData {
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
 void Mge_CloseWindow(void);
+const char* Mge_LoadFileText(const char* file_path);
+void Mge_UnLoadFileText(char* fileData);
+unsigned char* Mge_LoadFileData(const char *fileName, size_t *dataSize);
+void Mge_UnloadFileData(unsigned char *data);
+const char* Mge_GetFileExtension(const char *fileName);
 double Mge_GetTime(void);
 double Mge_GetDeltaTime(void);
 int Mge_GetFps(void);
@@ -273,6 +332,13 @@ bool IsKeyReleased(int key);
 float GetMouseX(void);
 float GetMouseY(void);
 Vector2 GetMousePosition(void);
+
+// Texture
+Image Mge_LoadImageFromMemory(const char *fileType, const unsigned char *fileData, int dataSize);
+Image Mge_LoadImage(const char* fileName);
+void Mge_UnloadImage(Image image);
+Texture2D Mge_LoadTextureFromImage(Image image);
+Texture2D Mge_LoadTexture(const char *fileName);
 
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing();

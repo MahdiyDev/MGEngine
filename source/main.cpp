@@ -111,6 +111,8 @@ int main(int argc, char** argv)
 	camera.fovy = 60.0f;
 	camera.projection = CAMERA_PERSPECTIVE;
 
+	Texture2D cubeTexture = Mge_LoadTexture("assets/wall.jpg");
+
 	while(!Mge_WindowShouldClose())
 	{
 		Mge_BeginDrawing();
@@ -118,6 +120,8 @@ int main(int argc, char** argv)
 			HandleCameraMovement(camera);
 
 		Mge_BeginMode3D(camera);
+			MgeGL_SetTexture(cubeTexture.id);
+
 			MgeGL_Begin(MGEGL_TRIANGLES);
 				MgeGL_Color4ub(255, 255, 255, 255);
 				for (size_t i = 0; i < sizeof(vertices) / sizeof(float); i++) {

@@ -53,7 +53,7 @@ test: make_build_dir $(COBJECTS) $(CXXOBJECTS)
 
 make_build_dir:
 	mkdir -p $(BUILD_OBJ_DIR)
-	cp -r ./assests $(BUILD_DIR)
+	cp -r ./assets $(BUILD_DIR)
 	cp -r ./shaders $(BUILD_DIR)
 
 gen_clangd:

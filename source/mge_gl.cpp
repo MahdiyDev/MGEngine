@@ -2,35 +2,10 @@
 #include "mge.h"
 #include "mge_math.h"
 #include "mge_utils.h"
-#include <cstdio>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
 #include <glad/glad.h>
 #include <imgui.h>
-#include <fstream>
 #include <math.h>
-#include <sstream>
-
-#define MAX_ATTRIB_LOCATION		3
-#define MAX_BUFFER_ELEMENTS		256
-
-typedef enum {
-	VERTICE_LOCATION = 0,
-	COLOR_LOCATION,
-	TEXTURE_LOCATION,
-} AttribLocations;
-
-typedef enum {
-	MGEGL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 = 0,
-} MgeGL_PixelFormat;
-
-typedef struct VertexData {
-	float* vertices;
-	unsigned char* colors;
-	float* texcoords;
-	unsigned int* indices;
-} VertexData;
 
 typedef struct GlData {
 	struct {
@@ -123,11 +98,10 @@ void MgeGL_Init(int width, int height)
 	MGEGL.State.projection = Matrix_Identity();
 	MGEGL.State.currentMatrix = &MGEGL.State.modelview;
 
-	// unsigned char pixels[4] = { 255, 255, 255, 255 };
-	int texWidth, texHeight;
-	unsigned char* pixels = stbi_load("assests/wall.jpg", &texWidth, &texHeight, 0, 0);
-	MGEGL.State.defaultTexture = MgeGL_LoadTexture(pixels, texWidth, texHeight, MGEGL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
-	stbi_image_free(pixels);
+	// Load default texture
+	unsigned char pixels[4] = { 255, 255, 255, 255 };
+	int texWidth = 1, texHeight = 1;
+	MGEGL.State.defaultTexture = MgeGL_LoadTexture(pixels, texWidth, texHeight, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
 
 	// Init Shader
 	unsigned int vertex = MgeGL_LoadShader(vertexShaderCode, GL_VERTEX_SHADER, "vertex");
@@ -261,9 +235,15 @@ void MgeGL_Draw()
 	{
 		glDrawElements(GL_TRIANGLES, MGEGL.State.vertexCounter/4*6, GL_UNSIGNED_INT, 0);
 	}
+	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindVertexArray(0);
 }
 
+void MgeGL_SetTexture(unsigned int id)
+{
+	// glBindTexture(GL_TEXTURE_2D, id);
+	MGEGL.State.defaultTexture = id;
+}
 
 void MgeGL_MatrixMode(int mode)
 {
@@ -528,47 +508,27 @@ void MgeGL_UniformMatrix4fv(int programID, const char* name, const Matrix& value
 	glUniformMatrix4fv(glGetUniformLocation(programID, name), 1, GL_FALSE, matValue);
 }
 
-std::string MgeGL_ReadShaderFromFile(const char* file_path)
-{
-	std::string line;
-	std::stringstream streamCode;
-	std::ifstream myfile(file_path);
-
-	if (myfile.is_open()) {
-		TRACE_LOG(LOG_INFO, "Shader: open file: %s", file_path);
-
-		while (getline(myfile, line)) {
-			streamCode << line << "\n";
-		}
-		myfile.close();
-	} else {
-		TRACE_LOG(LOG_ERROR, "Shader: Unable to open file: %s", file_path);
-	}
-
-	return streamCode.str();
-}
-
-unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, std::string typeName)
+unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName)
 {
 	unsigned int shader;
 	int success;
 	char infoLog[512];
 
 	shader = glCreateShader(shaderType);
-	TRACE_LOG(LOG_INFO, "Shader: %s shader created", typeName.c_str());
+	TRACE_LOG(LOG_INFO, "Shader: %s shader created", typeName);
 	if (shader == 0) {
-		TRACE_LOG(LOG_ERROR, "Shader: Unable to create shader: %s", typeName.c_str());
+		TRACE_LOG(LOG_ERROR, "Shader: Unable to create shader: %s", typeName);
 		return EXIT_FAILURE;
 	}
 	glShaderSource(shader, 1, &code, NULL);
 	glCompileShader(shader);
-	TRACE_LOG(LOG_INFO, "Shader: %s shader compiled", typeName.c_str());
+	TRACE_LOG(LOG_INFO, "Shader: %s shader compiled", typeName);
 
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if (!success) {
 		glGetShaderInfoLog(shader, 512, NULL, infoLog);
 		TRACE_LOG(LOG_ERROR, "Shader: %s shader not compiled Error: %s",
-			typeName.c_str(), infoLog);
+			typeName, infoLog);
 	}
 	return shader;
 }
