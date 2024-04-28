@@ -1,4 +1,5 @@
 #include "mge.h"
+#include "mge_utils.h"
 
 #include <climits>
 #include <stddef.h>
