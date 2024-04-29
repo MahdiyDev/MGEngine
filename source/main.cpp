@@ -111,7 +111,8 @@ int main(int argc, char** argv)
 	camera.fovy = 60.0f;
 	camera.projection = CAMERA_PERSPECTIVE;
 
-	Texture2D cubeTexture = Mge_LoadTexture("assets/wall.jpg");
+	// Texture2D cubeTexture = Mge_LoadTexture("assets/wall.jpg");
+	// Texture2D cube2Texture = Mge_LoadTexture("assets/smile_face.jpg");
 
 	while(!Mge_WindowShouldClose())
 	{
@@ -120,7 +121,7 @@ int main(int argc, char** argv)
 			HandleCameraMovement(camera);
 
 		Mge_BeginMode3D(camera);
-			MgeGL_SetTexture(cubeTexture.id);
+			// MgeGL_SetTexture(cubeTexture.id);
 
 			MgeGL_Begin(MGEGL_TRIANGLES);
 				MgeGL_Color4ub(255, 255, 255, 255);
