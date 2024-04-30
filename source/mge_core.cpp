@@ -129,6 +129,41 @@ void Mge_CloseWindow(void)
 	TRACE_LOG(LOG_INFO, "Window closed successfully");
 }
 
+Shader Mge_LoadShader(const char* vsFileName, const char* fsFileName)
+{
+	Shader shader = {0};
+	char* vertexShaderCode = NULL;
+	char* fragmentShaderCode = NULL;
+
+	if (vsFileName != NULL) vertexShaderCode = Mge_LoadFileText(vsFileName);
+	if (fsFileName != NULL) fragmentShaderCode = Mge_LoadFileText(fsFileName);
+
+	shader = Mge_LoadShaderFromMemory(vertexShaderCode, fragmentShaderCode);
+
+	Mge_UnLoadFileText(vertexShaderCode);
+	Mge_UnLoadFileText(fragmentShaderCode);
+
+	return shader;
+}
+
+Shader Mge_LoadShaderFromMemory(const char *vsCode, const char *fsCode)
+{
+	Shader shader = {0};
+
+	unsigned int vertex = MgeGL_LoadShader(vsCode, GL_VERTEX_SHADER, "vertex");
+	unsigned int fragment = MgeGL_LoadShader(fsCode, GL_FRAGMENT_SHADER, "fragment");
+	shader.id = MgeGL_CreateShaderProgram(vertex, fragment);
+
+	shader.locs = (int *)malloc(MGEGL_MAX_SHADER_LOCATIONS * sizeof(int));
+
+	// All locations reset to -1 (no location)
+	for (int i = 0; i < MGEGL_MAX_SHADER_LOCATIONS; i++) shader.locs[i] = -1;
+
+	// shader.locs[SHADER_LOC_VERTEX_POSITION]
+
+	return shader;
+}
+
 double Mge_GetTime(void)
 {
 	return Platform_GetTime();
@@ -218,6 +253,11 @@ void Mge_BeginMode3D(Camera3D& camera)
 		ImGui::DragFloat("camera.position.x", &camera.position.x, 0.01f);
 		ImGui::DragFloat("camera.position.y", &camera.position.y, 0.01f);
 		ImGui::DragFloat("camera.position.z", &camera.position.z, 0.01f);
+
+		ImGui::Text("camera.target");
+		ImGui::DragFloat("camera.target.x", &camera.target.x, 0.01f);
+		ImGui::DragFloat("camera.target.y", &camera.target.y, 0.01f);
+		ImGui::DragFloat("camera.target.z", &camera.target.z, 0.01f);
 	ImGui::End();
 	ImGui::EndFrame();
 
@@ -239,6 +279,16 @@ void Mge_EndMode3D(void)
 	MgeGL_LoadIdentity();				  // Reset current matrix (modelview)
 
 	MgeGL_DisableDepthTest();
+}
+
+void Mge_BeginShaderMode(Shader shader)
+{
+	MgeGL_SetShader(shader.id);
+}
+
+void Mge_EndShaderMode()
+{
+	MgeGL_SetShader(MgeGL_GetDefaultShader());
 }
 
 float Get_Frame_Time(void)

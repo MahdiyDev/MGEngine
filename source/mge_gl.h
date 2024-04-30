@@ -57,14 +57,16 @@ void MgeGL_LoadIdentity(void);
 void MgeGL_EnableDepthTest(void);
 void MgeGL_DisableDepthTest(void);
 
+unsigned int MgeGL_GetDefaultShader();
+void MgeGL_SetShader(unsigned int id);
 unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName);
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);
 void MgeGL_SetTexture(unsigned int id);
 int MgeGL_GetAttribLoc(const char* name);
-void MgeGL_Uniform1i(int programID, const char* name, const int value);
-void MgeGL_Uniform3fv(int programID, const char* name, const Vector3& value);
-void MgeGL_Uniform4fv(int programID, const char* name, const Vector4& value);
-void MgeGL_UniformMatrix4fv(int programID, const char* name, const Matrix& value);
+void MgeGL_Uniform1i(const char* name, const int value);
+void MgeGL_Uniform3fv(const char* name, const Vector3& value);
+void MgeGL_Uniform4fv(const char* name, const Vector4& value);
+void MgeGL_UniformMatrix4fv(const char* name, const Matrix& value);
 
 void MgeGL_Frustum(double left, double right, double bottom, double top, double znear, double zfar);
 void MgeGL_Ortho(double left, double right, double bottom, double top, double znear, double zfar);

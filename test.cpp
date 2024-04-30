@@ -1,5 +1,4 @@
 #include "mge.h"
-#include "mge_math.h"
 #include "mge_utils.h"
 
 #include <cstdlib>

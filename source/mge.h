@@ -312,15 +312,21 @@ typedef struct CoreData {
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
 void Mge_CloseWindow(void);
-const char* Mge_LoadFileText(const char* file_path);
-void Mge_UnLoadFileText(char* fileData);
-unsigned char* Mge_LoadFileData(const char *fileName, size_t *dataSize);
-void Mge_UnloadFileData(unsigned char *data);
-const char* Mge_GetFileExtension(const char *fileName);
 double Mge_GetTime(void);
 double Mge_GetDeltaTime(void);
 int Mge_GetFps(void);
 void Mge_SetTargetFPS(int fps);
+void Mge_BeginShaderMode(Shader shader);
+void Mge_EndShaderMode();
+Shader Mge_LoadShader(const char* vsFileName, const char* fsFileName);
+Shader Mge_LoadShaderFromMemory(const char *vsCode, const char *fsCode);
+
+// Utils
+char* Mge_LoadFileText(const char* file_path);
+void Mge_UnLoadFileText(char* fileData);
+unsigned char* Mge_LoadFileData(const char *fileName, size_t *dataSize);
+void Mge_UnloadFileData(unsigned char *data);
+const char* Mge_GetFileExtension(const char *fileName);
 
 // Keyboard
 bool IsKeyPressed(int key);

@@ -13,7 +13,8 @@ typedef struct GlData {
 		unsigned int VBO[4];
 		unsigned int VAO;
 		unsigned int defaultTexture;
-		unsigned int programID;
+		unsigned int defaultShaderID;
+		unsigned int currentShaderID;
 		unsigned int AttribLoc[MAX_ATTRIB_LOCATION];
 		unsigned char colorr, colorg, colorb, colora;
 		float texcoordx, texcoordy;
@@ -106,7 +107,8 @@ void MgeGL_Init(int width, int height)
 	// Init Shader
 	unsigned int vertex = MgeGL_LoadShader(vertexShaderCode, GL_VERTEX_SHADER, "vertex");
 	unsigned int fragment = MgeGL_LoadShader(fragmentShaderCode, GL_FRAGMENT_SHADER, "fragment");
-	MGEGL.State.programID = MgeGL_CreateShaderProgram(vertex, fragment);
+	MGEGL.State.defaultShaderID = MgeGL_CreateShaderProgram(vertex, fragment);
+	MGEGL.State.currentShaderID = MGEGL.State.defaultShaderID;
 
 	MGEGL.State.AttribLoc[VERTICE_LOCATION] = MgeGL_GetAttribLoc("aPos");
 	MGEGL.State.AttribLoc[COLOR_LOCATION] = MgeGL_GetAttribLoc("aColor");
@@ -138,7 +140,20 @@ void MgeGL_Init(int width, int height)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS*6*sizeof(unsigned int), MGEGL.State.vertexBuffer.indices, GL_STATIC_DRAW);
 
-	glUseProgram(MGEGL.State.programID);
+	glUseProgram(MGEGL.State.currentShaderID);
+}
+
+unsigned int MgeGL_GetDefaultShader()
+{
+	return MGEGL.State.defaultShaderID;
+}
+
+void MgeGL_SetShader(unsigned int id)
+{
+    if (MGEGL.State.currentShaderID != id)
+    {
+        MGEGL.State.currentShaderID = id;
+    }
 }
 
 int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount)
@@ -182,7 +197,7 @@ void MgeGL_Close()
 	glDeleteBuffers(1, &MGEGL.State.VBO[2]);
 	glDeleteBuffers(1, &MGEGL.State.VBO[3]);
 	glDeleteVertexArrays(1, &MGEGL.State.VAO);
-	glDeleteProgram(MGEGL.State.programID);
+	glDeleteProgram(MGEGL.State.currentShaderID);
 
 	free(MGEGL.State.vertexBuffer.vertices);
 	free(MGEGL.State.vertexBuffer.colors);
@@ -205,13 +220,13 @@ void MgeGL_End()
 
 void MgeGL_Draw()
 {
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "modelview", MGEGL.State.modelview);
-	MgeGL_UniformMatrix4fv(MGEGL.State.programID, "projection", MGEGL.State.projection);
+	MgeGL_UniformMatrix4fv("modelview", MGEGL.State.modelview);
+	MgeGL_UniformMatrix4fv("projection", MGEGL.State.projection);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, MGEGL.State.defaultTexture);
 
-	glUseProgram(MGEGL.State.programID);
+	glUseProgram(MGEGL.State.currentShaderID);
 	glBindVertexArray(MGEGL.State.VAO);
 
 	// positions
@@ -330,7 +345,7 @@ void MgeGL_MultMatrixf(const float *matf)
 // Push the current matrix into MGEGL.State.stack
 void MgeGL_PushMatrix(void)
 {
-	if (MGEGL.State.stackCounter >= MGEGL_MAX_MATRIX_STACK_SIZE) TRACE_LOG(LOG_ERROR, "RLGL: Matrix stack overflow (MGEGL_MAX_MATRIX_STACK_SIZE)");
+	if (MGEGL.State.stackCounter >= MGEGL_MAX_MATRIX_STACK_SIZE) TRACE_LOG(LOG_ERROR, "MGEGL: Matrix stack overflow (MGEGL_MAX_MATRIX_STACK_SIZE)");
 
 	if (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW)
 	{
@@ -473,31 +488,31 @@ void MgeGL_Ortho(double left, double right, double bottom, double top, double zn
 
 int MgeGL_GetAttribLoc(const char* name)
 {
-	return glGetAttribLocation(MGEGL.State.programID, name);
+	return glGetAttribLocation(MGEGL.State.currentShaderID, name);
 }
 
-void MgeGL_Uniform1i(int programID, const char* name, const int value)
+void MgeGL_Uniform1i(const char* name, const int value)
 {
-	glUniform1i(glGetUniformLocation(programID, name), value);
+	glUniform1i(glGetUniformLocation(MGEGL.State.currentShaderID, name), value);
 }
 
-void MgeGL_Uniform3fv(int programID, const char* name, const Vector3& value)
+void MgeGL_Uniform3fv(const char* name, const Vector3& value)
 {
 	float vectorValue[3] = {
 		value.x, value.y, value.z
 	};
-	glUniform3fv(glGetUniformLocation(programID, name), 1, vectorValue);
+	glUniform3fv(glGetUniformLocation(MGEGL.State.currentShaderID, name), 1, vectorValue);
 }
 
-void MgeGL_Uniform4fv(int programID, const char* name, const Vector4& value)
+void MgeGL_Uniform4fv(const char* name, const Vector4& value)
 {
 	float vectorValue[4] = {
 		value.x, value.y, value.z, value.w
 	};
-	glUniform4fv(glGetUniformLocation(programID, name), 1, vectorValue);
+	glUniform4fv(glGetUniformLocation(MGEGL.State.currentShaderID, name), 1, vectorValue);
 }
 
-void MgeGL_UniformMatrix4fv(int programID, const char* name, const Matrix& value)
+void MgeGL_UniformMatrix4fv(const char* name, const Matrix& value)
 {
 	float matValue[16] = {
 		value.m0,  value.m1,  value.m2,  value.m3,
@@ -505,7 +520,7 @@ void MgeGL_UniformMatrix4fv(int programID, const char* name, const Matrix& value
 		value.m8,  value.m9,  value.m10, value.m11,
 		value.m12, value.m13, value.m14, value.m15
 	};
-	glUniformMatrix4fv(glGetUniformLocation(programID, name), 1, GL_FALSE, matValue);
+	glUniformMatrix4fv(glGetUniformLocation(MGEGL.State.currentShaderID, name), 1, GL_FALSE, matValue);
 }
 
 unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName)

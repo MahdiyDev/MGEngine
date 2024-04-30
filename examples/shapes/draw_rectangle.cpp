@@ -7,7 +7,7 @@
 
 void signal_handler(int sig)
 {
-	Close_Window();
+	Mge_CloseWindow();
 	if (sig == SIGSEGV) {
 		TRACE_LOG(LOG_ERROR, "Invalid access to storage.");
 	} else if (sig == SIGINT) {
@@ -19,7 +19,9 @@ void signal_handler(int sig)
 int main(int argc, char** argv)
 {
     int WIDTH = 800, HEIGHT = 600;
-    Init_Window(WIDTH, HEIGHT, "Hello this is test");
+    Mge_InitWindow(WIDTH, HEIGHT, "Hello this is test");
+
+	Mge_SetTargetFPS(60);
 
 	signal(SIGSEGV, signal_handler);
 	signal(SIGINT, signal_handler);
@@ -32,17 +34,17 @@ int main(int argc, char** argv)
 	};
 	Vector2 origin = { rec.width/2, rec.height/2 };
 
-    while (!Window_Should_Close()) {
-		float angle = -10.0f*Get_Time();
+    while (!Mge_WindowShouldClose()) {
+		float angle = -10.0f*Mge_GetTime();
 
-        Begin_Drawing();
-        	Clear_Background(GRAY);
+        Mge_BeginDrawing();
+        	Mge_ClearBackground(GRAY);
 			Draw_Line(rec.x, rec.y, rec.x-0, rec.y-100, RED);
 			Draw_Line(rec.x, rec.y, rec.x+100, rec.y-0, BLUE);
 			Draw_RectanglePro(rec, origin, 1*angle, WHITE);
-        End_Drawing();
+        Mge_EndDrawing();
     }
 
-    Close_Window();
+    Mge_CloseWindow();
     return 0;
 }

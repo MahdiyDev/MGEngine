@@ -45,7 +45,7 @@ float vertices[] = {
 	1.0f, 0.0f,   0.5f,  0.5f,  0.5f,
 	1.0f, 0.0f,   0.5f,  0.5f,  0.5f,
 	0.0f, 0.0f,  -0.5f,  0.5f,  0.5f,
-	0.0f, 1.0f,  -0.5f,  0.5f, -0.5f
+	0.0f, 1.0f,  -0.5f,  0.5f, -0.5f,
 };
 
 int width = 800*2, height = 600*2;
@@ -113,6 +113,7 @@ int main(int argc, char** argv)
 
 	// Texture2D cubeTexture = Mge_LoadTexture("assets/wall.jpg");
 	// Texture2D cube2Texture = Mge_LoadTexture("assets/smile_face.jpg");
+	Shader lightShader = Mge_LoadShader("shaders/light_shader.vert", "shaders/light_shader.frag");
 
 	while(!Mge_WindowShouldClose())
 	{
@@ -121,7 +122,9 @@ int main(int argc, char** argv)
 			HandleCameraMovement(camera);
 
 		Mge_BeginMode3D(camera);
+		Mge_BeginShaderMode(lightShader);
 			// MgeGL_SetTexture(cubeTexture.id);
+			MgeGL_Uniform4fv("lightColor", Vector4 {1.0f, 1.0f, (float)sin(Mge_GetTime())*2.0f, 1.0f});
 
 			MgeGL_Begin(MGEGL_TRIANGLES);
 				MgeGL_Color4ub(255, 255, 255, 255);
@@ -185,6 +188,16 @@ int main(int argc, char** argv)
 					i+=4;
 				}
 			MgeGL_End();
+
+			MgeGL_Begin(MGEGL_TRIANGLES);
+				MgeGL_Color4ub(255, 255, 255, 255);
+				for (size_t i = 0; i < sizeof(vertices) / sizeof(float); i++) {
+					MgeGL_TexCoord2f(vertices[i+0], vertices[i+1]);
+					MgeGL_Vertex3f(vertices[i+2]+3.0f,  vertices[i+3]+3.0f, vertices[i+4]+3.0f);
+					i+=4;
+				}
+			MgeGL_End();
+		// Mge_EndShaderMode();
 		Mge_EndMode3D();
 		Mge_EndDrawing();
 	}

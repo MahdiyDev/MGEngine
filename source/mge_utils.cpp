@@ -72,7 +72,7 @@ void Trace_Log(int logType, const char* text, ...)
 #endif
 }
 
-const char* Mge_LoadFileText(const char* fileName)
+char* Mge_LoadFileText(const char* fileName)
 {
 	FILE *fptr;
 	size_t file_size = 0;
