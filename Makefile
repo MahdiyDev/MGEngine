@@ -6,10 +6,12 @@ CXXFLAGS=-Wall -Werror -pedantic -std=c++14
 
 LIB_LINKS+=-lglfw3 -limgui
 LIB_DIR+=-L./3rdparty/glfw/lib
+3RDPARTY_GLFW_OPTIONS=
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
 LIB_LINKS+=-lwinmm -lgdi32 -lkernel32
+3RDPARTY_GLFW_OPTIONS+=-G "MinGW Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_MAKE_PROGRAM=make
 LIB_DIR+=-L./3rdparty/imgui/lib/win32
 else
 CURRENT_DIR += $(shell pwd)
@@ -48,7 +50,7 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 .PHONY: 3rdparty
 3rdparty:
 	cd 3rdparty/glfw/source && \
-	cmake -S . -B ../build -DCMAKE_INSTALL_PREFIX=../ && \
+	cmake -S . -B ../build -DCMAKE_INSTALL_PREFIX=../ $(3RDPARTY_GLFW_OPTIONS) && \
 	cd ../build && \
 	make && make install 
 
