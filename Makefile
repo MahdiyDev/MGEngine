@@ -4,13 +4,12 @@ CXX = g++
 CFLAGS=
 CXXFLAGS=-Wall -Werror -pedantic -std=c++14
 
-
 LIB_LINKS+=-lglfw3 -limgui
+LIB_DIR+=-L./3rdparty/glfw/lib
 
 ifeq ($(OS),Windows_NT)
 CURRENT_DIR += $(shell sh -c "pwd -W")
 LIB_LINKS+=-lwinmm -lgdi32 -lkernel32
-LIB_DIR+=-L./3rdparty/glfw/lib
 LIB_DIR+=-L./3rdparty/imgui/lib/win32
 else
 CURRENT_DIR += $(shell pwd)
@@ -19,7 +18,6 @@ endif
 
 INCLUDES+=-I./$(SOURCE_DIR)
 INCLUDES+=-I./3rdparty/glad/include
-# INCLUDES+=-I./3rdparty/glm
 INCLUDES+=-I./3rdparty/stb
 INCLUDES+=-I./3rdparty/glfw/include
 INCLUDES+=-I./3rdparty/imgui/include
@@ -47,6 +45,13 @@ $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
+.PHONY: 3rdparty
+3rdparty:
+	cd 3rdparty/glfw/source && \
+	cmake -S . -B ../build -DCMAKE_INSTALL_PREFIX=../ && \
+	cd ../build && \
+	make && make install 
+
 test: make_build_dir $(COBJECTS) $(CXXOBJECTS)
 	$(CXX) $(INCLUDES) -c test.cpp -o $(BUILD_OBJ_DIR)/test.o
 	$(CXX) $(CXXFLAGS) $(COBJECTS) $(filter-out $(BUILD_OBJ_DIR)/main.o,$(CXXOBJECTS)) $(BUILD_OBJ_DIR)/test.o $(LIB_DIR) $(LIB_LINKS)
@@ -71,3 +76,4 @@ gen_clangd:
 clean:
 	rm -rf *.o
 	rm -rf build/*
+	rm -rf 3rdparty/glfw/build
