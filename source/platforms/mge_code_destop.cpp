@@ -98,14 +98,14 @@ void InitPlatform(void)
 
 	glfwSetKeyCallback(platform.window, KeyCallback);
 	glfwSetCursorPosCallback(platform.window, MouseCursorPosCallback);
-	glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	// glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-	// IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	// ImGuiIO io = ImGui::GetIO();
-	ImGui::StyleColorsDark();
-	ImGui_ImplGlfw_InitForOpenGL(platform.window, true);
-	ImGui_ImplOpenGL3_Init("#version 460");
+	// // IMGUI_CHECKVERSION();
+	// ImGui::CreateContext();
+	// // ImGuiIO io = ImGui::GetIO();
+	// ImGui::StyleColorsDark();
+	// ImGui_ImplGlfw_InitForOpenGL(platform.window, true);
+	// ImGui_ImplOpenGL3_Init("#version 460");
 }
 
 double Platform_GetTime(void)
@@ -118,6 +118,8 @@ void Poll_Input_Events(void)
 	// Reset keys/chars pressed registered
 	CORE.Input.Keyboard.keyPressedQueueCount = 0;
 	CORE.Input.Keyboard.charPressedQueueCount = 0;
+
+	CORE.Input.Mouse.previousPosition = CORE.Input.Mouse.currentPosition;
 
 	// Register previous keys states
 	for (int i = 0; i < MAX_KEYBOARD_KEYS; i++)
@@ -146,9 +148,9 @@ bool Mge_WindowShouldClose(void)
 
 void Close_Platform(void)
 {
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
+	// ImGui_ImplOpenGL3_Shutdown();
+	// ImGui_ImplGlfw_Shutdown();
+	// ImGui::DestroyContext();
 
 	glfwDestroyWindow(platform.window);
 	glfwTerminate();
@@ -185,4 +187,54 @@ static void MouseCursorPosCallback(GLFWwindow *window, double x, double y)
 {
 	CORE.Input.Mouse.currentPosition.x = (float)x;
 	CORE.Input.Mouse.currentPosition.y = (float)y;
+}
+
+// Show mouse cursor
+void ShowCursor(void)
+{
+	glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	CORE.Input.Mouse.cursorHidden = false;
+}
+
+// Hides mouse cursor
+void HideCursor(void)
+{
+	glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+	CORE.Input.Mouse.cursorHidden = true;
+}
+
+// Enables cursor (unlock cursor)
+void EnableCursor(void)
+{
+	glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+
+	// Set cursor position in the middle
+	SetMousePosition(CORE.Window.screen.width/2, CORE.Window.screen.height/2);
+
+	if (glfwRawMouseMotionSupported()) glfwSetInputMode(platform.window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+
+	CORE.Input.Mouse.cursorHidden = false;
+}
+
+// Disables cursor (lock cursor)
+void DisableCursor(void)
+{
+	glfwSetInputMode(platform.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+	// Set cursor position in the middle
+	SetMousePosition(CORE.Window.screen.width/2, CORE.Window.screen.height/2);
+
+	if (glfwRawMouseMotionSupported()) glfwSetInputMode(platform.window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+
+	CORE.Input.Mouse.cursorHidden = true;
+}
+
+// Set mouse position XY
+void SetMousePosition(int x, int y)
+{
+	CORE.Input.Mouse.currentPosition = CLITERAL(Vector2) { (float)x, (float)y };
+	CORE.Input.Mouse.previousPosition = CORE.Input.Mouse.currentPosition;
+
+	// NOTE: emscripten not implemented
+	glfwSetCursorPos(platform.window, CORE.Input.Mouse.currentPosition.x, CORE.Input.Mouse.currentPosition.y);
 }

@@ -26,13 +26,14 @@ int main(int argc, char** argv)
 	signal(SIGINT, signal_handler);
 
 	Mge_SetTargetFPS(60);
-
+	float i = 0;
 	while (!Mge_WindowShouldClose()) {
 		Mge_BeginDrawing();
 		// Mge_BeginMode3D(Camera3D {});
 			Mge_ClearBackground(GRAY);
 			Draw_RectangleRec(Rectangle {150,150,100,100}, RED);
 			Draw_RectangleRec(Rectangle {200,200,100,100}, GREEN);
+			Draw_TriangleLines(Vector2 {100, 100}, Vector2 {150, 200}, Vector2 {50, 200}, GREEN);
 		// Mge_EndMode3D();
 		Mge_EndDrawing();
 	}

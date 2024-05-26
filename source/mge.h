@@ -301,8 +301,10 @@ typedef struct CoreData {
 
 		struct {
 			Vector2 currentPosition;
+			Vector2 previousPosition;
 			Vector2 offset;
 			Vector2 scale;
+			bool cursorHidden;
 		} Mouse;
 	} Input;
 } CoreData;
@@ -319,6 +321,7 @@ void Mge_SetTargetFPS(int fps);
 void Mge_BeginShaderMode(Shader shader);
 void Mge_EndShaderMode();
 Shader Mge_LoadShader(const char* vsFileName, const char* fsFileName);
+void Mge_UnloadShader(Shader shader);
 Shader Mge_LoadShaderFromMemory(const char *vsCode, const char *fsCode);
 
 // Utils
@@ -338,6 +341,11 @@ bool IsKeyReleased(int key);
 float GetMouseX(void);
 float GetMouseY(void);
 Vector2 GetMousePosition(void);
+void SetMousePosition(int x, int y);
+void ShowCursor(void);
+void HideCursor(void);
+void EnableCursor(void);
+void DisableCursor(void);
 
 // Texture
 Image Mge_LoadImageFromMemory(const char *fileType, const unsigned char *fileData, int dataSize);

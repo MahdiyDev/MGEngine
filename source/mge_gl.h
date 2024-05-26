@@ -27,7 +27,11 @@
 #endif
 
 #ifndef MAX_BUFFER_ELEMENTS
-	#define MAX_BUFFER_ELEMENTS		256
+	#define MAX_BUFFER_ELEMENTS		256*5
+#endif
+
+#ifndef MGEGL_DEFAULT_DRAWCALLS
+	#define MGEGL_DEFAULT_DRAWCALLS 256
 #endif
 
 typedef enum {
@@ -41,6 +45,8 @@ typedef struct VertexData {
 	unsigned char* colors;
 	float* texcoords;
 	unsigned int* indices;
+
+	int elementCount;
 } VertexData;
 
 void MgeGL_Init(int width, int height);
@@ -56,11 +62,13 @@ void MgeGL_MatrixMode(int mode);
 void MgeGL_LoadIdentity(void);
 void MgeGL_EnableDepthTest(void);
 void MgeGL_DisableDepthTest(void);
+bool MgeGL_CheckRenderBatchLimit(int vCount);
 
-unsigned int MgeGL_GetDefaultShader();
+unsigned int MgeGL_GetDefaultShaderId();
 void MgeGL_SetShader(unsigned int id);
 unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName);
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);
+void MgeGL_UnloadShaderProgram(unsigned int id);
 void MgeGL_SetTexture(unsigned int id);
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(const char* name, const int value);

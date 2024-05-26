@@ -26,12 +26,6 @@ int main(int argc, char** argv)
 	signal(SIGSEGV, signal_handler);
 	signal(SIGINT, signal_handler);
 
-	// Rectangle rec = {
-	// 	.x = (float)WIDTH/2,
-	// 	.y = (float)HEIGHT/2,
-	// 	.width = 100,
-	// 	.height = 100,
-	// };
 	Vector2 origin = { 100, 100 };
 
 	Mge_SetTargetFPS(60);
@@ -49,12 +43,10 @@ int main(int argc, char** argv)
 
 	while (!Mge_WindowShouldClose()) {
 		Mge_BeginDrawing();
-			// float angle = -100.0f*Mge_GetTime();
 			Mge_ClearBackground(GRAY);
 			Draw_TriangleLines(Vector2 {100, 100}, Vector2 {150, 200}, Vector2 {50, 200}, GREEN);
 			Draw_TriangleLines(Vector2 {100, 100+80}, Vector2 {150, 200+80}, Vector2 {50, 200+80}, GREEN);
 			Draw_TriangleLines(Vector2 {100, 100+160}, Vector2 {150, 200+160}, Vector2 {50, 200+160}, GREEN);
-			// printf("fps: %d\n", Get_Fps());
 			Draw_TriangleStrip(points, 18, BLUE);
 		Mge_EndDrawing();
 	}

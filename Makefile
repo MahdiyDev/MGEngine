@@ -38,6 +38,9 @@ EXECUTABLE = MGEngine
 
 all: make_build_dir $(EXECUTABLE)
 
+print_obj:
+	@echo $(COBJECTS) $(CXXOBJECTS)
+
 $(EXECUTABLE): $(COBJECTS) $(CXXOBJECTS)
 	$(CXX) $(CXXFLAGS) $(COBJECTS) $(CXXOBJECTS) -o $(BUILD_DIR)/$@ $(LIB_DIR) $(LIB_LINKS)
 

@@ -3,9 +3,16 @@
 #include "mge_math.h"
 #include "mge_utils.h"
 
+#include <cstdio>
 #include <glad/glad.h>
 #include <imgui.h>
 #include <math.h>
+
+typedef struct MgeGL_DrawCall {
+	int mode;
+	int vertexAlignment;
+	int vertexCount;
+} MgeGL_DrawCall;
 
 typedef struct GlData {
 	struct {
@@ -32,36 +39,36 @@ typedef struct GlData {
 		int framebufferWidth;
 		int framebufferHeight;
 
-		int mode; // removed soon
+		// int mode; // removed soon
+		MgeGL_DrawCall* draws;
+		int drawCounter;
 	} State;
 } GlData;
 
-const char* vertexShaderCode = 
-	"#version 460 core\n"
-	"in vec3 aPos;\n"
-	"in vec4 aColor;\n"
-	"in vec2 aTexCoord;\n"
-	"out vec4 vertexColor;\n"
-	"out vec2 texCoord;\n"
-	"uniform mat4 modelview;\n"
-	"uniform mat4 projection;\n"
-	"void main()\n"
-	"{\n"
-	"	gl_Position = projection * modelview  * vec4(aPos, 1.0);\n"
-	"	vertexColor = aColor;\n"
-	"	texCoord = aTexCoord;\n"
-	"}\n\0";
+const char* vertexShaderCode = "#version 460 core\n"
+							   "in vec3 aPos;\n"
+							   "in vec4 aColor;\n"
+							   "in vec2 aTexCoord;\n"
+							   "out vec4 vertexColor;\n"
+							   "out vec2 texCoord;\n"
+							   "uniform mat4 modelview;\n"
+							   "uniform mat4 projection;\n"
+							   "void main()\n"
+							   "{\n"
+							   "	gl_Position = projection * modelview  * vec4(aPos, 1.0);\n"
+							   "	vertexColor = aColor;\n"
+							   "	texCoord = aTexCoord;\n"
+							   "}\n\0";
 
-const char* fragmentShaderCode = 
-	"#version 460 core\n"
-	"out vec4 FragColor;\n"
-	"in vec4 vertexColor;\n"
-	"in vec2 texCoord;\n"
-	"uniform sampler2D sampleTex;\n"
-	"void main()\n"
-	"{\n"
-	"	FragColor = texture(sampleTex, texCoord) * vertexColor;\n"
-	"}\n\0";
+const char* fragmentShaderCode = "#version 460 core\n"
+								 "out vec4 FragColor;\n"
+								 "in vec4 vertexColor;\n"
+								 "in vec2 texCoord;\n"
+								 "uniform sampler2D sampleTex;\n"
+								 "void main()\n"
+								 "{\n"
+								 "	FragColor = texture(sampleTex, texCoord) * vertexColor;\n"
+								 "}\n\0";
 
 GlData MGEGL = { 0 };
 
@@ -72,28 +79,47 @@ void MgeGL_Init(int width, int height)
 	MGEGL.State.framebufferHeight = height;
 	MGEGL.State.vertexCounter = 0;
 	MGEGL.State.currentDepth = -1.0f;
-	MGEGL.State.vertexBuffer.vertices = (float*)malloc(MAX_BUFFER_ELEMENTS*3*sizeof(float));
-	MGEGL.State.vertexBuffer.colors = (unsigned char*)malloc(MAX_BUFFER_ELEMENTS*4*sizeof(unsigned char));
-	MGEGL.State.vertexBuffer.texcoords = (float*)malloc(MAX_BUFFER_ELEMENTS*2*sizeof(float));
-	MGEGL.State.vertexBuffer.indices = (unsigned int*)malloc(MAX_BUFFER_ELEMENTS*6*sizeof(unsigned int));
 
-	for (int i = 0; i < MAX_BUFFER_ELEMENTS*3; i++)MGEGL.State.vertexBuffer.vertices[i] = 0.0f;
-	for (int i = 0; i < MAX_BUFFER_ELEMENTS*4; i++)MGEGL.State.vertexBuffer.colors[i] = 0;
-	for (int i = 0; i < MAX_BUFFER_ELEMENTS*2; i++)MGEGL.State.vertexBuffer.texcoords[i] = 0.0f;
+	MGEGL.State.vertexBuffer.elementCount = MAX_BUFFER_ELEMENTS;
+	MGEGL.State.vertexBuffer.vertices = (float*)malloc(MAX_BUFFER_ELEMENTS * 3 * sizeof(float));
+	MGEGL.State.vertexBuffer.colors = (unsigned char*)malloc(MAX_BUFFER_ELEMENTS * 4 * sizeof(unsigned char));
+	MGEGL.State.vertexBuffer.texcoords = (float*)malloc(MAX_BUFFER_ELEMENTS * 2 * sizeof(float));
+	MGEGL.State.vertexBuffer.indices = (unsigned int*)malloc(MAX_BUFFER_ELEMENTS * 6 * sizeof(unsigned int));
+
+	for (int i = 0; i < MAX_BUFFER_ELEMENTS * 3; i++)
+		MGEGL.State.vertexBuffer.vertices[i] = 0.0f;
+	for (int i = 0; i < MAX_BUFFER_ELEMENTS * 4; i++)
+		MGEGL.State.vertexBuffer.colors[i] = 0;
+	for (int i = 0; i < MAX_BUFFER_ELEMENTS * 2; i++)
+		MGEGL.State.vertexBuffer.texcoords[i] = 0.0f;
 
 	int k = 0;
 
-	for (int j = 0; j < (6*MAX_BUFFER_ELEMENTS); j += 6)
-	{
-		MGEGL.State.vertexBuffer.indices[j + 0] = 4*k + 0;
-		MGEGL.State.vertexBuffer.indices[j + 1] = 4*k + 1;
-		MGEGL.State.vertexBuffer.indices[j + 2] = 4*k + 2;
-		MGEGL.State.vertexBuffer.indices[j + 3] = 4*k + 0;
-		MGEGL.State.vertexBuffer.indices[j + 4] = 4*k + 2;
-		MGEGL.State.vertexBuffer.indices[j + 5] = 4*k + 3;
+	for (int j = 0; j < (6 * MAX_BUFFER_ELEMENTS); j += 6) {
+		MGEGL.State.vertexBuffer.indices[j + 0] = 4 * k + 0;
+		MGEGL.State.vertexBuffer.indices[j + 1] = 4 * k + 1;
+		MGEGL.State.vertexBuffer.indices[j + 2] = 4 * k + 2;
+		MGEGL.State.vertexBuffer.indices[j + 3] = 4 * k + 0;
+		MGEGL.State.vertexBuffer.indices[j + 4] = 4 * k + 2;
+		MGEGL.State.vertexBuffer.indices[j + 5] = 4 * k + 3;
 
 		k++;
 	}
+
+	MGEGL.State.draws = (MgeGL_DrawCall*)malloc(MGEGL_DEFAULT_DRAWCALLS * sizeof(MgeGL_DrawCall));
+
+	for (int i = 0; i < MGEGL_DEFAULT_DRAWCALLS; i++) {
+		MGEGL.State.draws[i].mode = MGEGL_QUADS;
+		MGEGL.State.draws[i].vertexAlignment = 0;
+		MGEGL.State.draws[i].vertexCount = 0;
+		// MGEGL.State.draws[i].vaoId = 0;
+		// MGEGL.State.draws[i].shaderId = 0;
+		// MGEGL.State.draws[i].textureId = MGEGL.State.defaultTextureId;
+		// MGEGL.State.draws[i].MGEGL.State.projection = rlMatrixIdentity();
+		// MGEGL.State.draws[i].MGEGL.State.modelview = rlMatrixIdentity();
+	}
+
+	MGEGL.State.drawCounter = 1;
 
 	MGEGL.State.modelview = Matrix_Identity();
 	MGEGL.State.projection = Matrix_Identity();
@@ -120,43 +146,43 @@ void MgeGL_Init(int width, int height)
 	// positions
 	glGenBuffers(1, &MGEGL.State.VBO[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);
-	glBufferData(GL_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS*3*sizeof(float), MGEGL.State.vertexBuffer.vertices, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS * 3 * sizeof(float), MGEGL.State.vertexBuffer.vertices, GL_DYNAMIC_DRAW);
 	glVertexAttribPointer(MGEGL.State.AttribLoc[VERTICE_LOCATION], 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(MGEGL.State.AttribLoc[VERTICE_LOCATION]);
 	// colors
 	glGenBuffers(1, &MGEGL.State.VBO[1]);
 	glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[1]);
-	glBufferData(GL_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS*4*sizeof(unsigned char), MGEGL.State.vertexBuffer.colors, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors, GL_DYNAMIC_DRAW);
 	glVertexAttribPointer(MGEGL.State.AttribLoc[COLOR_LOCATION], 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
 	glEnableVertexAttribArray(MGEGL.State.AttribLoc[COLOR_LOCATION]);
 	// textures
 	glGenBuffers(1, &MGEGL.State.VBO[2]);
 	glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
-	glBufferData(GL_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS*2*sizeof(float), MGEGL.State.vertexBuffer.texcoords, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords, GL_DYNAMIC_DRAW);
 	glVertexAttribPointer(MGEGL.State.AttribLoc[TEXTURE_LOCATION], 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(MGEGL.State.AttribLoc[TEXTURE_LOCATION]);
 
 	glGenBuffers(1, &MGEGL.State.VBO[3]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS*6*sizeof(unsigned int), MGEGL.State.vertexBuffer.indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_BUFFER_ELEMENTS * 6 * sizeof(unsigned int), MGEGL.State.vertexBuffer.indices, GL_STATIC_DRAW);
 
 	glUseProgram(MGEGL.State.currentShaderID);
 }
 
-unsigned int MgeGL_GetDefaultShader()
+unsigned int MgeGL_GetDefaultShaderId()
 {
 	return MGEGL.State.defaultShaderID;
 }
 
 void MgeGL_SetShader(unsigned int id)
 {
-    if (MGEGL.State.currentShaderID != id)
-    {
-        MGEGL.State.currentShaderID = id;
-    }
+	if (MGEGL.State.currentShaderID != id) {
+		MgeGL_Draw();
+		MGEGL.State.currentShaderID = id;
+	}
 }
 
-int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount)
+int MgeGL_LoadTexture(const void* data, int width, int height, int format, int mipmapCount)
 {
 	unsigned int id;
 
@@ -171,16 +197,12 @@ int MgeGL_LoadTexture(const void *data, int width, int height, int format, int m
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	if (data != NULL)
-	{
+	if (data != NULL) {
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
-	}
-	else {
+	} else {
 		TRACE_LOG(LOG_INFO, "could not load texture");
 	}
-
-	// MgeGL_Uniform1i(MGEGL.State.programID, "sampleTex", 0);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -203,55 +225,115 @@ void MgeGL_Close()
 	free(MGEGL.State.vertexBuffer.colors);
 	free(MGEGL.State.vertexBuffer.texcoords);
 	free(MGEGL.State.vertexBuffer.indices);
+	free(MGEGL.State.draws);
 }
 
 void MgeGL_Begin(int mode)
 {
-	MGEGL.State.mode = mode;
-	MgeGL_Draw();
-	MGEGL.State.vertexCounter = 0;
-	MGEGL.State.currentDepth = -1.0f;
+	if (MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode != mode) {
+		if (MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount > 0) {
+			if (MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode == MGEGL_LINES) MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexAlignment = ((MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount < 4)? MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount : MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount%4);
+			else if (MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode == MGEGL_TRIANGLES) MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexAlignment = ((MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount < 4)? 1 : (4 - (MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount%4)));
+			else MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexAlignment = 0;
+
+			if (!MgeGL_CheckRenderBatchLimit(MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexAlignment))
+			{
+				MGEGL.State.vertexCounter += MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexAlignment;
+				MGEGL.State.drawCounter++;
+			}
+		}
+
+		if (MGEGL.State.drawCounter >= MGEGL_DEFAULT_DRAWCALLS) MgeGL_Draw();
+
+		MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode = mode;
+		MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount = 0;
+	}
+
+	// printf("MGEGL.State.drawCounter: %d\n", MGEGL.State.vertexCounter);
+}
+
+bool MgeGL_CheckRenderBatchLimit(int vCount)
+{
+	bool overflow = false;
+
+	if ((MGEGL.State.vertexCounter + vCount) >=
+		(MGEGL.State.vertexBuffer.elementCount*4))
+	{
+		overflow = true;
+
+		// Store current primitive drawing mode and texture id
+		int currentMode = MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode;
+		// int currentTexture = MGEGL.State.draws[MGEGL.State.drawCounter - 1].textureId;
+
+		MgeGL_Draw();
+
+		// Restore state of last batch so we can continue adding vertices
+		MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode = currentMode;
+		// MGEGL.State.draws[MGEGL.State.drawCounter - 1].textureId = currentTexture;
+	}
+
+	return overflow;
 }
 
 void MgeGL_End()
 {
-	MGEGL.State.currentDepth += (1.0f/20000.0f);
+	MGEGL.State.currentDepth += (1.0f / 20000.0f);
 }
 
 void MgeGL_Draw()
 {
-	MgeGL_UniformMatrix4fv("modelview", MGEGL.State.modelview);
-	MgeGL_UniformMatrix4fv("projection", MGEGL.State.projection);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, MGEGL.State.defaultTexture);
-
-	glUseProgram(MGEGL.State.currentShaderID);
-	glBindVertexArray(MGEGL.State.VAO);
-
-	// positions
-	glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter*3*sizeof(float), MGEGL.State.vertexBuffer.vertices);
-	// colors
-	glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[1]);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter*4*sizeof(unsigned char), MGEGL.State.vertexBuffer.colors);
-	// textures
-	glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter*2*sizeof(float), MGEGL.State.vertexBuffer.texcoords);
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
-
-	if (MGEGL.State.mode == MGEGL_LINES || MGEGL.State.mode == MGEGL_TRIANGLES)
+	if (MGEGL.State.vertexCounter > 0)
 	{
-		int offset = 0;
-		glDrawArrays(MGEGL.State.mode, offset, MGEGL.State.vertexCounter);
+		MgeGL_UniformMatrix4fv("modelview", MGEGL.State.modelview);
+		MgeGL_UniformMatrix4fv("projection", MGEGL.State.projection);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, MGEGL.State.defaultTexture);
+
+		glUseProgram(MGEGL.State.currentShaderID);
+		glBindVertexArray(MGEGL.State.VAO);
+
+		// positions
+		glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 3 * sizeof(float), MGEGL.State.vertexBuffer.vertices);
+		// colors
+		glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[1]);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors);
+		// textures
+		glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
+
+		for (int i = 0, vertexOffset = 0; i < MGEGL.State.drawCounter; i++)
+		{
+			// glBindTexture(GL_TEXTURE_2D, batch->draws[i].textureId);
+			if (
+				MGEGL.State.draws[i].mode == MGEGL_LINES ||
+				MGEGL.State.draws[i].mode == MGEGL_TRIANGLES
+			) {
+				glDrawArrays(MGEGL.State.draws[i].mode, vertexOffset, MGEGL.State.draws[i].vertexCount);
+			} else {
+				glDrawElements(GL_TRIANGLES, MGEGL.State.draws[i].vertexCount / 4 * 6, GL_UNSIGNED_INT, (GLvoid *)(vertexOffset/4*6*sizeof(GLuint)));
+			}
+			vertexOffset += (MGEGL.State.draws[i].vertexCount + MGEGL.State.draws[i].vertexAlignment);
+		}
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
 	}
-	else
+	// glUseProgram(0);
+
+	MGEGL.State.vertexCounter = 0;
+	MGEGL.State.currentDepth = -1.0f;
+
+	for (int i = 0; i < MGEGL_DEFAULT_DRAWCALLS; i++)
 	{
-		glDrawElements(GL_TRIANGLES, MGEGL.State.vertexCounter/4*6, GL_UNSIGNED_INT, 0);
+		MGEGL.State.draws[i].mode = MGEGL_QUADS;
+		MGEGL.State.draws[i].vertexCount = 0;
+		// MGEGL.State.draws[i].textureId = RLGL.State.defaultTextureId;
 	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindVertexArray(0);
+	MGEGL.State.drawCounter = 1;
 }
 
 void MgeGL_SetTexture(unsigned int id)
@@ -262,8 +344,10 @@ void MgeGL_SetTexture(unsigned int id)
 
 void MgeGL_MatrixMode(int mode)
 {
-	if (mode == MGEGL_PROJECTION) MGEGL.State.currentMatrix = &MGEGL.State.projection;
-	else if (mode == MGEGL_MODELVIEW) MGEGL.State.currentMatrix = &MGEGL.State.modelview;
+	if (mode == MGEGL_PROJECTION)
+		MGEGL.State.currentMatrix = &MGEGL.State.projection;
+	else if (mode == MGEGL_MODELVIEW)
+		MGEGL.State.currentMatrix = &MGEGL.State.modelview;
 
 	MGEGL.State.currentMatrixMode = mode;
 }
@@ -291,33 +375,32 @@ void MgeGL_Rotatef(float angle, float x, float y, float z)
 	Matrix matRotation = Matrix_Identity();
 
 	// Axis vector (x, y, z) normalization
-	float lengthSquared = x*x + y*y + z*z;
-	if ((lengthSquared != 1.0f) && (lengthSquared != 0.0f))
-	{
-		float inverseLength = 1.0f/sqrtf(lengthSquared);
+	float lengthSquared = x * x + y * y + z * z;
+	if ((lengthSquared != 1.0f) && (lengthSquared != 0.0f)) {
+		float inverseLength = 1.0f / sqrtf(lengthSquared);
 		x *= inverseLength;
 		y *= inverseLength;
 		z *= inverseLength;
 	}
 
 	// Rotation matrix generation
-	float sinres = sinf(DEG2RAD*angle);
-	float cosres = cosf(DEG2RAD*angle);
+	float sinres = sinf(DEG2RAD * angle);
+	float cosres = cosf(DEG2RAD * angle);
 	float t = 1.0f - cosres;
 
-	matRotation.m0 = x*x*t + cosres;
-	matRotation.m1 = y*x*t + z*sinres;
-	matRotation.m2 = z*x*t - y*sinres;
+	matRotation.m0 = x * x * t + cosres;
+	matRotation.m1 = y * x * t + z * sinres;
+	matRotation.m2 = z * x * t - y * sinres;
 	matRotation.m3 = 0.0f;
 
-	matRotation.m4 = x*y*t - z*sinres;
-	matRotation.m5 = y*y*t + cosres;
-	matRotation.m6 = z*y*t + x*sinres;
+	matRotation.m4 = x * y * t - z * sinres;
+	matRotation.m5 = y * y * t + cosres;
+	matRotation.m6 = z * y * t + x * sinres;
 	matRotation.m7 = 0.0f;
 
-	matRotation.m8 = x*z*t + y*sinres;
-	matRotation.m9 = y*z*t - x*sinres;
-	matRotation.m10 = z*z*t + cosres;
+	matRotation.m8 = x * z * t + y * sinres;
+	matRotation.m9 = y * z * t - x * sinres;
+	matRotation.m10 = z * z * t + cosres;
 	matRotation.m11 = 0.0f;
 
 	matRotation.m12 = 0.0f;
@@ -329,7 +412,7 @@ void MgeGL_Rotatef(float angle, float x, float y, float z)
 	*MGEGL.State.currentMatrix = Matrix_Multiply(matRotation, *MGEGL.State.currentMatrix);
 }
 
-void MgeGL_MultMatrixf(const float *matf)
+void MgeGL_MultMatrixf(const float* matf)
 {
 	// Matrix creation from array
 	Matrix mat = {
@@ -345,10 +428,10 @@ void MgeGL_MultMatrixf(const float *matf)
 // Push the current matrix into MGEGL.State.stack
 void MgeGL_PushMatrix(void)
 {
-	if (MGEGL.State.stackCounter >= MGEGL_MAX_MATRIX_STACK_SIZE) TRACE_LOG(LOG_ERROR, "MGEGL: Matrix stack overflow (MGEGL_MAX_MATRIX_STACK_SIZE)");
+	if (MGEGL.State.stackCounter >= MGEGL_MAX_MATRIX_STACK_SIZE)
+		TRACE_LOG(LOG_ERROR, "MGEGL: Matrix stack overflow (MGEGL_MAX_MATRIX_STACK_SIZE)");
 
-	if (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW)
-	{
+	if (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW) {
 		MGEGL.State.transformRequired = true;
 		MGEGL.State.currentMatrix = &MGEGL.State.transform;
 	}
@@ -360,15 +443,13 @@ void MgeGL_PushMatrix(void)
 // Pop lattest inserted matrix from MGEGL.State.stack
 void MgeGL_PopMatrix(void)
 {
-	if (MGEGL.State.stackCounter > 0)
-	{
+	if (MGEGL.State.stackCounter > 0) {
 		Matrix mat = MGEGL.State.stack[MGEGL.State.stackCounter - 1];
 		*MGEGL.State.currentMatrix = mat;
 		MGEGL.State.stackCounter--;
 	}
 
-	if ((MGEGL.State.stackCounter == 0) && (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW))
-	{
+	if ((MGEGL.State.stackCounter == 0) && (MGEGL.State.currentMatrixMode == MGEGL_MODELVIEW)) {
 		MGEGL.State.currentMatrix = &MGEGL.State.modelview;
 		MGEGL.State.transformRequired = false;
 	}
@@ -405,26 +486,49 @@ void MgeGL_Vertex3f(float x, float y, float z)
 	float tz = z;
 
 	// Transform provided vector if required
-	if (MGEGL.State.transformRequired)
-	{
-		tx = MGEGL.State.transform.m0*x + MGEGL.State.transform.m4*y + MGEGL.State.transform.m8*z + MGEGL.State.transform.m12;
-		ty = MGEGL.State.transform.m1*x + MGEGL.State.transform.m5*y + MGEGL.State.transform.m9*z + MGEGL.State.transform.m13;
-		tz = MGEGL.State.transform.m2*x + MGEGL.State.transform.m6*y + MGEGL.State.transform.m10*z + MGEGL.State.transform.m14;
+	if (MGEGL.State.transformRequired) {
+		tx = MGEGL.State.transform.m0 * x + MGEGL.State.transform.m4 * y + MGEGL.State.transform.m8 * z + MGEGL.State.transform.m12;
+		ty = MGEGL.State.transform.m1 * x + MGEGL.State.transform.m5 * y + MGEGL.State.transform.m9 * z + MGEGL.State.transform.m13;
+		tz = MGEGL.State.transform.m2 * x + MGEGL.State.transform.m6 * y + MGEGL.State.transform.m10 * z + MGEGL.State.transform.m14;
 	}
+
+	if (MGEGL.State.vertexCounter > (MGEGL.State.vertexBuffer.elementCount*4 - 4))
+	{
+		if ((MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode == MGEGL_LINES) &&
+			(MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount%2 == 0))
+		{
+			// Reached the maximum number of vertices for MGEGL_LINES drawing
+			// Launch a draw call but keep current state for next vertices comming
+			// NOTE: We add +1 vertex to the check for security
+			MgeGL_CheckRenderBatchLimit(2 + 1);
+		}
+		else if ((MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode == MGEGL_TRIANGLES) &&
+			(MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount%3 == 0))
+		{
+			MgeGL_CheckRenderBatchLimit(3 + 1);
+		}
+		else if ((MGEGL.State.draws[MGEGL.State.drawCounter - 1].mode == MGEGL_QUADS) &&
+			(MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount%4 == 0))
+		{
+			MgeGL_CheckRenderBatchLimit(4 + 1);
+		}
+	}
+
 	// Adding position
-	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+0] = tx;
-	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+1] = ty;
-	MGEGL.State.vertexBuffer.vertices[3*MGEGL.State.vertexCounter+2] = tz;
+	MGEGL.State.vertexBuffer.vertices[3 * MGEGL.State.vertexCounter + 0] = tx;
+	MGEGL.State.vertexBuffer.vertices[3 * MGEGL.State.vertexCounter + 1] = ty;
+	MGEGL.State.vertexBuffer.vertices[3 * MGEGL.State.vertexCounter + 2] = tz;
 	// Adding color
-	MGEGL.State.vertexBuffer.colors[4*MGEGL.State.vertexCounter+0] = MGEGL.State.colorr;
-	MGEGL.State.vertexBuffer.colors[4*MGEGL.State.vertexCounter+1] = MGEGL.State.colorg;
-	MGEGL.State.vertexBuffer.colors[4*MGEGL.State.vertexCounter+2] = MGEGL.State.colorb;
-	MGEGL.State.vertexBuffer.colors[4*MGEGL.State.vertexCounter+3] = MGEGL.State.colora;
+	MGEGL.State.vertexBuffer.colors[4 * MGEGL.State.vertexCounter + 0] = MGEGL.State.colorr;
+	MGEGL.State.vertexBuffer.colors[4 * MGEGL.State.vertexCounter + 1] = MGEGL.State.colorg;
+	MGEGL.State.vertexBuffer.colors[4 * MGEGL.State.vertexCounter + 2] = MGEGL.State.colorb;
+	MGEGL.State.vertexBuffer.colors[4 * MGEGL.State.vertexCounter + 3] = MGEGL.State.colora;
 	// Adding texture
-	MGEGL.State.vertexBuffer.texcoords[2*MGEGL.State.vertexCounter+0] = MGEGL.State.texcoordx;
-	MGEGL.State.vertexBuffer.texcoords[2*MGEGL.State.vertexCounter+1] = MGEGL.State.texcoordy;
+	MGEGL.State.vertexBuffer.texcoords[2 * MGEGL.State.vertexCounter + 0] = MGEGL.State.texcoordx;
+	MGEGL.State.vertexBuffer.texcoords[2 * MGEGL.State.vertexCounter + 1] = MGEGL.State.texcoordy;
 
 	MGEGL.State.vertexCounter++;
+	MGEGL.State.draws[MGEGL.State.drawCounter - 1].vertexCount++;
 }
 
 void MgeGL_Frustum(double left, double right, double bottom, double top, double znear, double zfar)
@@ -435,24 +539,24 @@ void MgeGL_Frustum(double left, double right, double bottom, double top, double 
 	float tb = (float)(top - bottom);
 	float fn = (float)(zfar - znear);
 
-	matFrustum.m0 = ((float) znear*2.0f)/rl;
+	matFrustum.m0 = ((float)znear * 2.0f) / rl;
 	matFrustum.m1 = 0.0f;
 	matFrustum.m2 = 0.0f;
 	matFrustum.m3 = 0.0f;
 
 	matFrustum.m4 = 0.0f;
-	matFrustum.m5 = ((float) znear*2.0f)/tb;
+	matFrustum.m5 = ((float)znear * 2.0f) / tb;
 	matFrustum.m6 = 0.0f;
 	matFrustum.m7 = 0.0f;
 
-	matFrustum.m8 = ((float)right + (float)left)/rl;
-	matFrustum.m9 = ((float)top + (float)bottom)/tb;
-	matFrustum.m10 = -((float)zfar + (float)znear)/fn;
+	matFrustum.m8 = ((float)right + (float)left) / rl;
+	matFrustum.m9 = ((float)top + (float)bottom) / tb;
+	matFrustum.m10 = -((float)zfar + (float)znear) / fn;
 	matFrustum.m11 = -1.0f;
 
 	matFrustum.m12 = 0.0f;
 	matFrustum.m13 = 0.0f;
-	matFrustum.m14 = -((float)zfar*(float)znear*2.0f)/fn;
+	matFrustum.m14 = -((float)zfar * (float)znear * 2.0f) / fn;
 	matFrustum.m15 = 0.0f;
 
 	*MGEGL.State.currentMatrix = Matrix_Multiply(*MGEGL.State.currentMatrix, matFrustum);
@@ -466,21 +570,21 @@ void MgeGL_Ortho(double left, double right, double bottom, double top, double zn
 	float tb = (float)(top - bottom);
 	float fn = (float)(zfar - znear);
 
-	matOrtho.m0 = 2.0f/rl;
+	matOrtho.m0 = 2.0f / rl;
 	matOrtho.m1 = 0.0f;
 	matOrtho.m2 = 0.0f;
 	matOrtho.m3 = 0.0f;
 	matOrtho.m4 = 0.0f;
-	matOrtho.m5 = 2.0f/tb;
+	matOrtho.m5 = 2.0f / tb;
 	matOrtho.m6 = 0.0f;
 	matOrtho.m7 = 0.0f;
 	matOrtho.m8 = 0.0f;
 	matOrtho.m9 = 0.0f;
-	matOrtho.m10 = -2.0f/fn;
+	matOrtho.m10 = -2.0f / fn;
 	matOrtho.m11 = 0.0f;
-	matOrtho.m12 = -((float)left + (float)right)/rl;
-	matOrtho.m13 = -((float)top + (float)bottom)/tb;
-	matOrtho.m14 = -((float)zfar + (float)znear)/fn;
+	matOrtho.m12 = -((float)left + (float)right) / rl;
+	matOrtho.m13 = -((float)top + (float)bottom) / tb;
+	matOrtho.m14 = -((float)zfar + (float)znear) / fn;
 	matOrtho.m15 = 1.0f;
 
 	*MGEGL.State.currentMatrix = Matrix_Multiply(*MGEGL.State.currentMatrix, matOrtho);
@@ -515,9 +619,9 @@ void MgeGL_Uniform4fv(const char* name, const Vector4& value)
 void MgeGL_UniformMatrix4fv(const char* name, const Matrix& value)
 {
 	float matValue[16] = {
-		value.m0,  value.m1,  value.m2,  value.m3,
-		value.m4,  value.m5,  value.m6,  value.m7,
-		value.m8,  value.m9,  value.m10, value.m11,
+		value.m0, value.m1, value.m2, value.m3,
+		value.m4, value.m5, value.m6, value.m7,
+		value.m8, value.m9, value.m10, value.m11,
 		value.m12, value.m13, value.m14, value.m15
 	};
 	glUniformMatrix4fv(glGetUniformLocation(MGEGL.State.currentShaderID, name), 1, GL_FALSE, matValue);
@@ -570,6 +674,13 @@ unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragmen
 	glDeleteShader(vertex);
 	glDeleteShader(fragment);
 	return programID;
+}
+
+void MgeGL_UnloadShaderProgram(unsigned int id)
+{
+	glDeleteProgram(id);
+
+	TRACE_LOG(LOG_INFO, "Shader: [ID %i] Unloaded shader program data from VRAM (GPU)", id);
 }
 
 void MgeGL_ClearColor(Color color)

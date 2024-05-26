@@ -146,6 +146,16 @@ Shader Mge_LoadShader(const char* vsFileName, const char* fsFileName)
 	return shader;
 }
 
+void Mge_UnloadShader(Shader shader)
+{
+	if (shader.id != MgeGL_GetDefaultShaderId())
+	{
+		MgeGL_UnloadShaderProgram(shader.id);
+
+		free(shader.locs);
+	}
+}
+
 Shader Mge_LoadShaderFromMemory(const char *vsCode, const char *fsCode)
 {
 	Shader shader = {0};
@@ -194,8 +204,10 @@ void Mge_BeginDrawing(void)
 
 void Mge_EndDrawing(void)
 {
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	// ImGui::Render();
+	// ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	MgeGL_Draw();
+
 	Swap_Screen_Buffer();
 
 	CORE.Time.current = Mge_GetTime();
@@ -223,6 +235,8 @@ Vector3 transform = Vector3 {0, 0, -6.0f};
 
 void Mge_BeginMode3D(Camera3D& camera)
 {
+	MgeGL_Draw();
+		
 	MgeGL_MatrixMode(MGEGL_PROJECTION);
 	MgeGL_PushMatrix();
 	MgeGL_LoadIdentity();
@@ -245,21 +259,21 @@ void Mge_BeginMode3D(Camera3D& camera)
 		MgeGL_Ortho(-right, right, -top,top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
 	}
 
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-	ImGui::Begin("MgeGL_Translatef");
-		ImGui::Text("camera.position");
-		ImGui::DragFloat("camera.position.x", &camera.position.x, 0.01f);
-		ImGui::DragFloat("camera.position.y", &camera.position.y, 0.01f);
-		ImGui::DragFloat("camera.position.z", &camera.position.z, 0.01f);
+	// ImGui_ImplOpenGL3_NewFrame();
+	// ImGui_ImplGlfw_NewFrame();
+	// ImGui::NewFrame();
+	// ImGui::Begin("MgeGL_Translatef");
+	// 	ImGui::Text("camera.position");
+	// 	ImGui::DragFloat("camera.position.x", &camera.position.x, 0.01f);
+	// 	ImGui::DragFloat("camera.position.y", &camera.position.y, 0.01f);
+	// 	ImGui::DragFloat("camera.position.z", &camera.position.z, 0.01f);
 
-		ImGui::Text("camera.target");
-		ImGui::DragFloat("camera.target.x", &camera.target.x, 0.01f);
-		ImGui::DragFloat("camera.target.y", &camera.target.y, 0.01f);
-		ImGui::DragFloat("camera.target.z", &camera.target.z, 0.01f);
-	ImGui::End();
-	ImGui::EndFrame();
+	// 	ImGui::Text("camera.target");
+	// 	ImGui::DragFloat("camera.target.x", &camera.target.x, 0.01f);
+	// 	ImGui::DragFloat("camera.target.y", &camera.target.y, 0.01f);
+	// 	ImGui::DragFloat("camera.target.z", &camera.target.z, 0.01f);
+	// ImGui::End();
+	// ImGui::EndFrame();
 
 	MgeGL_MatrixMode(MGEGL_MODELVIEW);
 	MgeGL_LoadIdentity();
@@ -272,6 +286,8 @@ void Mge_BeginMode3D(Camera3D& camera)
 
 void Mge_EndMode3D(void)
 {
+	MgeGL_Draw();
+
 	MgeGL_MatrixMode(MGEGL_PROJECTION);	// Switch to projection matrix
 	MgeGL_PopMatrix();					 // Restore previous matrix (projection) from matrix stack
 
@@ -288,7 +304,7 @@ void Mge_BeginShaderMode(Shader shader)
 
 void Mge_EndShaderMode()
 {
-	MgeGL_SetShader(MgeGL_GetDefaultShader());
+	MgeGL_SetShader(MgeGL_GetDefaultShaderId());
 }
 
 float Get_Frame_Time(void)
