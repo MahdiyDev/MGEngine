@@ -339,10 +339,12 @@ float GetMouseX(void);
 float GetMouseY(void);
 Vector2 GetMousePosition(void);
 void SetMousePosition(int x, int y);
-void ShowCursor(void);
-void HideCursor(void);
-void EnableCursor(void);
-void DisableCursor(void);
+void ShowCursor(void);       // make the cursor visible
+void HideCursor(void);       // hide the cursor (still free to move)
+void EnableCursor(void);     // show + unlock the cursor
+void DisableCursor(void);    // hide + lock the cursor to the window (FPS style)
+bool IsCursorHidden(void);   // true while the cursor is hidden or locked
+void Mge_ToggleCursor(void); // flip between EnableCursor() and DisableCursor()
 
 // Texture
 Image Mge_LoadImageFromMemory(const char *fileType, const unsigned char *fileData, int dataSize);

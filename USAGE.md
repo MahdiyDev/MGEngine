@@ -39,7 +39,12 @@ make                 # -> build/MGEngine
 ```
 
 `make` compiles every `source/*.c` (the desktop platform file is `#include`d by
-`mge_core.c`, not compiled on its own).
+`mge_core.c`, not compiled on its own). It first runs `make_build_dir`, which
+creates `build/obj/` and copies `shaders/` + `assets/` into `build/` so the
+executable can be run from either the repo root or `build/`.
+
+On Windows use `mingw32-make`. The Makefiles pin `SHELL := cmd.exe`, so the
+recipes work whether or not an `sh`/Git-Bash shell is on `PATH`.
 
 ### Tests (no GLFW / GL context required)
 
@@ -88,6 +93,37 @@ int main(void)
 `Mge_EndMode3D`, with the low-level `MgeGL_Begin(MGEGL_TRIANGLES)` …
 `MgeGL_Vertex3f` … `MgeGL_End` immediate calls inside. See `source/main.c`.
 
+### Cursor
+
+| Function | Effect |
+| --- | --- |
+| `ShowCursor()` / `HideCursor()` | toggle cursor **visibility** (the cursor still moves freely) |
+| `EnableCursor()` | show **and** unlock the cursor |
+| `DisableCursor()` | hide **and** lock the cursor to the window centre (FPS style, enables raw mouse motion) |
+| `Mge_ToggleCursor()` | flip between `EnableCursor()` and `DisableCursor()` |
+| `IsCursorHidden()` | `true` while the cursor is hidden / locked |
+
+Bind it to a key in your loop — `source/main.c` uses **TAB** to free and re-lock
+the mouse, and only runs the fly-camera while it is locked:
+
+```c
+Mge_InitWindow(1280, 720, "demo");
+DisableCursor();                        // start with a captured cursor
+
+while (!Mge_WindowShouldClose()) {
+    Mge_BeginDrawing();
+
+    if (IsKeyPressed(KEY_TAB))
+        Mge_ToggleCursor();
+
+    if (IsCursorHidden())
+        update_camera(&camera);         // mouse-look only while captured
+
+    /* ... draw ... */
+    Mge_EndDrawing();
+}
+```
+
 ### Math
 
 `glm` is gone. `mge_math.h` provides plain-C functions — no operator overloads:
@@ -123,10 +159,10 @@ directly.
 
 ## Notes / limitations
 
-- Verified here by `gcc -fsyntax-only -Wall -Wextra` on every translation unit
-  plus the runnable `test/` suite (67 checks). The full `build/MGEngine` link was
-  **not** run in this environment — it needs `cmake` to build GLFW and a real GL
-  context.
+- Every translation unit compiles clean under `gcc -std=c11 -Wall -Wextra`, the
+  `test/` suite passes (67 checks), and `build/MGEngine` links once
+  `3rdparty/glfw/lib/libglfw3.a` exists (`make 3rdparty`). Running the window /
+  renderer needs a real GL context and was not exercised here.
 - Dear ImGui was already fully commented out; its includes and the `-limgui` link
   flag were removed. `3rdparty/imgui/` is left in place but unused.
 - `3rdparty/glm/` was deleted.

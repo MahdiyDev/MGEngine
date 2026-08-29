@@ -20,11 +20,15 @@ LIB_DIR   = -L../3rdparty/glfw/lib
 LIB_LINKS = -lglfw3
 
 ifeq ($(OS),Windows_NT)
+    SHELL := cmd.exe
+    .SHELLFLAGS := /c
     LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
     EXE = .exe
+    RM  = del /q /f $(subst /,\,$1) 2>nul
 else
     LIB_LINKS += -lGL -lm -lpthread -ldl -lX11
     EXE =
+    RM  = rm -f $1
 endif
 
 # engine objects, minus main.o (each example has its own main)
@@ -40,4 +44,4 @@ shapes/%$(EXE): shapes/%.c $(ENGINE_OBJS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) $< $(ENGINE_OBJS) -o $@ $(LIB_DIR) $(LIB_LINKS)
 
 clean:
-	rm -f $(BIN)
+	-$(call RM,$(BIN))

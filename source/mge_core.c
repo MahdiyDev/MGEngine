@@ -377,3 +377,16 @@ Vector2 GetMousePosition(void)
     position.y = (CORE.Input.Mouse.currentPosition.y + CORE.Input.Mouse.offset.y) * CORE.Input.Mouse.scale.y;
     return position;
 }
+
+bool IsCursorHidden(void)
+{
+    return CORE.Input.Mouse.cursorHidden;
+}
+
+void Mge_ToggleCursor(void)
+{
+    if (CORE.Input.Mouse.cursorHidden)
+        EnableCursor();
+    else
+        DisableCursor();
+}

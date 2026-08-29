@@ -1,6 +1,7 @@
 # MGEngine -- pure C11 build (no C++, no glm, no imgui).
 #
 #   make              build build/MGEngine (needs 3rdparty/glfw/lib/libglfw3.a)
+#   make make_build_dir  create build/ and copy shaders/ + assets/ into it
 #   make 3rdparty     build GLFW from source (needs cmake)
 #   make test         build+run the unit tests (no window/GL needed)
 #   make clean
@@ -23,13 +24,19 @@ LIB_DIR   = -L./3rdparty/glfw/lib
 LIB_LINKS = -lglfw3
 
 ifeq ($(OS),Windows_NT)
+    SHELL := cmd.exe
+    .SHELLFLAGS := /c
     LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
     EXE  := .exe
     MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
+    CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
+    RMDIR = if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
 else
     LIB_LINKS += -lGL -lm -lpthread -ldl -lX11
     EXE  :=
     MKDIR = mkdir -p $1
+    CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
+    RMDIR = rm -rf $1
 endif
 
 SOURCE_DIR    = source
@@ -42,10 +49,15 @@ COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES))
 
 EXECUTABLE = MGEngine
 
-.PHONY: all clean 3rdparty test
+.PHONY: all clean 3rdparty test make_build_dir
 
-# Run the built executable from the repo root so shaders/ and assets/ resolve.
-all: $(BUILD_DIR)/$(EXECUTABLE)$(EXE)
+all: make_build_dir $(BUILD_DIR)/$(EXECUTABLE)$(EXE)
+
+# create build/obj and stage runtime data so build/MGEngine can run from build/
+make_build_dir:
+	$(call MKDIR,$(BUILD_OBJ_DIR))
+	$(call CPDIR,shaders,$(BUILD_DIR)/shaders)
+	$(call CPDIR,assets,$(BUILD_DIR)/assets)
 
 $(BUILD_DIR)/$(EXECUTABLE)$(EXE): $(COBJECTS)
 	$(CC) $(CFLAGS) $(COBJECTS) -o $@ $(LIB_DIR) $(LIB_LINKS)
@@ -66,8 +78,4 @@ test:
 
 clean:
 	$(MAKE) -C test clean
-ifeq ($(OS),Windows_NT)
-	if exist "$(subst /,\,$(BUILD_DIR))" rmdir /s /q "$(subst /,\,$(BUILD_DIR))"
-else
-	rm -rf $(BUILD_DIR)
-endif
+	$(call RMDIR,$(BUILD_DIR))

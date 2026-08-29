@@ -129,7 +129,16 @@ int main(void)
     while (!Mge_WindowShouldClose()) {
         Mge_BeginDrawing();
         Mge_ClearBackground(DARKGREEN);
-        HandleCameraMovement(&camera);
+
+        // TAB frees / re-locks the mouse cursor
+        if (IsKeyPressed(KEY_TAB)) {
+            Mge_ToggleCursor();
+            firstMouse = true; // avoid a camera jump when re-locking
+        }
+
+        // only steer the camera while the cursor is captured
+        if (IsCursorHidden())
+            HandleCameraMovement(&camera);
 
         Mge_BeginMode3D(camera);
         Mge_BeginShaderMode(lightShader);

@@ -14,13 +14,17 @@ CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 TESTS := test_math test_utils
 
 ifeq ($(OS),Windows_NT)
+    SHELL := cmd.exe
+    .SHELLFLAGS := /c
     EXE    := .exe
-    RM     := del /q /f
+    RM     := del /q /f 2>nul
     native  = $(subst /,\,$1)
+    runexe  = .\$(subst /,\,$1)
 else
     EXE    :=
     RM     := rm -f
     native  = $1
+    runexe  = ./$1
 endif
 
 .PHONY: all test clean $(TESTS)
@@ -29,7 +33,7 @@ all: test
 test: $(TESTS)
 
 $(TESTS): %: %$(EXE)
-	$(call native,$<)
+	$(call runexe,$<)
 
 test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ test_math.c ../source/mge_math.c -lm
