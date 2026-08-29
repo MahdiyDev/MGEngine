@@ -50,10 +50,10 @@ typedef struct VertexData {
 } VertexData;
 
 void MgeGL_Init(int width, int height);
-void MgeGL_Close();
-void MgeGL_Draw();
+void MgeGL_Close(void);
+void MgeGL_Draw(void);
 void MgeGL_Begin(int mode);
-void MgeGL_End();
+void MgeGL_End(void);
 void MgeGL_ClearScreenBuffers(void);
 void MgeGL_Viewport(int x, int y, int width, int height);
 void MgeGL_Load_Extensions(void* loader);
@@ -64,7 +64,7 @@ void MgeGL_EnableDepthTest(void);
 void MgeGL_DisableDepthTest(void);
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
-unsigned int MgeGL_GetDefaultShaderId();
+unsigned int MgeGL_GetDefaultShaderId(void);
 void MgeGL_SetShader(unsigned int id);
 unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName);
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);
@@ -72,9 +72,9 @@ void MgeGL_UnloadShaderProgram(unsigned int id);
 void MgeGL_SetTexture(unsigned int id);
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(const char* name, const int value);
-void MgeGL_Uniform3fv(const char* name, const Vector3& value);
-void MgeGL_Uniform4fv(const char* name, const Vector4& value);
-void MgeGL_UniformMatrix4fv(const char* name, const Matrix& value);
+void MgeGL_Uniform3fv(const char* name, Vector3 value);
+void MgeGL_Uniform4fv(const char* name, Vector4 value);
+void MgeGL_UniformMatrix4fv(const char* name, Matrix value);
 
 void MgeGL_Frustum(double left, double right, double bottom, double top, double znear, double zfar);
 void MgeGL_Ortho(double left, double right, double bottom, double top, double znear, double zfar);

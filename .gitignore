@@ -5,4 +5,12 @@ build
 *.out
 *.o
 *.exe
+*.tmp
 3rdparty/glfw/lib/*
+3rdparty/glfw/build/*
+test/test_math
+test/test_utils
+examples/shapes/draw_line
+examples/shapes/draw_rectangle
+examples/shapes/draw_triangle
+examples/shapes/mixed

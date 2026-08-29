@@ -1,53 +1,43 @@
+# Build the shape examples. Requires the engine objects to be built first:
+#   (cd .. && make)
+#
+#   make            build every example in shapes/
+#   make clean
+
 CC = gcc
-CXX = g++
 
-CFLAGS=
-CXXFLAGS=-Wall -Werror -pedantic -std=c++20
+MLIB = ../3rdparty/mlib
 
-LIB_LINKS+=-lglfw3 -limgui
-LIB_DIR+=-L../3rdparty/glfw/lib
-3RDPARTY_GLFW_OPTIONS=
+CFLAGS   ?= -std=c11 -Wall -Wextra -g
+CPPFLAGS  = -DPLATFORM_DESKTOP
+INCLUDES  = -I../source \
+            -I../3rdparty/glad/include \
+            -I../3rdparty/stb \
+            -I../3rdparty/glfw/include \
+            -I$(MLIB) -I$(MLIB)/vec
+
+LIB_DIR   = -L../3rdparty/glfw/lib
+LIB_LINKS = -lglfw3
 
 ifeq ($(OS),Windows_NT)
-CURRENT_DIR += $(shell sh -c "pwd -W")
-LIB_LINKS+=-lwinmm -lgdi32 -lkernel32
-3RDPARTY_GLFW_OPTIONS+=-G "MinGW Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_MAKE_PROGRAM=make
-LIB_DIR+=-L../3rdparty/imgui/lib/win32
+    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
+    EXE = .exe
 else
-CURRENT_DIR += $(shell pwd)
-LIB_DIR+=-L../3rdparty/imgui/lib/linux/
+    LIB_LINKS += -lGL -lm -lpthread -ldl -lX11
+    EXE =
 endif
 
-INCLUDES+=-I./$(SOURCE_DIR)
-INCLUDES+=-I../3rdparty/glad/include
-INCLUDES+=-I../3rdparty/stb
-INCLUDES+=-I../3rdparty/glfw/include
-INCLUDES+=-I../3rdparty/imgui/include
-INCLUDES+=-I../source
+# engine objects, minus main.o (each example has its own main)
+ENGINE_OBJS = $(filter-out ../build/obj/main.o,$(wildcard ../build/obj/*.o))
 
-SOURCE_DIR = shapes
+SRC = $(wildcard shapes/*.c)
+BIN = $(patsubst shapes/%.c,shapes/%$(EXE),$(SRC))
 
-CSOURCES = $(wildcard $(SOURCE_DIR)/*.c)
-CXXSOURCES = $(wildcard $(SOURCE_DIR)/*.cpp)
+.PHONY: all clean
+all: $(BIN)
 
-COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(SOURCE_DIR)/%,$(CSOURCES))
-CXXOBJECTS = $(patsubst $(SOURCE_DIR)/%.cpp,$(SOURCE_DIR)/%,$(CXXSOURCES))
-MGENGINE_OBJS = ../build/obj/glad.o \
-				../build/obj/mge_core.o \
-				../build/obj/mge_gl.o \
-				../build/obj/mge_math.o \
-				../build/obj/mge_shapes.o \
-				../build/obj/mge_texture.o \
-				../build/obj/mge_utils.o
+shapes/%$(EXE): shapes/%.c $(ENGINE_OBJS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) $< $(ENGINE_OBJS) -o $@ $(LIB_DIR) $(LIB_LINKS)
 
-all: $(COBJECTS) $(CXXOBJECTS)
-
-$(SOURCE_DIR)/%: $(SOURCE_DIR)/%.c
-	$(CXX) $(CFLAGS) $(MGENGINE_OBJS) $< -o $@ $(INCLUDES) $(LIB_DIR) $(LIB_LINKS)
-
-$(SOURCE_DIR)/%: $(SOURCE_DIR)/%.cpp
-	$(CXX) $(CXXFLAGS) $(MGENGINE_OBJS) $< -o $@ $(INCLUDES) $(LIB_DIR) $(LIB_LINKS)
-
-.PHONY: clean
 clean:
-	rm $(COBJECTS) $(CXXOBJECTS)
+	rm -f $(BIN)

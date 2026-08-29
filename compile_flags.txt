@@ -1,0 +1,10 @@
+-std=c11
+-Wall
+-Wextra
+-DPLATFORM_DESKTOP
+-I./source
+-I./3rdparty/glad/include
+-I./3rdparty/stb
+-I./3rdparty/glfw/include
+-I./3rdparty/mlib
+-I./3rdparty/mlib/vec

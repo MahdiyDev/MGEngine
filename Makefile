@@ -1,84 +1,73 @@
+# MGEngine -- pure C11 build (no C++, no glm, no imgui).
+#
+#   make              build build/MGEngine (needs 3rdparty/glfw/lib/libglfw3.a)
+#   make 3rdparty     build GLFW from source (needs cmake)
+#   make test         build+run the unit tests (no window/GL needed)
+#   make clean
+#
+# On Windows use `mingw32-make`.
+
 CC = gcc
-CXX = g++
 
-CFLAGS=
-CXXFLAGS=-Wall -Werror -pedantic -std=c++14
+MLIB = ./3rdparty/mlib
 
-LIB_LINKS+=-lglfw3 -limgui
-LIB_DIR+=-L./3rdparty/glfw/lib
-3RDPARTY_GLFW_OPTIONS=
+CFLAGS  ?= -std=c11 -Wall -Wextra -g
+CPPFLAGS = -DPLATFORM_DESKTOP
+INCLUDES = -I./source \
+           -I./3rdparty/glad/include \
+           -I./3rdparty/stb \
+           -I./3rdparty/glfw/include \
+           -I$(MLIB) -I$(MLIB)/vec
+
+LIB_DIR   = -L./3rdparty/glfw/lib
+LIB_LINKS = -lglfw3
 
 ifeq ($(OS),Windows_NT)
-CURRENT_DIR += $(shell sh -c "pwd -W")
-LIB_LINKS+=-lwinmm -lgdi32 -lkernel32
-3RDPARTY_GLFW_OPTIONS+=-G "MinGW Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_MAKE_PROGRAM=make
-LIB_DIR+=-L./3rdparty/imgui/lib/win32
+    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
+    EXE  := .exe
+    MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
 else
-CURRENT_DIR += $(shell pwd)
-LIB_DIR+=-L./3rdparty/imgui/lib/linux/
+    LIB_LINKS += -lGL -lm -lpthread -ldl -lX11
+    EXE  :=
+    MKDIR = mkdir -p $1
 endif
 
-INCLUDES+=-I./$(SOURCE_DIR)
-INCLUDES+=-I./3rdparty/glad/include
-INCLUDES+=-I./3rdparty/stb
-INCLUDES+=-I./3rdparty/glfw/include
-INCLUDES+=-I./3rdparty/imgui/include
+SOURCE_DIR    = source
+BUILD_DIR     = build
+BUILD_OBJ_DIR = $(BUILD_DIR)/obj
 
-SOURCE_DIR = source
-BUILD_DIR = build
-BUILD_OBJ_DIR=$(BUILD_DIR)/obj
-
+# platforms/*.c is #included by mge_core.c, so it is not compiled on its own
 CSOURCES = $(wildcard $(SOURCE_DIR)/*.c)
-CXXSOURCES = $(wildcard $(SOURCE_DIR)/*.cpp)
-
 COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES))
-CXXOBJECTS = $(patsubst $(SOURCE_DIR)/%.cpp,$(BUILD_OBJ_DIR)/%.o,$(CXXSOURCES))
 
 EXECUTABLE = MGEngine
 
-all: make_build_dir $(EXECUTABLE)
+.PHONY: all clean 3rdparty test
 
-print_obj:
-	@echo $(COBJECTS) $(CXXOBJECTS)
+# Run the built executable from the repo root so shaders/ and assets/ resolve.
+all: $(BUILD_DIR)/$(EXECUTABLE)$(EXE)
 
-$(EXECUTABLE): $(COBJECTS) $(CXXOBJECTS)
-	$(CXX) $(CXXFLAGS) $(COBJECTS) $(CXXOBJECTS) -o $(BUILD_DIR)/$@ $(LIB_DIR) $(LIB_LINKS)
+$(BUILD_DIR)/$(EXECUTABLE)$(EXE): $(COBJECTS)
+	$(CC) $(CFLAGS) $(COBJECTS) -o $@ $(LIB_DIR) $(LIB_LINKS)
 
-$(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+$(BUILD_OBJ_DIR):
+	$(call MKDIR,$(BUILD_OBJ_DIR))
 
-$(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+$(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_OBJ_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-.PHONY: 3rdparty
 3rdparty:
 	cd 3rdparty/glfw/source && \
-	cmake -S . -B ../build -DCMAKE_INSTALL_PREFIX=../ $(3RDPARTY_GLFW_OPTIONS) && \
-	cd ../build && \
-	make && make install 
+	cmake -S . -B ../build -DCMAKE_INSTALL_PREFIX=../ -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF && \
+	cmake --build ../build && cmake --install ../build
 
-test: make_build_dir $(COBJECTS) $(CXXOBJECTS)
-	$(CXX) $(INCLUDES) -c test.cpp -o $(BUILD_OBJ_DIR)/test.o
-	$(CXX) $(CXXFLAGS) $(COBJECTS) $(filter-out $(BUILD_OBJ_DIR)/main.o,$(CXXOBJECTS)) $(BUILD_OBJ_DIR)/test.o $(LIB_DIR) $(LIB_LINKS)
+test:
+	$(MAKE) -C test
 
-make_build_dir:
-	mkdir -p $(BUILD_OBJ_DIR)
-	cp -r ./assets $(BUILD_DIR)
-	cp -r ./shaders $(BUILD_DIR)
-
-gen_clangd:
-	@rm -rf .clangd
-	@printf "CompileFlags:\n" >> .clangd
-	@printf "\tAdd:\n" >> .clangd
-	@printf "    - $(CXXFLAGS)\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/${SOURCE_DIR}\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/3rdparty/glad/include\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/3rdparty/glfw/include\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/3rdparty/imgui/include\n" >> .clangd
-	@printf "    - -I$(CURRENT_DIR)/3rdparty/stb\n" >> .clangd
-
-.PHONY: clean
 clean:
-	rm -rf *.o
-	rm -rf build/*
-	rm -rf 3rdparty/glfw/build
+	$(MAKE) -C test clean
+ifeq ($(OS),Windows_NT)
+	if exist "$(subst /,\,$(BUILD_DIR))" rmdir /s /q "$(subst /,\,$(BUILD_DIR))"
+else
+	rm -rf $(BUILD_DIR)
+endif

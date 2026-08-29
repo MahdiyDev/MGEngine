@@ -2,17 +2,14 @@
 
 #include "mge_config.h"
 #include "mge_math.h"
-#include <cstdarg>
-#include <cstddef>
-#include <cstdint>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #define MGE_VERSION "v0.0.1"
 
-#if defined(__cplusplus)
-	#define CLITERAL(type) type
-#else
-	#define CLITERAL(type) (type)
-#endif
+#define CLITERAL(type) (type)
 
 #ifndef MGE_CULL_DISTANCE_NEAR
 	#define MGE_CULL_DISTANCE_NEAR		0.01
@@ -319,7 +316,7 @@ double Mge_GetDeltaTime(void);
 int Mge_GetFps(void);
 void Mge_SetTargetFPS(int fps);
 void Mge_BeginShaderMode(Shader shader);
-void Mge_EndShaderMode();
+void Mge_EndShaderMode(void);
 Shader Mge_LoadShader(const char* vsFileName, const char* fsFileName);
 void Mge_UnloadShader(Shader shader);
 Shader Mge_LoadShaderFromMemory(const char *vsCode, const char *fsCode);
@@ -355,9 +352,9 @@ Texture2D Mge_LoadTextureFromImage(Image image);
 Texture2D Mge_LoadTexture(const char *fileName);
 
 void Mge_ClearBackground(Color color);
-void Mge_BeginDrawing();
-void Mge_EndDrawing();
-void Mge_BeginMode3D(Camera3D& camera);
+void Mge_BeginDrawing(void);
+void Mge_EndDrawing(void);
+void Mge_BeginMode3D(Camera3D camera);
 void Mge_EndMode3D(void);
 
 // Shapes
@@ -368,7 +365,6 @@ void Draw_RectangleV(Vector2 position, Vector2 size, Color color);
 void Draw_RectangleRec(Rectangle rec, Color color);
 void Draw_RectanglePro(Rectangle rec, Vector2 origin, float rotation, Color color);
 void Draw_RectangleLines(int posX, int posY, int width, int height, Color color);
-void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_TriangleLines(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_TriangleFan(Vector2 *points, int pointCount, Color color);

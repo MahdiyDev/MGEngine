@@ -1,13 +1,15 @@
 #pragma once
 
+// Small linear-algebra layer (replaces glm). Plain C11, no operator overloads.
+
 #ifndef PI
     #define PI 3.14159265358979323846f
 #endif
 #ifndef DEG2RAD
-    #define DEG2RAD (PI/180.0f)
+    #define DEG2RAD (PI / 180.0f)
 #endif
 #ifndef RAD2DEG
-    #define RAD2DEG (180.0f/PI)
+    #define RAD2DEG (180.0f / PI)
 #endif
 
 typedef struct float16 {
@@ -18,129 +20,42 @@ typedef struct float16 {
     #define MatrixToFloat(mat) (MatrixToFloatV(mat).v)
 #endif
 
-typedef struct Vector2 { float x; float y; } Vector2;
+typedef struct Vector2 {
+    float x;
+    float y;
+} Vector2;
 
-typedef struct Vector3 { 
-	float x; float y; float z; 
-
-	Vector3 operator+(const Vector3 right)
-	{
-		return Vector3 { x + right.x, y + right.y, z + right.z };
-	}
-
-	Vector3 operator-(const Vector3 right)
-	{
-		return Vector3 { x - right.x, y - right.y, z - right.z };
-	}
-
-	Vector3 operator*(const Vector3 right)
-	{
-		return Vector3 { x*right.x, y*right.y, z*right.z };
-	}
-
-	Vector3 operator/(const Vector3 right)
-	{
-		return Vector3 { x/right.x, y/right.y, z/right.z };
-	}
-
-	Vector3 operator+=(const Vector3 right)
-	{
-		x += right.x;
-		y += right.y;
-		z += right.z;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator-=(const Vector3 right)
-	{
-		x -= right.x;
-		y -= right.y;
-		z -= right.z;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator*=(const Vector3 right)
-	{
-		x *= right.x;
-		y *= right.y;
-		z *= right.z;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator/=(const Vector3 right)
-	{
-		x /= right.x;
-		y /= right.y;
-		z /= right.z;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator+(const float right)
-	{
-		return Vector3 { x + right, y + right, z + right };
-	}
-
-	Vector3 operator-(const float right)
-	{
-		return Vector3 { x - right, y - right, z - right };
-	}
-
-	Vector3 operator*(const float right)
-	{
-		return Vector3 { x*right, y*right, z*right };
-	}
-
-	Vector3 operator/(const float right)
-	{
-		return Vector3 { x/right, y/right, z/right };
-	}
-
-	Vector3 operator+=(const float right)
-	{
-		x += right;
-		y += right;
-		z += right;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator-=(const float right)
-	{
-		x -= right;
-		y -= right;
-		z -= right;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator*=(const float right)
-	{
-		x *= right;
-		y *= right;
-		z *= right;
-		return Vector3 { x, y, z };
-	}
-
-	Vector3 operator/=(const float right)
-	{
-		x /= right;
-		y /= right;
-		z /= right;
-		return Vector3 { x, y, z };
-	}
+typedef struct Vector3 {
+    float x;
+    float y;
+    float z;
 } Vector3;
 
-typedef struct Vector4 { float x; float y; float z; float w; } Vector4;
+typedef struct Vector4 {
+    float x;
+    float y;
+    float z;
+    float w;
+} Vector4;
 
+// NOTE: stored column-major so MatrixToFloatV() feeds OpenGL directly.
 typedef struct Matrix {
-    float m0, m4, m8, m12;      // Matrix first row (4 components)
-    float m1, m5, m9, m13;      // Matrix second row (4 components)
-    float m2, m6, m10, m14;     // Matrix third row (4 components)
-    float m3, m7, m11, m15;     // Matrix fourth row (4 components)
+    float m0, m4, m8, m12;  // Matrix first column
+    float m1, m5, m9, m13;  // Matrix second column
+    float m2, m6, m10, m14; // Matrix third column
+    float m3, m7, m11, m15; // Matrix fourth column
 } Matrix;
 
 float Clamp(float value, float min, float max);
 
 Vector2 Vector2_Rotate(Vector2 v, float angle);
 
+Vector3 Vector3_Add(Vector3 a, Vector3 b);
+Vector3 Vector3_Subtract(Vector3 a, Vector3 b);
+Vector3 Vector3_Scale(Vector3 v, float scalar);   // v * scalar
+Vector3 Vector3_Multiply(Vector3 a, Vector3 b);   // component-wise
+float   Vector3_DotProduct(Vector3 a, Vector3 b);
+float   Vector3_Length(Vector3 v);
 Vector3 Vector3Cross(Vector3 v1, Vector3 v2);
 Vector3 Vector3Normalize(Vector3 v);
 
