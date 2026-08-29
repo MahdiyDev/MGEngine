@@ -48,7 +48,7 @@ typedef struct GlData {
     } State;
 } GlData;
 
-static const char* vertexShaderCode = "#version 460 core\n"
+static const char* vertexShaderCode = "#version 330 core\n"
                                       "in vec3 aPos;\n"
                                       "in vec4 aColor;\n"
                                       "in vec2 aTexCoord;\n"
@@ -63,7 +63,7 @@ static const char* vertexShaderCode = "#version 460 core\n"
                                       "	texCoord = aTexCoord;\n"
                                       "}\n";
 
-static const char* fragmentShaderCode = "#version 460 core\n"
+static const char* fragmentShaderCode = "#version 330 core\n"
                                         "out vec4 FragColor;\n"
                                         "in vec4 vertexColor;\n"
                                         "in vec2 texCoord;\n"
@@ -176,8 +176,9 @@ unsigned int MgeGL_GetDefaultShaderId(void)
 void MgeGL_SetShader(unsigned int id)
 {
     if (MGEGL.State.currentShaderID != id) {
-        MgeGL_Draw();
+        MgeGL_Draw(); // flush whatever was queued with the previous shader
         MGEGL.State.currentShaderID = id;
+        glUseProgram(id); // keep the active program in sync so MgeGL_Uniform* land on it
     }
 }
 
@@ -286,13 +287,15 @@ void MgeGL_End(void)
 void MgeGL_Draw(void)
 {
     if (MGEGL.State.vertexCounter > 0) {
+        // NOTE: glUniform* affects the *active* program, so bind it first.
+        glUseProgram(MGEGL.State.currentShaderID);
+
         MgeGL_UniformMatrix4fv("modelview", MGEGL.State.modelview);
         MgeGL_UniformMatrix4fv("projection", MGEGL.State.projection);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, MGEGL.State.defaultTexture);
 
-        glUseProgram(MGEGL.State.currentShaderID);
         glBindVertexArray(MGEGL.State.VAO);
 
         glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);

@@ -81,6 +81,16 @@ Vector3 Vector3Normalize(Vector3 v)
     return result;
 }
 
+Vector4 Vector4_Transform(Vector4 v, Matrix mat)
+{
+    Vector4 r;
+    r.x = mat.m0 * v.x + mat.m4 * v.y + mat.m8 * v.z + mat.m12 * v.w;
+    r.y = mat.m1 * v.x + mat.m5 * v.y + mat.m9 * v.z + mat.m13 * v.w;
+    r.z = mat.m2 * v.x + mat.m6 * v.y + mat.m10 * v.z + mat.m14 * v.w;
+    r.w = mat.m3 * v.x + mat.m7 * v.y + mat.m11 * v.z + mat.m15 * v.w;
+    return r;
+}
+
 Matrix Matrix_Identity(void)
 {
     Matrix result = {

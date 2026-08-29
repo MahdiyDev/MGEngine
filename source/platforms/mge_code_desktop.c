@@ -30,6 +30,7 @@ static PlatformData platform = { 0 };
 static void Error_Callback(int error, const char* description);
 static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void MouseCursorPosCallback(GLFWwindow* window, double x, double y);
+static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
 // GLFW3 Error Callback, runs on GLFW3 error
 static void Error_Callback(int error, const char* description)
@@ -94,6 +95,7 @@ void InitPlatform(void)
 
     glfwSetKeyCallback(platform.window, KeyCallback);
     glfwSetCursorPosCallback(platform.window, MouseCursorPosCallback);
+    glfwSetMouseButtonCallback(platform.window, MouseButtonCallback);
 }
 
 double Platform_GetTime(void)
@@ -111,6 +113,9 @@ void Poll_Input_Events(void)
     for (int i = 0; i < MAX_KEYBOARD_KEYS; i++) {
         CORE.Input.Keyboard.previousKeyState[i] = CORE.Input.Keyboard.currentKeyState[i];
         CORE.Input.Keyboard.keyRepeatInFrame[i] = 0;
+    }
+    for (int i = 0; i < MAX_MOUSE_BUTTONS; i++) {
+        CORE.Input.Mouse.previousButtonState[i] = CORE.Input.Mouse.currentButtonState[i];
     }
 
     glfwPollEvents();
@@ -170,6 +175,15 @@ static void MouseCursorPosCallback(GLFWwindow* window, double x, double y)
     (void)window;
     CORE.Input.Mouse.currentPosition.x = (float)x;
     CORE.Input.Mouse.currentPosition.y = (float)y;
+}
+
+static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+    (void)window;
+    (void)mods;
+    if (button < 0 || button >= MAX_MOUSE_BUTTONS)
+        return;
+    CORE.Input.Mouse.currentButtonState[button] = (action == GLFW_PRESS) ? 1 : 0;
 }
 
 void ShowCursor(void)

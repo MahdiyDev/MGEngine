@@ -14,3 +14,6 @@ examples/shapes/draw_line
 examples/shapes/draw_rectangle
 examples/shapes/draw_triangle
 examples/shapes/mixed
+test/test_object
+examples/objects/gizmo_2d
+examples/objects/gizmo_3d

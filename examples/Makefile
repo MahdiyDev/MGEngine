@@ -1,7 +1,7 @@
-# Build the shape examples. Requires the engine objects to be built first:
+# Build the examples. Requires the engine objects to be built first:
 #   (cd .. && make)
 #
-#   make            build every example in shapes/
+#   make            build every example in shapes/ and objects/
 #   make clean
 
 CC = gcc
@@ -34,13 +34,13 @@ endif
 # engine objects, minus main.o (each example has its own main)
 ENGINE_OBJS = $(filter-out ../build/obj/main.o,$(wildcard ../build/obj/*.o))
 
-SRC = $(wildcard shapes/*.c)
-BIN = $(patsubst shapes/%.c,shapes/%$(EXE),$(SRC))
+SRC = $(wildcard shapes/*.c objects/*.c)
+BIN = $(SRC:.c=$(EXE))
 
 .PHONY: all clean
 all: $(BIN)
 
-shapes/%$(EXE): shapes/%.c $(ENGINE_OBJS)
+%$(EXE): %.c $(ENGINE_OBJS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) $< $(ENGINE_OBJS) -o $@ $(LIB_DIR) $(LIB_LINKS)
 
 clean:

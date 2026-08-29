@@ -11,7 +11,7 @@ MLIB   := ../3rdparty/mlib
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils
+TESTS := test_math test_utils test_object
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -40,6 +40,9 @@ test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
 
 test_utils$(EXE): test_utils.c ../source/mge_utils.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ test_utils.c ../source/mge_utils.c
+
+test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ test_object.c ../source/mge_object.c ../source/mge_math.c -lm
 
 clean:
 	-$(RM) $(call native,$(addsuffix $(EXE),$(TESTS)) _mge_utils.tmp)

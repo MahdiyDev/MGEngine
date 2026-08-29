@@ -257,6 +257,7 @@ typedef struct {
 } Size;
 
 #define MAX_KEYBOARD_KEYS 512
+#define MAX_MOUSE_BUTTONS 8
 
 typedef struct CoreData {
 	struct {
@@ -302,10 +303,34 @@ typedef struct CoreData {
 			Vector2 offset;
 			Vector2 scale;
 			bool cursorHidden;
+			char currentButtonState[MAX_MOUSE_BUTTONS];
+			char previousButtonState[MAX_MOUSE_BUTTONS];
 		} Mouse;
 	} Input;
 } CoreData;
 #endif
+
+// Mouse buttons
+typedef enum {
+	MOUSE_BUTTON_LEFT   = 0,
+	MOUSE_BUTTON_RIGHT  = 1,
+	MOUSE_BUTTON_MIDDLE = 2
+} MouseButton;
+
+// A movable scene object -- a rectangle in 2D, an axis-aligned box in 3D.
+typedef enum {
+	OBJECT_2D = 0,
+	OBJECT_3D
+} ObjectKind;
+
+typedef struct Object {
+	ObjectKind kind;
+	Vector3 position;   // centre; z is unused for OBJECT_2D
+	Vector3 size;       // full extents (2D: {w, h, 0})
+	Color color;
+	int id;
+	bool selected;
+} Object;
 
 // Core
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
@@ -338,6 +363,7 @@ bool IsKeyReleased(int key);
 float GetMouseX(void);
 float GetMouseY(void);
 Vector2 GetMousePosition(void);
+Vector2 GetMouseDelta(void);
 void SetMousePosition(int x, int y);
 void ShowCursor(void);       // make the cursor visible
 void HideCursor(void);       // hide the cursor (still free to move)
@@ -345,6 +371,13 @@ void EnableCursor(void);     // show + unlock the cursor
 void DisableCursor(void);    // hide + lock the cursor to the window (FPS style)
 bool IsCursorHidden(void);   // true while the cursor is hidden or locked
 void Mge_ToggleCursor(void); // flip between EnableCursor() and DisableCursor()
+bool IsMouseButtonPressed(int button);
+bool IsMouseButtonDown(int button);
+bool IsMouseButtonReleased(int button);
+
+// Window
+int Mge_GetScreenWidth(void);
+int Mge_GetScreenHeight(void);
 
 // Texture
 Image Mge_LoadImageFromMemory(const char *fileType, const unsigned char *fileData, int dataSize);
@@ -371,3 +404,27 @@ void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_TriangleLines(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_TriangleFan(Vector2 *points, int pointCount, Color color);
 void Draw_TriangleStrip(Vector2 *points, int pointCount, Color color);
+void Draw_Arrow(Vector2 start, Vector2 end, float headSize, Color color);   // 2D
+void Draw_Arrow3D(Vector3 start, Vector3 end, Color color);                 // call inside Mge_BeginMode3D
+void Draw_Cube(Vector3 center, Vector3 size, Color color);
+void Draw_CubeWires(Vector3 center, Vector3 size, Color color);
+
+// Camera / projection helpers (3D)
+Matrix Mge_GetCameraViewMatrix(Camera3D camera);
+Matrix Mge_GetCameraProjectionMatrix(Camera3D camera, float aspect);
+Vector2 Mge_GetWorldToScreen(Vector3 position, Camera3D camera);
+Vector2 Mge_GetWorldToScreenEx(Vector3 position, Camera3D camera, int screenWidth, int screenHeight);
+
+// Objects
+Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
+Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
+void   Mge_DrawObject(Object obj);
+void   Mge_DrawObjectGizmo(Object obj, float axisLength);   // X/Y (2D) or X/Y/Z (3D) arrows at obj.position
+
+// Mouse-driven manipulation. Call once per frame while the cursor is enabled.
+// Left-click an object to select it, then drag a gizmo arrow to move along that
+// axis, or drag the body to move freely. Returns the selected index, or -1.
+int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength);
+int Mge_ManipulateObjects3D(Object* objects, int count, Camera3D camera, float axisLength);
+void Mge_ClearSelection(Object* objects, int count); // deselect all, cancel any drag
+int Mge_GetSelectedObject(void);                     // index of the selected object, or -1

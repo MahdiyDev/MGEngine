@@ -1,72 +1,20 @@
+// MGEngine demo.
+//   TAB           toggle between fly-camera (cursor locked) and edit mode (cursor free)
+//   fly-camera    WASD to move, mouse to look
+//   edit mode     left-click a box to select it, drag a gizmo arrow to move it
+//                 along that axis; right-click to deselect
 #include "mge.h"
 #include "mge_gl.h"
 #include "mge_math.h"
 
 #include <math.h>
-#include <stdio.h>
 
-// Interleaved [u, v, x, y, z] per vertex; 36 vertices = a textured cube.
-static float vertices[] = {
-    1.0f, 0.0f, 0.5f, -0.5f, -0.5f,
-    0.0f, 0.0f, -0.5f, -0.5f, -0.5f,
-    1.0f, 1.0f, 0.5f, 0.5f, -0.5f,
-    1.0f, 1.0f, 0.5f, 0.5f, -0.5f,
-    0.0f, 1.0f, -0.5f, 0.5f, -0.5f,
-    0.0f, 0.0f, -0.5f, -0.5f, -0.5f,
-
-    0.0f, 0.0f, -0.5f, -0.5f, 0.5f,
-    1.0f, 0.0f, 0.5f, -0.5f, 0.5f,
-    1.0f, 1.0f, 0.5f, 0.5f, 0.5f,
-    1.0f, 1.0f, 0.5f, 0.5f, 0.5f,
-    0.0f, 1.0f, -0.5f, 0.5f, 0.5f,
-    0.0f, 0.0f, -0.5f, -0.5f, 0.5f,
-
-    1.0f, 0.0f, -0.5f, 0.5f, 0.5f,
-    1.0f, 1.0f, -0.5f, 0.5f, -0.5f,
-    0.0f, 1.0f, -0.5f, -0.5f, -0.5f,
-    0.0f, 1.0f, -0.5f, -0.5f, -0.5f,
-    0.0f, 0.0f, -0.5f, -0.5f, 0.5f,
-    1.0f, 0.0f, -0.5f, 0.5f, 0.5f,
-
-    1.0f, 0.0f, 0.5f, 0.5f, 0.5f,
-    1.0f, 1.0f, 0.5f, 0.5f, -0.5f,
-    0.0f, 1.0f, 0.5f, -0.5f, -0.5f,
-    0.0f, 1.0f, 0.5f, -0.5f, -0.5f,
-    0.0f, 0.0f, 0.5f, -0.5f, 0.5f,
-    1.0f, 0.0f, 0.5f, 0.5f, 0.5f,
-
-    0.0f, 1.0f, -0.5f, -0.5f, -0.5f,
-    1.0f, 1.0f, 0.5f, -0.5f, -0.5f,
-    1.0f, 0.0f, 0.5f, -0.5f, 0.5f,
-    1.0f, 0.0f, 0.5f, -0.5f, 0.5f,
-    0.0f, 0.0f, -0.5f, -0.5f, 0.5f,
-    0.0f, 1.0f, -0.5f, -0.5f, -0.5f,
-
-    0.0f, 1.0f, -0.5f, 0.5f, -0.5f,
-    1.0f, 1.0f, 0.5f, 0.5f, -0.5f,
-    1.0f, 0.0f, 0.5f, 0.5f, 0.5f,
-    1.0f, 0.0f, 0.5f, 0.5f, 0.5f,
-    0.0f, 0.0f, -0.5f, 0.5f, 0.5f,
-    0.0f, 1.0f, -0.5f, 0.5f, -0.5f,
-};
-
-static const int width = 800 * 2, height = 600 * 2;
+static const int width = 1280, height = 720;
 static bool firstMouse = true;
-static float lastX = 800.0f;
-static float lastY = 600.0f;
+static float lastX = 640.0f;
+static float lastY = 360.0f;
 static float yaw = -90.0f;
 static float pitch = 0.0f;
-
-static void DrawCube(Vector3 offset, Color color)
-{
-    MgeGL_Begin(MGEGL_TRIANGLES);
-    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
-    for (size_t i = 0; i + 5 <= sizeof(vertices) / sizeof(float); i += 5) {
-        MgeGL_TexCoord2f(vertices[i + 0], vertices[i + 1]);
-        MgeGL_Vertex3f(vertices[i + 2] + offset.x, vertices[i + 3] + offset.y, vertices[i + 4] + offset.z);
-    }
-    MgeGL_End();
-}
 
 static void HandleCameraMovement(Camera3D* camera)
 {
@@ -115,10 +63,10 @@ int main(void)
 {
     Mge_InitWindow(width, height, "MGEngine v1.0");
     Mge_SetTargetFPS(60);
-    DisableCursor();
+    DisableCursor(); // start in fly-camera mode
 
     Camera3D camera = { 0 };
-    camera.position = (Vector3){ 0.0f, 0.0f, 10.0f };
+    camera.position = (Vector3){ 0.0f, 3.0f, 12.0f };
     camera.target = (Vector3){ 0.0f, 0.0f, -1.0f };
     camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
     camera.fovy = 60.0f;
@@ -126,36 +74,49 @@ int main(void)
 
     Shader lightShader = Mge_LoadShader("shaders/light_shader.vert", "shaders/light_shader.frag");
 
-    while (!Mge_WindowShouldClose()) {
-        Mge_BeginDrawing();
-        Mge_ClearBackground(DARKGREEN);
+    const int N = 4;
+    const float AXIS = 1.6f;
+    Object objects[4] = {
+        Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f }, RED),
+        Mge_MakeObject3D((Vector3){ 3.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f }, GREEN),
+        Mge_MakeObject3D((Vector3){ 0.0f, 0.0f, -3.0f }, (Vector3){ 1.0f, 1.0f, 1.0f }, BLUE),
+        Mge_MakeObject3D((Vector3){ 0.0f, 2.5f, 0.0f }, (Vector3){ 1.6f, 0.6f, 1.6f }, YELLOW),
+    };
 
-        // TAB frees / re-locks the mouse cursor
+    while (!Mge_WindowShouldClose()) {
         if (IsKeyPressed(KEY_TAB)) {
             Mge_ToggleCursor();
             firstMouse = true; // avoid a camera jump when re-locking
         }
 
-        // only steer the camera while the cursor is captured
-        if (IsCursorHidden())
+        bool editing = !IsCursorHidden();
+        int selected = -1;
+
+        if (editing) {
+            selected = Mge_ManipulateObjects3D(objects, N, camera, AXIS);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+                Mge_ClearSelection(objects, N);
+        } else {
             HandleCameraMovement(&camera);
+        }
+
+        Mge_BeginDrawing();
+        Mge_ClearBackground(DARKGREEN);
 
         Mge_BeginMode3D(camera);
+
+        // pulsing floor via the custom shader
         Mge_BeginShaderMode(lightShader);
-
         MgeGL_Uniform4fv("lightColor",
-            (Vector4){ 1.0f, 1.0f, (float)sin(Mge_GetTime()) * 2.0f, 1.0f });
-
-        DrawCube((Vector3){ 0.0f, 0.0f, 0.0f }, WHITE);
-        DrawCube((Vector3){ 0.0f, 0.0f, 1.5f }, RED);
-        DrawCube((Vector3){ 0.0f, 0.0f, -1.5f }, GREEN);
-        DrawCube((Vector3){ 1.5f, 0.0f, 0.0f }, BLUE);
-        DrawCube((Vector3){ 0.0f, 1.5f, 0.0f }, (Color){ 0, 255, 255, 255 });
-        DrawCube((Vector3){ -1.5f, 0.0f, 0.0f }, YELLOW);
-        DrawCube((Vector3){ 0.0f, -1.5f, 0.0f }, (Color){ 255, 0, 255, 255 });
-        DrawCube((Vector3){ 3.0f, 3.0f, 3.0f }, WHITE);
-
+            (Vector4){ 1.0f, 1.0f, (float)sin(Mge_GetTime()) * 0.5f + 0.5f, 1.0f });
+        Draw_Cube((Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 24.0f, 0.1f, 24.0f }, DARKGRAY);
         Mge_EndShaderMode();
+
+        for (int i = 0; i < N; i++)
+            Mge_DrawObject(objects[i]);
+        if (selected >= 0)
+            Mge_DrawObjectGizmo(objects[selected], AXIS);
+
         Mge_EndMode3D();
         Mge_EndDrawing();
     }

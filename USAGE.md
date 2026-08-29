@@ -11,11 +11,12 @@ source/
   mge_gl.h  mge_gl.c     immediate-mode-ish batched GL renderer (MgeGL_*)
   mge_math.h mge_math.c  Vector2/3/4, Matrix, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
-  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle ...
+  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
+  mge_object.c          Object struct + mouse-driven translation gizmo
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-  main.c               demo: a grid of spinning coloured cubes
+  main.c               demo: fly-camera + TAB to edit mode with a move gizmo
 test/                  unit tests for math + file utils (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 ```
@@ -90,8 +91,10 @@ int main(void)
 ```
 
 3D uses a `Camera3D` (passed **by value**) between `Mge_BeginMode3D` /
-`Mge_EndMode3D`, with the low-level `MgeGL_Begin(MGEGL_TRIANGLES)` …
-`MgeGL_Vertex3f` … `MgeGL_End` immediate calls inside. See `source/main.c`.
+`Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Arrow3D` or the
+low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
+calls. `source/main.c` shows a fly-camera plus TAB-toggled edit mode with the
+move gizmo.
 
 ### Cursor
 
@@ -123,6 +126,61 @@ while (!Mge_WindowShouldClose()) {
     Mge_EndDrawing();
 }
 ```
+
+### Objects & the move gizmo
+
+An `Object` is a movable rectangle (`OBJECT_2D`) or axis-aligned box (`OBJECT_3D`)
+with a `position` (centre), `size`, `color`, `id` and `selected` flag.
+
+```c
+Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
+Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
+void   Mge_DrawObject(Object obj);                        // filled shape (+ outline when selected)
+void   Mge_DrawObjectGizmo(Object obj, float axisLength); // X/Y (2D) or X/Y/Z (3D) arrows at the position
+```
+
+`Mge_ManipulateObjects2D/3D()` does mouse picking and dragging — call it **once
+per frame while the cursor is enabled** (i.e. not in FPS mode). Left-click an
+object to select it, then:
+
+- drag a **gizmo arrow** → the object moves **along that axis only** (the drag is
+  projected onto the arrow's screen direction);
+- drag the object **body** (2D) → free move.
+
+```c
+Object objs[3] = { Mge_MakeObject2D(200, 200, 80, 60, RED), ... };
+const float AXIS = 70.0f;
+
+while (!Mge_WindowShouldClose()) {
+    int sel = Mge_ManipulateObjects2D(objs, 3, AXIS);   // returns selected index or -1
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+        Mge_ClearSelection(objs, 3);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground(DARKGRAY);
+    for (int i = 0; i < 3; i++) Mge_DrawObject(objs[i]);
+    if (sel >= 0) Mge_DrawObjectGizmo(objs[sel], AXIS);
+    Mge_EndDrawing();
+}
+```
+
+3D is the same shape, called inside `Mge_BeginMode3D` for the drawing, with the
+camera passed to the manipulator:
+
+```c
+int sel = Mge_ManipulateObjects3D(objs, n, camera, 1.6f);
+Mge_BeginMode3D(camera);
+    for (...) Mge_DrawObject(objs[i]);
+    if (sel >= 0) Mge_DrawObjectGizmo(objs[sel], 1.6f);
+Mge_EndMode3D();
+```
+
+Supporting pieces this adds: mouse buttons (`IsMouseButtonPressed/Down/Released`,
+`GetMouseDelta`), window size (`Mge_GetScreenWidth/Height`), 3D shapes
+(`Draw_Arrow`, `Draw_Arrow3D`, `Draw_Cube`, `Draw_CubeWires`), and world→screen
+projection (`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
+`Mge_GetCameraProjectionMatrix`). Runnable demos: `examples/objects/gizmo_2d.c`
+and `gizmo_3d.c`.
 
 ### Math
 
@@ -160,7 +218,7 @@ directly.
 ## Notes / limitations
 
 - Every translation unit compiles clean under `gcc -std=c11 -Wall -Wextra`, the
-  `test/` suite passes (67 checks), and `build/MGEngine` links once
+  `test/` suite passes (104 checks — math, file I/O, objects/gizmo), and `build/MGEngine` links once
   `3rdparty/glfw/lib/libglfw3.a` exists (`make 3rdparty`). Running the window /
   renderer needs a real GL context and was not exercised here.
 - Dear ImGui was already fully commented out; its includes and the `-limgui` link

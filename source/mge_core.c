@@ -378,6 +378,48 @@ Vector2 GetMousePosition(void)
     return position;
 }
 
+Vector2 GetMouseDelta(void)
+{
+    Vector2 d;
+    d.x = CORE.Input.Mouse.currentPosition.x - CORE.Input.Mouse.previousPosition.x;
+    d.y = CORE.Input.Mouse.currentPosition.y - CORE.Input.Mouse.previousPosition.y;
+    return d;
+}
+
+bool IsMouseButtonPressed(int button)
+{
+    if ((button >= 0) && (button < MAX_MOUSE_BUTTONS)) {
+        return (CORE.Input.Mouse.previousButtonState[button] == 0) && (CORE.Input.Mouse.currentButtonState[button] == 1);
+    }
+    return false;
+}
+
+bool IsMouseButtonDown(int button)
+{
+    if ((button >= 0) && (button < MAX_MOUSE_BUTTONS)) {
+        return CORE.Input.Mouse.currentButtonState[button] == 1;
+    }
+    return false;
+}
+
+bool IsMouseButtonReleased(int button)
+{
+    if ((button >= 0) && (button < MAX_MOUSE_BUTTONS)) {
+        return (CORE.Input.Mouse.previousButtonState[button] == 1) && (CORE.Input.Mouse.currentButtonState[button] == 0);
+    }
+    return false;
+}
+
+int Mge_GetScreenWidth(void)
+{
+    return (int)CORE.Window.screen.width;
+}
+
+int Mge_GetScreenHeight(void)
+{
+    return (int)CORE.Window.screen.height;
+}
+
 bool IsCursorHidden(void)
 {
     return CORE.Input.Mouse.cursorHidden;

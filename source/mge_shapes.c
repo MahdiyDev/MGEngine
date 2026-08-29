@@ -168,3 +168,111 @@ void Draw_TriangleStrip(Vector2* points, int pointCount, Color color)
     }
     MgeGL_End();
 }
+
+// 2D arrow: a shaft line from `start` to `end` plus a filled triangular head.
+void Draw_Arrow(Vector2 start, Vector2 end, float headSize, Color color)
+{
+    Draw_LineV(start, end, color);
+
+    Vector2 dir = { end.x - start.x, end.y - start.y };
+    float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+    if (len < 0.0001f || headSize <= 0.0f)
+        return;
+    dir.x /= len;
+    dir.y /= len;
+
+    Vector2 perp = { -dir.y, dir.x };
+    Vector2 base = { end.x - dir.x * headSize, end.y - dir.y * headSize };
+    Vector2 left = { base.x + perp.x * headSize * 0.5f, base.y + perp.y * headSize * 0.5f };
+    Vector2 right = { base.x - perp.x * headSize * 0.5f, base.y - perp.y * headSize * 0.5f };
+    Draw_Triangle(end, left, right, color);
+}
+
+// 3D arrow (call inside Mge_BeginMode3D): shaft line + a 4-line head.
+void Draw_Arrow3D(Vector3 start, Vector3 end, Color color)
+{
+    Vector3 dir = Vector3_Subtract(end, start);
+    float len = Vector3_Length(dir);
+    if (len < 0.0001f)
+        return;
+    dir = Vector3_Scale(dir, 1.0f / len);
+
+    float head = len * 0.18f;
+    if (head > 0.5f)
+        head = 0.5f;
+
+    Vector3 ref = (fabsf(dir.y) < 0.99f) ? (Vector3){ 0.0f, 1.0f, 0.0f } : (Vector3){ 1.0f, 0.0f, 0.0f };
+    Vector3 n1 = Vector3Normalize(Vector3Cross(dir, ref));
+    Vector3 n2 = Vector3Cross(dir, n1);
+    Vector3 neck = Vector3_Subtract(end, Vector3_Scale(dir, head));
+
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    MgeGL_Vertex3f(start.x, start.y, start.z);
+    MgeGL_Vertex3f(end.x, end.y, end.z);
+
+    float r = head * 0.4f;
+    Vector3 fins[4] = {
+        Vector3_Add(neck, Vector3_Scale(n1, r)),
+        Vector3_Add(neck, Vector3_Scale(n1, -r)),
+        Vector3_Add(neck, Vector3_Scale(n2, r)),
+        Vector3_Add(neck, Vector3_Scale(n2, -r)),
+    };
+    for (int i = 0; i < 4; i++) {
+        MgeGL_Vertex3f(end.x, end.y, end.z);
+        MgeGL_Vertex3f(fins[i].x, fins[i].y, fins[i].z);
+    }
+    MgeGL_End();
+}
+
+void Draw_Cube(Vector3 center, Vector3 size, Color color)
+{
+    float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
+    float cx = center.x, cy = center.y, cz = center.z;
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+
+    // -Z
+    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz - z);
+    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z);
+    // +Z
+    MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
+    MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz + z);
+    // -X
+    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz + z);
+    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz - z);
+    // +X
+    MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy - y, cz + z);
+    MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
+    // -Y
+    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz + z);
+    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz + z); MgeGL_Vertex3f(cx - x, cy - y, cz + z);
+    // +Y
+    MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz - z);
+    MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
+
+    MgeGL_End();
+}
+
+void Draw_CubeWires(Vector3 center, Vector3 size, Color color)
+{
+    float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
+    float cx = center.x, cy = center.y, cz = center.z;
+    Vector3 c[8] = {
+        { cx - x, cy - y, cz - z }, { cx + x, cy - y, cz - z },
+        { cx + x, cy + y, cz - z }, { cx - x, cy + y, cz - z },
+        { cx - x, cy - y, cz + z }, { cx + x, cy - y, cz + z },
+        { cx + x, cy + y, cz + z }, { cx - x, cy + y, cz + z },
+    };
+    int e[12][2] = { { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 }, { 4, 5 }, { 5, 6 },
+        { 6, 7 }, { 7, 4 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
+
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    for (int i = 0; i < 12; i++) {
+        MgeGL_Vertex3f(c[e[i][0]].x, c[e[i][0]].y, c[e[i][0]].z);
+        MgeGL_Vertex3f(c[e[i][1]].x, c[e[i][1]].y, c[e[i][1]].z);
+    }
+    MgeGL_End();
+}

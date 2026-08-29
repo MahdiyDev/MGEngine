@@ -59,6 +59,8 @@ float   Vector3_Length(Vector3 v);
 Vector3 Vector3Cross(Vector3 v1, Vector3 v2);
 Vector3 Vector3Normalize(Vector3 v);
 
+Vector4 Vector4_Transform(Vector4 v, Matrix mat); // column-major mat * v
+
 Matrix Matrix_Identity(void);
 Matrix Matrix_Multiply(Matrix left, Matrix right);
 Matrix Matrix_Translate(float x, float y, float z);
