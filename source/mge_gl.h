@@ -23,7 +23,7 @@
 #endif
 
 #ifndef MAX_ATTRIB_LOCATION
-	#define MAX_ATTRIB_LOCATION		3
+	#define MAX_ATTRIB_LOCATION		4
 #endif
 
 #ifndef MAX_BUFFER_ELEMENTS
@@ -34,16 +34,20 @@
 	#define MGEGL_DEFAULT_DRAWCALLS 256
 #endif
 
+// Fixed attribute locations -- every shader (default and custom) must use
+// `layout(location = N)` matching these so the one shared VAO stays valid.
 typedef enum {
 	VERTICE_LOCATION = 0,
-	COLOR_LOCATION,
-	TEXTURE_LOCATION,
+	COLOR_LOCATION = 1,
+	TEXTURE_LOCATION = 2,
+	NORMAL_LOCATION = 3,
 } AttribLocations;
 
 typedef struct VertexData {
 	float* vertices;
 	unsigned char* colors;
 	float* texcoords;
+	float* normals;
 	unsigned int* indices;
 
 	int elementCount;
@@ -72,6 +76,7 @@ void MgeGL_UnloadShaderProgram(unsigned int id);
 void MgeGL_SetTexture(unsigned int id);
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(const char* name, const int value);
+void MgeGL_Uniform1f(const char* name, float value);
 void MgeGL_Uniform3fv(const char* name, Vector3 value);
 void MgeGL_Uniform4fv(const char* name, Vector4 value);
 void MgeGL_UniformMatrix4fv(const char* name, Matrix value);
@@ -89,4 +94,5 @@ void MgeGL_Vertex2i(int x, int y);
 void MgeGL_Vertex2f(float x, float y);
 void MgeGL_Vertex3f(float x, float y, float z);
 void MgeGL_TexCoord2f(float x, float y);
+void MgeGL_Normal3f(float x, float y, float z);
 int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount);

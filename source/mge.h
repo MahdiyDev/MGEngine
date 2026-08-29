@@ -323,11 +323,30 @@ typedef enum {
 	OBJECT_3D
 } ObjectKind;
 
+// --- Lighting (Phong: ambient + diffuse + specular) ---
+//
+// A `Light` is a scene entity (its position, colour and per-term strengths).
+// A `Material` is the *surface* response and is attached to an Object; several
+// objects with different materials can be lit by the same light.
+typedef struct Material {
+	Color color;        // base / albedo colour of the surface
+	float shininess;    // Phong specular exponent (higher = tighter highlight)
+} Material;
+
+typedef struct Light {
+	Vector3 position;   // world-space position of the light
+	Vector3 color;      // linear RGB, roughly 0..1
+	float ambient;      // strength of the ambient term  (constant fill)
+	float diffuse;      // strength of the diffuse term  (Lambert)
+	float specular;     // strength of the specular term (Phong highlight)
+} Light;
+
 typedef struct Object {
 	ObjectKind kind;
 	Vector3 position;   // centre; z is unused for OBJECT_2D
 	Vector3 size;       // full extents (2D: {w, h, 0})
 	Color color;
+	Material material;  // surface response for 3D lit rendering
 	int id;
 	bool selected;
 } Object;
@@ -428,3 +447,17 @@ int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength);
 int Mge_ManipulateObjects3D(Object* objects, int count, Camera3D camera, float axisLength);
 void Mge_ClearSelection(Object* objects, int count); // deselect all, cancel any drag
 int Mge_GetSelectedObject(void);                     // index of the selected object, or -1
+
+// Lighting. Call inside Mge_BeginMode3D:
+//
+//   Mge_BeginLighting3D(light, camera);
+//       Mge_SetMaterial(mat);   Draw_Cube(...);   // one or more lit surfaces
+//   Mge_EndLighting3D();
+//
+// Mge_DrawObject() already calls Mge_SetMaterial(obj.material) for you, so an
+// Object drawn between Begin/End is lit with its own material automatically.
+Light    Mge_MakeLight(Vector3 position, Vector3 color); // sensible default term strengths
+Material Mge_DefaultMaterial(void);                      // WHITE, shininess 32
+void     Mge_BeginLighting3D(Light light, Camera3D camera);
+void     Mge_SetMaterial(Material material);             // no-op unless lighting is active
+void     Mge_EndLighting3D(void);

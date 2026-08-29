@@ -234,24 +234,31 @@ void Draw_Cube(Vector3 center, Vector3 size, Color color)
     MgeGL_Color4ub(color.r, color.g, color.b, color.a);
 
     // -Z
+    MgeGL_Normal3f(0.0f, 0.0f, -1.0f);
     MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz - z);
     MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z);
     // +Z
+    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
     MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
     MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz + z);
     // -X
+    MgeGL_Normal3f(-1.0f, 0.0f, 0.0f);
     MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz + z);
     MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz - z);
     // +X
+    MgeGL_Normal3f(1.0f, 0.0f, 0.0f);
     MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy - y, cz + z);
     MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
     // -Y
+    MgeGL_Normal3f(0.0f, -1.0f, 0.0f);
     MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz + z);
     MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz + z); MgeGL_Vertex3f(cx - x, cy - y, cz + z);
     // +Y
+    MgeGL_Normal3f(0.0f, 1.0f, 0.0f);
     MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz - z);
     MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
 
+    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
     MgeGL_End();
 }
 

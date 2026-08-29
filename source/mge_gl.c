@@ -23,14 +23,14 @@ DEFINE_VEC(Matrix, MgeGL_MatrixStack);
 typedef struct GlData {
     struct {
         int vertexCounter;
-        unsigned int VBO[4];
+        unsigned int VBO[5];
         unsigned int VAO;
         unsigned int defaultTexture;
         unsigned int defaultShaderID;
         unsigned int currentShaderID;
-        unsigned int AttribLoc[MAX_ATTRIB_LOCATION];
         unsigned char colorr, colorg, colorb, colora;
         float texcoordx, texcoordy;
+        float normalx, normaly, normalz;
 
         Matrix modelview, projection, transform;
         Matrix* currentMatrix;
@@ -49,9 +49,11 @@ typedef struct GlData {
 } GlData;
 
 static const char* vertexShaderCode = "#version 330 core\n"
-                                      "in vec3 aPos;\n"
-                                      "in vec4 aColor;\n"
-                                      "in vec2 aTexCoord;\n"
+                                      "layout(location = 0) in vec3 aPos;\n"
+                                      "layout(location = 1) in vec4 aColor;\n"
+                                      "layout(location = 2) in vec2 aTexCoord;\n"
+                                      // location 3 (aNormal) is left to the lighting shader; the shared
+                                      // VAO keeps it enabled, an unused attribute is harmless here.
                                       "out vec4 vertexColor;\n"
                                       "out vec2 texCoord;\n"
                                       "uniform mat4 modelview;\n"
@@ -95,6 +97,7 @@ void MgeGL_Init(int width, int height)
     MGEGL.State.vertexBuffer.vertices = (float*)malloc(vertCount * 3 * sizeof(float));
     MGEGL.State.vertexBuffer.colors = (unsigned char*)malloc(vertCount * 4 * sizeof(unsigned char));
     MGEGL.State.vertexBuffer.texcoords = (float*)malloc(vertCount * 2 * sizeof(float));
+    MGEGL.State.vertexBuffer.normals = (float*)malloc(vertCount * 3 * sizeof(float));
     MGEGL.State.vertexBuffer.indices = (unsigned int*)malloc(quadCount * 6 * sizeof(unsigned int));
 
     for (int i = 0; i < vertCount * 3; i++)
@@ -103,6 +106,12 @@ void MgeGL_Init(int width, int height)
         MGEGL.State.vertexBuffer.colors[i] = 0;
     for (int i = 0; i < vertCount * 2; i++)
         MGEGL.State.vertexBuffer.texcoords[i] = 0.0f;
+    for (int i = 0; i < vertCount * 3; i++)
+        MGEGL.State.vertexBuffer.normals[i] = 0.0f;
+
+    MGEGL.State.normalx = 0.0f;
+    MGEGL.State.normaly = 0.0f;
+    MGEGL.State.normalz = 1.0f;
 
     for (int k = 0; k < quadCount; k++) {
         unsigned int* idx = &MGEGL.State.vertexBuffer.indices[k * 6];
@@ -135,10 +144,9 @@ void MgeGL_Init(int width, int height)
     MGEGL.State.defaultShaderID = MgeGL_CreateShaderProgram(vertex, fragment);
     MGEGL.State.currentShaderID = MGEGL.State.defaultShaderID;
 
-    MGEGL.State.AttribLoc[VERTICE_LOCATION] = MgeGL_GetAttribLoc("aPos");
-    MGEGL.State.AttribLoc[COLOR_LOCATION] = MgeGL_GetAttribLoc("aColor");
-    MGEGL.State.AttribLoc[TEXTURE_LOCATION] = MgeGL_GetAttribLoc("aTexCoord");
-
+    // NOTE: attribute locations are FIXED (see AttribLocations) so this one shared
+    // VAO stays valid for every shader -- the default one and any custom/lighting
+    // shader, all of which must declare `layout(location = N)` to match.
     glGenVertexArrays(1, &MGEGL.State.VAO);
     glBindVertexArray(MGEGL.State.VAO);
 
@@ -146,20 +154,26 @@ void MgeGL_Init(int width, int height)
     glGenBuffers(1, &MGEGL.State.VBO[0]);
     glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);
     glBufferData(GL_ARRAY_BUFFER, vertCount * 3 * sizeof(float), MGEGL.State.vertexBuffer.vertices, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(MGEGL.State.AttribLoc[VERTICE_LOCATION], 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(MGEGL.State.AttribLoc[VERTICE_LOCATION]);
+    glVertexAttribPointer(VERTICE_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(VERTICE_LOCATION);
     // colors
     glGenBuffers(1, &MGEGL.State.VBO[1]);
     glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[1]);
     glBufferData(GL_ARRAY_BUFFER, vertCount * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(MGEGL.State.AttribLoc[COLOR_LOCATION], 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
-    glEnableVertexAttribArray(MGEGL.State.AttribLoc[COLOR_LOCATION]);
+    glVertexAttribPointer(COLOR_LOCATION, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
+    glEnableVertexAttribArray(COLOR_LOCATION);
     // texcoords
     glGenBuffers(1, &MGEGL.State.VBO[2]);
     glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
     glBufferData(GL_ARRAY_BUFFER, vertCount * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(MGEGL.State.AttribLoc[TEXTURE_LOCATION], 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(MGEGL.State.AttribLoc[TEXTURE_LOCATION]);
+    glVertexAttribPointer(TEXTURE_LOCATION, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(TEXTURE_LOCATION);
+    // normals (consumed by the lighting shader)
+    glGenBuffers(1, &MGEGL.State.VBO[4]);
+    glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[4]);
+    glBufferData(GL_ARRAY_BUFFER, vertCount * 3 * sizeof(float), MGEGL.State.vertexBuffer.normals, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(NORMAL_LOCATION);
 
     glGenBuffers(1, &MGEGL.State.VBO[3]);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
@@ -213,19 +227,22 @@ int MgeGL_LoadTexture(const void* data, int width, int height, int format, int m
 
 void MgeGL_Close(void)
 {
-    glDisableVertexAttribArray(MGEGL.State.AttribLoc[VERTICE_LOCATION]);
-    glDisableVertexAttribArray(MGEGL.State.AttribLoc[COLOR_LOCATION]);
-    glDisableVertexAttribArray(MGEGL.State.AttribLoc[TEXTURE_LOCATION]);
+    glDisableVertexAttribArray(VERTICE_LOCATION);
+    glDisableVertexAttribArray(COLOR_LOCATION);
+    glDisableVertexAttribArray(TEXTURE_LOCATION);
+    glDisableVertexAttribArray(NORMAL_LOCATION);
     glDeleteBuffers(1, &MGEGL.State.VBO[0]);
     glDeleteBuffers(1, &MGEGL.State.VBO[1]);
     glDeleteBuffers(1, &MGEGL.State.VBO[2]);
     glDeleteBuffers(1, &MGEGL.State.VBO[3]);
+    glDeleteBuffers(1, &MGEGL.State.VBO[4]);
     glDeleteVertexArrays(1, &MGEGL.State.VAO);
     glDeleteProgram(MGEGL.State.currentShaderID);
 
     free(MGEGL.State.vertexBuffer.vertices);
     free(MGEGL.State.vertexBuffer.colors);
     free(MGEGL.State.vertexBuffer.texcoords);
+    free(MGEGL.State.vertexBuffer.normals);
     free(MGEGL.State.vertexBuffer.indices);
     MgeGL_DrawList_free(&MGEGL.State.draws);
     MgeGL_MatrixStack_free(&MGEGL.State.stack);
@@ -304,6 +321,8 @@ void MgeGL_Draw(void)
         glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors);
         glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[4]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 3 * sizeof(float), MGEGL.State.vertexBuffer.normals);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
 
@@ -451,6 +470,13 @@ void MgeGL_TexCoord2f(float x, float y)
     MGEGL.State.texcoordy = y;
 }
 
+void MgeGL_Normal3f(float x, float y, float z)
+{
+    MGEGL.State.normalx = x;
+    MGEGL.State.normaly = y;
+    MGEGL.State.normalz = z;
+}
+
 void MgeGL_Vertex2i(int x, int y)
 {
     MgeGL_Vertex3f((float)x, (float)y, MGEGL.State.currentDepth);
@@ -494,6 +520,20 @@ void MgeGL_Vertex3f(float x, float y, float z)
     MGEGL.State.vertexBuffer.colors[4 * vc + 3] = MGEGL.State.colora;
     MGEGL.State.vertexBuffer.texcoords[2 * vc + 0] = MGEGL.State.texcoordx;
     MGEGL.State.vertexBuffer.texcoords[2 * vc + 1] = MGEGL.State.texcoordy;
+
+    float nx = MGEGL.State.normalx, ny = MGEGL.State.normaly, nz = MGEGL.State.normalz;
+    if (MGEGL.State.transformRequired) {
+        // rotate the normal by the transform's upper 3x3 (translation ignored)
+        float rx = MGEGL.State.transform.m0 * nx + MGEGL.State.transform.m4 * ny + MGEGL.State.transform.m8 * nz;
+        float ry = MGEGL.State.transform.m1 * nx + MGEGL.State.transform.m5 * ny + MGEGL.State.transform.m9 * nz;
+        float rz = MGEGL.State.transform.m2 * nx + MGEGL.State.transform.m6 * ny + MGEGL.State.transform.m10 * nz;
+        nx = rx;
+        ny = ry;
+        nz = rz;
+    }
+    MGEGL.State.vertexBuffer.normals[3 * vc + 0] = nx;
+    MGEGL.State.vertexBuffer.normals[3 * vc + 1] = ny;
+    MGEGL.State.vertexBuffer.normals[3 * vc + 2] = nz;
 
     MGEGL.State.vertexCounter++;
     CurrentDraw()->vertexCount++;
@@ -546,6 +586,11 @@ int MgeGL_GetAttribLoc(const char* name)
 void MgeGL_Uniform1i(const char* name, const int value)
 {
     glUniform1i(glGetUniformLocation(MGEGL.State.currentShaderID, name), value);
+}
+
+void MgeGL_Uniform1f(const char* name, float value)
+{
+    glUniform1f(glGetUniformLocation(MGEGL.State.currentShaderID, name), value);
 }
 
 void MgeGL_Uniform3fv(const char* name, Vector3 value)

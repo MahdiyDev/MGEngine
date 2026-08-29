@@ -18,6 +18,10 @@ void Draw_CubeWires(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; 
 void Draw_Arrow(Vector2 a, Vector2 b, float s, Color c) { (void)a; (void)b; (void)s; (void)c; }
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 
+// lighting backend (mge_light.c is not linked here)
+Material Mge_DefaultMaterial(void) { return (Material){ .color = WHITE, .shininess = 32.0f }; }
+void Mge_SetMaterial(Material m) { (void)m; }
+
 static Vector2 g_mouse;
 static int g_btn[8];
 static int g_btnPrev[8];
@@ -64,6 +68,10 @@ TEST(make_objects)
     CHECK(b.kind == OBJECT_3D);
     CHECK_F(b.position.z, 3.0f);
     CHECK_F(b.size.z, 6.0f);
+
+    // a 3D object gets a default material tinted with its colour
+    CHECK_F(b.material.shininess, 32.0f);
+    CHECK(b.material.color.g == 255 && b.material.color.r == 0);
 }
 
 TEST(vector4_transform)

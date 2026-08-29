@@ -33,6 +33,8 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
     o.position = position;
     o.size = size;
     o.color = color;
+    o.material = Mge_DefaultMaterial();
+    o.material.color = color;
     return o;
 }
 
@@ -49,7 +51,8 @@ void Mge_DrawObject(Object obj)
         if (obj.selected)
             Draw_RectangleLines((int)r.x - 2, (int)r.y - 2, (int)r.width + 4, (int)r.height + 4, WHITE);
     } else {
-        Draw_Cube(obj.position, obj.size, obj.color);
+        Mge_SetMaterial(obj.material); // no-op unless Mge_BeginLighting3D is active
+        Draw_Cube(obj.position, obj.size, obj.material.color);
         if (obj.selected)
             Draw_CubeWires(obj.position,
                 (Vector3){ obj.size.x + 0.05f, obj.size.y + 0.05f, obj.size.z + 0.05f }, WHITE);

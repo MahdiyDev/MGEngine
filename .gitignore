@@ -17,3 +17,6 @@ examples/shapes/mixed
 test/test_object
 examples/objects/gizmo_2d
 examples/objects/gizmo_3d
+examples/lighting/ambient
+examples/lighting/diffuse
+examples/lighting/specular

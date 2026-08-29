@@ -13,12 +13,15 @@ source/
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
+  mge_light.c          Phong lighting (ambient + diffuse + specular)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-  main.c               demo: fly-camera + TAB to edit mode with a move gizmo
+  main.c               demo: fly-camera + TAB edit mode + combined lighting
 test/                  unit tests for math + file utils (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
+examples/objects/      gizmo_2d, gizmo_3d
+examples/lighting/     ambient, diffuse, specular
 ```
 
 ## Using mlib
@@ -41,8 +44,8 @@ make                 # -> build/MGEngine
 
 `make` compiles every `source/*.c` (the desktop platform file is `#include`d by
 `mge_core.c`, not compiled on its own). It first runs `make_build_dir`, which
-creates `build/obj/` and copies `shaders/` + `assets/` into `build/` so the
-executable can be run from either the repo root or `build/`.
+creates `build/obj/` and copies `assets/` (and `shaders/`, if either exists) into
+`build/` so the executable can be run from either the repo root or `build/`.
 
 On Windows use `mingw32-make`. The Makefiles pin `SHELL := cmd.exe`, so the
 recipes work whether or not an `sh`/Git-Bash shell is on `PATH`.
@@ -182,6 +185,60 @@ projection (`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
 `Mge_GetCameraProjectionMatrix`). Runnable demos: `examples/objects/gizmo_2d.c`
 and `gizmo_3d.c`.
 
+### Lighting
+
+Phong shading with the three classic terms:
+
+| term | what it is |
+| --- | --- |
+| **ambient** | a flat, constant fill added everywhere (nothing is fully black) |
+| **diffuse** | Lambert: brightness ∝ `max(dot(surfaceNormal, dirToLight), 0)` |
+| **specular** | a highlight where the surface reflects the light toward the camera; `material.shininess` sets its tightness |
+
+**Where do the knobs live?** — the two halves of the equation split cleanly:
+
+- a **`Light`** is a *scene entity*: its `position`, `color`, and the strength of
+  each term (`ambient` / `diffuse` / `specular`). There can be several; you pass
+  one to `Mge_BeginLighting3D`.
+- a **`Material`** is the *surface response* and is a field on `Object`
+  (`obj.material`): the surface `color` and its `shininess`. That is the answer
+  to "should lighting be in the material, and attached to the object?" — the
+  *surface* parameters are; the *light* itself is separate.
+
+```c
+Light    Mge_MakeLight(Vector3 position, Vector3 color); // defaults: ambient .15, diffuse 1, specular .5
+Material Mge_DefaultMaterial(void);                      // WHITE, shininess 32
+void     Mge_BeginLighting3D(Light light, Camera3D camera);
+void     Mge_SetMaterial(Material material);             // per-surface; no-op unless lighting is active
+void     Mge_EndLighting3D(void);                        // restore the default (unlit) shader
+```
+
+Call it inside `Mge_BeginMode3D`. `Mge_DrawObject` sets the object's own material
+for you, so lit objects just work:
+
+```c
+Light light = Mge_MakeLight((Vector3){ 4, 6, 4 }, (Vector3){ 1, 1, 1 });
+Object box  = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED);
+box.material.shininess = 64.0f;
+
+Mge_BeginMode3D(camera);
+    Mge_BeginLighting3D(light, camera);
+        Mge_DrawObject(box);                              // lit with box.material
+        Mge_SetMaterial((Material){ .color = GRAY, .shininess = 8 });
+        Draw_Cube((Vector3){ 0, -1, 0 }, (Vector3){ 24, 0.1f, 24 }, GRAY); // lit floor
+    Mge_EndLighting3D();
+    if (sel >= 0) Mge_DrawObjectGizmo(box, 1.6f);         // overlay lines stay unlit
+Mge_EndMode3D();
+```
+
+Only geometry with per-vertex normals is shaded correctly — `Draw_Cube` emits
+them; `MgeGL_Normal3f(x, y, z)` sets the current normal for your own
+`MgeGL_Vertex3f` calls. Lines (`Draw_Arrow3D`, `Draw_CubeWires`) have no normals,
+so draw them outside the `Begin/EndLighting3D` pair.
+
+Isolated demos: `examples/lighting/{ambient,diffuse,specular}.c` each switch off
+the other terms so you can see one at a time; `source/main.c` uses all three.
+
 ### Math
 
 `glm` is gone. `mge_math.h` provides plain-C functions — no operator overloads:
@@ -214,11 +271,20 @@ directly.
 - `Draw_TriangleFan` was an empty stub — now implemented.
 - Removed the dead `transform` global and the two duplicate `Draw_Triangle`
   prototypes.
+- **`glUniform*` on the wrong program** — `MgeGL_Draw` uploaded the matrix
+  uniforms before `glUseProgram`, and `MgeGL_SetShader` never called
+  `glUseProgram` at all, so after a mid-frame shader switch the matrices landed
+  on whichever program was last active and the geometry collapsed to the origin.
+- **Shared VAO vs. custom shaders** — attribute locations were looked up per
+  shader with `glGetAttribLocation`; a custom shader that ordered its inputs
+  differently broke the one shared VAO. Locations are now fixed
+  (`layout(location = N)`, `AttribLocations` enum): 0 pos, 1 color, 2 texcoord,
+  3 normal.
 
 ## Notes / limitations
 
 - Every translation unit compiles clean under `gcc -std=c11 -Wall -Wextra`, the
-  `test/` suite passes (104 checks — math, file I/O, objects/gizmo), and `build/MGEngine` links once
+  `test/` suite passes (106 checks — math, file I/O, objects/gizmo/material), and `build/MGEngine` links once
   `3rdparty/glfw/lib/libglfw3.a` exists (`make 3rdparty`). Running the window /
   renderer needs a real GL context and was not exercised here.
 - Dear ImGui was already fully commented out; its includes and the `-limgui` link

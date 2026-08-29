@@ -72,7 +72,7 @@ int main(void)
     camera.fovy = 60.0f;
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Shader lightShader = Mge_LoadShader("shaders/light_shader.vert", "shaders/light_shader.frag");
+    Light light = Mge_MakeLight((Vector3){ 4.0f, 6.0f, 4.0f }, (Vector3){ 1.0f, 1.0f, 1.0f });
 
     const int N = 4;
     const float AXIS = 1.6f;
@@ -100,20 +100,24 @@ int main(void)
             HandleCameraMovement(&camera);
         }
 
+        // orbit the light so the specular highlight moves across the boxes
+        double t = Mge_GetTime();
+        light.position = (Vector3){ (float)cos(t) * 6.0f, 6.0f, (float)sin(t) * 6.0f };
+
         Mge_BeginDrawing();
-        Mge_ClearBackground(DARKGREEN);
+        Mge_ClearBackground((Color){ 18, 18, 22, 255 }); // dark room
 
         Mge_BeginMode3D(camera);
 
-        // pulsing floor via the custom shader
-        Mge_BeginShaderMode(lightShader);
-        MgeGL_Uniform4fv("lightColor",
-            (Vector4){ 1.0f, 1.0f, (float)sin(Mge_GetTime()) * 0.5f + 0.5f, 1.0f });
+        // combined ambient + diffuse + specular lighting for the whole scene
+        Mge_BeginLighting3D(light, camera);
+        Mge_SetMaterial((Material){ .color = DARKGRAY, .shininess = 8.0f });
         Draw_Cube((Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 24.0f, 0.1f, 24.0f }, DARKGRAY);
-        Mge_EndShaderMode();
-
         for (int i = 0; i < N; i++)
             Mge_DrawObject(objects[i]);
+        Mge_EndLighting3D();
+
+        // gizmo / selection wires are unlit overlay lines
         if (selected >= 0)
             Mge_DrawObjectGizmo(objects[selected], AXIS);
 
@@ -121,7 +125,6 @@ int main(void)
         Mge_EndDrawing();
     }
 
-    Mge_UnloadShader(lightShader);
     Mge_CloseWindow();
     return 0;
 }

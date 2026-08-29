@@ -1,7 +1,7 @@
 # Build the examples. Requires the engine objects to be built first:
 #   (cd .. && make)
 #
-#   make            build every example in shapes/ and objects/
+#   make            build every example in shapes/, objects/ and lighting/
 #   make clean
 
 CC = gcc
@@ -34,7 +34,7 @@ endif
 # engine objects, minus main.o (each example has its own main)
 ENGINE_OBJS = $(filter-out ../build/obj/main.o,$(wildcard ../build/obj/*.o))
 
-SRC = $(wildcard shapes/*.c objects/*.c)
+SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c)
 BIN = $(SRC:.c=$(EXE))
 
 .PHONY: all clean
