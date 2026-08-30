@@ -18,8 +18,8 @@ void Draw_CubeWires(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; 
 void Draw_Arrow(Vector2 a, Vector2 b, float s, Color c) { (void)a; (void)b; (void)s; (void)c; }
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 
-// lighting backend (mge_light.c is not linked here)
-Material Mge_DefaultMaterial(void) { return (Material){ .color = WHITE, .shininess = 32.0f }; }
+// lighting backend (mge_light.c is not linked here; mge_material.c provides the
+// real Mge_DefaultMaterial / Mge_SetMaterialTexture)
 void Mge_SetMaterial(Material m) { (void)m; }
 
 static Vector2 g_mouse;
@@ -69,9 +69,11 @@ TEST(make_objects)
     CHECK_F(b.position.z, 3.0f);
     CHECK_F(b.size.z, 6.0f);
 
-    // a 3D object gets a default material tinted with its colour
+    // a 3D object gets a default material whose diffuse map is tinted with its colour
     CHECK_F(b.material.shininess, 32.0f);
-    CHECK(b.material.color.g == 255 && b.material.color.r == 0);
+    CHECK(b.material.maps[MATERIAL_MAP_DIFFUSE].color.g == 255 &&
+        b.material.maps[MATERIAL_MAP_DIFFUSE].color.r == 0);
+    CHECK(b.material.maps[MATERIAL_MAP_DIFFUSE].texture.id == 0); // no texture by default
 }
 
 TEST(vector4_transform)

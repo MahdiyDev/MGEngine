@@ -328,9 +328,34 @@ typedef enum {
 // A `Light` is a scene entity (its position, colour and per-term strengths).
 // A `Material` is the *surface* response and is attached to an Object; several
 // objects with different materials can be lit by the same light.
+
+// Material map slots. A `Material` holds one `MaterialMap` per slot; each map
+// pairs a texture with a colour and a scalar `value` whose meaning depends on
+// the slot:
+//
+//   MATERIAL_MAP_DIFFUSE   .texture  albedo map (falls back to a white 1x1
+//                                    texture when .texture.id == 0)
+//                          .color    albedo tint, multiplies the texture
+//                          .value    unused
+//   MATERIAL_MAP_SPECULAR  .texture  unused
+//                          .color    unused (reserved for a coloured highlight)
+//                          .value    specular strength multiplier (1 = as-is,
+//                                    0 = no highlight)
+typedef enum {
+	MATERIAL_MAP_DIFFUSE = 0,   // base colour / albedo
+	MATERIAL_MAP_SPECULAR,      // specular highlight strength
+	MATERIAL_MAP_COUNT
+} MaterialMapIndex;
+
+typedef struct MaterialMap {
+	Texture2D texture;  // map texture (id 0 -> engine's white 1x1 texture)
+	Color color;        // map colour / tint
+	float value;        // scalar parameter (meaning depends on the slot)
+} MaterialMap;
+
 typedef struct Material {
-	Color color;        // base / albedo colour of the surface
-	float shininess;    // Phong specular exponent (higher = tighter highlight)
+	MaterialMap maps[MATERIAL_MAP_COUNT]; // indexed by MaterialMapIndex
+	float shininess;                      // Phong specular exponent (higher = tighter highlight)
 } Material;
 
 typedef struct Light {
@@ -457,7 +482,8 @@ int Mge_GetSelectedObject(void);                     // index of the selected ob
 // Mge_DrawObject() already calls Mge_SetMaterial(obj.material) for you, so an
 // Object drawn between Begin/End is lit with its own material automatically.
 Light    Mge_MakeLight(Vector3 position, Vector3 color); // sensible default term strengths
-Material Mge_DefaultMaterial(void);                      // WHITE, shininess 32
+Material Mge_DefaultMaterial(void);                      // white diffuse, no textures, shininess 32
+void     Mge_SetMaterialTexture(Material* material, int mapIndex, Texture2D texture); // assign one map's texture
 void     Mge_BeginLighting3D(Light light, Camera3D camera);
 void     Mge_SetMaterial(Material material);             // no-op unless lighting is active
 void     Mge_EndLighting3D(void);

@@ -5,7 +5,7 @@
 // normal are already in world space -- no normal matrix is needed.
 //
 //   Mge_BeginLighting3D(light, camera);   // switches to the lighting shader
-//       Mge_SetMaterial(mat);             // per-surface shininess
+//       Mge_SetMaterial(mat);             // per-surface texture + shininess
 //       Draw_Cube(...);                   // or Mge_DrawObject(obj)
 //   Mge_EndLighting3D();                  // back to the default (unlit) shader
 
@@ -48,6 +48,7 @@ static const char* lightFragCode =
     "uniform float ambientStrength;\n"
     "uniform float diffuseStrength;\n"
     "uniform float specularStrength;\n"
+    "uniform float matSpecular;\n"   // per-material specular multiplier (MATERIAL_MAP_SPECULAR.value)
     "uniform float shininess;\n"
     "void main()\n"
     "{\n"
@@ -59,8 +60,8 @@ static const char* lightFragCode =
     "    float spec = (diff > 0.0) ? pow(max(dot(V, R), 0.0), max(shininess, 1.0)) : 0.0;\n"
     "    vec3 ambient  = ambientStrength  * lightColor;\n"
     "    vec3 diffuse  = diffuseStrength  * diff * lightColor;\n"
-    "    vec3 specular = specularStrength * spec * lightColor;\n"
-    "    vec4 base = texture(sampleTex, vTexCoord) * vColor;\n"
+    "    vec3 specular = specularStrength * matSpecular * spec * lightColor;\n"
+    "    vec4 base = texture(sampleTex, vTexCoord) * vColor;\n"   // MATERIAL_MAP_DIFFUSE: texture * colour
     "    FragColor = vec4((ambient + diffuse + specular) * base.rgb, base.a);\n"
     "}\n";
 
@@ -79,14 +80,6 @@ Light Mge_MakeLight(Vector3 position, Vector3 color)
     return l;
 }
 
-Material Mge_DefaultMaterial(void)
-{
-    Material m = { 0 };
-    m.color = WHITE;
-    m.shininess = 32.0f;
-    return m;
-}
-
 void Mge_BeginLighting3D(Light light, Camera3D camera)
 {
     if (!s_loaded) {
@@ -95,6 +88,7 @@ void Mge_BeginLighting3D(Light light, Camera3D camera)
     }
 
     MgeGL_SetShader(s_shader.id); // flushes the previous batch, makes this program active
+    MgeGL_SetTexture(MgeGL_GetWhiteTexture()); // start untextured until a material says otherwise
     s_active = true;
 
     MgeGL_Uniform3fv("lightPos", light.position);
@@ -103,6 +97,7 @@ void Mge_BeginLighting3D(Light light, Camera3D camera)
     MgeGL_Uniform1f("ambientStrength", light.ambient);
     MgeGL_Uniform1f("diffuseStrength", light.diffuse);
     MgeGL_Uniform1f("specularStrength", light.specular);
+    MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform1f("shininess", 32.0f);
 }
 
@@ -112,6 +107,12 @@ void Mge_SetMaterial(Material material)
         return;
 
     MgeGL_Draw(); // flush surfaces queued with the previous material
+
+    // MATERIAL_MAP_DIFFUSE: bind its texture (white 1x1 when unset). The map's
+    // colour is applied through the per-vertex colour of the geometry you draw.
+    MgeGL_SetTexture(material.maps[MATERIAL_MAP_DIFFUSE].texture.id);
+
+    MgeGL_Uniform1f("matSpecular", material.maps[MATERIAL_MAP_SPECULAR].value);
     MgeGL_Uniform1f("shininess", material.shininess);
 }
 
@@ -121,5 +122,6 @@ void Mge_EndLighting3D(void)
         return;
 
     s_active = false;
+    MgeGL_SetTexture(MgeGL_GetWhiteTexture()); // don't leak a material texture into unlit draws
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
 }

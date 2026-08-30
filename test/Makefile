@@ -11,7 +11,7 @@ MLIB   := ../3rdparty/mlib
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object
+TESTS := test_math test_utils test_object test_material
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -20,11 +20,15 @@ ifeq ($(OS),Windows_NT)
     RM     := del /q /f 2>nul
     native  = $(subst /,\,$1)
     runexe  = .\$(subst /,\,$1)
+    # link the runtime in: some Windows app-control (Device Guard / WDAC)
+    # policies block freshly built, dynamically linked exes
+    LDFLAGS ?= -static
 else
     EXE    :=
     RM     := rm -f
     native  = $1
     runexe  = ./$1
+    LDFLAGS ?=
 endif
 
 .PHONY: all test clean $(TESTS)
@@ -36,13 +40,16 @@ $(TESTS): %: %$(EXE)
 	$(call runexe,$<)
 
 test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ test_math.c ../source/mge_math.c -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_math.c ../source/mge_math.c -lm
 
 test_utils$(EXE): test_utils.c ../source/mge_utils.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ test_utils.c ../source/mge_utils.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_utils.c ../source/mge_utils.c
 
-test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ test_object.c ../source/mge_object.c ../source/mge_math.c -lm
+test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c -lm
+
+test_material$(EXE): test_material.c ../source/mge_material.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_material.c ../source/mge_material.c
 
 clean:
 	-$(RM) $(call native,$(addsuffix $(EXE),$(TESTS)) _mge_utils.tmp)

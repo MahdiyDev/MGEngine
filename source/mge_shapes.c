@@ -230,34 +230,34 @@ void Draw_Cube(Vector3 center, Vector3 size, Color color)
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
     float cx = center.x, cy = center.y, cz = center.z;
 
+    // 6 faces, each: outward normal + its 4 corners (bottom-left, bottom-right,
+    // top-right, top-left as seen from outside). Two triangles + per-corner UVs
+    // per face so material textures map one full copy onto every face.
+    const struct {
+        float n[3];
+        float v[4][3];
+    } faces[6] = {
+        { { 0, 0, 1 },  { { cx - x, cy - y, cz + z }, { cx + x, cy - y, cz + z }, { cx + x, cy + y, cz + z }, { cx - x, cy + y, cz + z } } }, // +Z
+        { { 0, 0, -1 }, { { cx + x, cy - y, cz - z }, { cx - x, cy - y, cz - z }, { cx - x, cy + y, cz - z }, { cx + x, cy + y, cz - z } } }, // -Z
+        { { 1, 0, 0 },  { { cx + x, cy - y, cz + z }, { cx + x, cy - y, cz - z }, { cx + x, cy + y, cz - z }, { cx + x, cy + y, cz + z } } }, // +X
+        { { -1, 0, 0 }, { { cx - x, cy - y, cz - z }, { cx - x, cy - y, cz + z }, { cx - x, cy + y, cz + z }, { cx - x, cy + y, cz - z } } }, // -X
+        { { 0, 1, 0 },  { { cx - x, cy + y, cz + z }, { cx + x, cy + y, cz + z }, { cx + x, cy + y, cz - z }, { cx - x, cy + y, cz - z } } }, // +Y
+        { { 0, -1, 0 }, { { cx - x, cy - y, cz - z }, { cx + x, cy - y, cz - z }, { cx + x, cy - y, cz + z }, { cx - x, cy - y, cz + z } } }, // -Y
+    };
+    const float uv[4][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+    const int tri[6] = { 0, 1, 2, 0, 2, 3 };
+
     MgeGL_Begin(MGEGL_TRIANGLES);
     MgeGL_Color4ub(color.r, color.g, color.b, color.a);
-
-    // -Z
-    MgeGL_Normal3f(0.0f, 0.0f, -1.0f);
-    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz - z);
-    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z);
-    // +Z
-    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
-    MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
-    MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz + z);
-    // -X
-    MgeGL_Normal3f(-1.0f, 0.0f, 0.0f);
-    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy - y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz + z);
-    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz + z); MgeGL_Vertex3f(cx - x, cy + y, cz - z);
-    // +X
-    MgeGL_Normal3f(1.0f, 0.0f, 0.0f);
-    MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy - y, cz + z);
-    MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
-    // -Y
-    MgeGL_Normal3f(0.0f, -1.0f, 0.0f);
-    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz + z);
-    MgeGL_Vertex3f(cx - x, cy - y, cz - z); MgeGL_Vertex3f(cx + x, cy - y, cz + z); MgeGL_Vertex3f(cx - x, cy - y, cz + z);
-    // +Y
-    MgeGL_Normal3f(0.0f, 1.0f, 0.0f);
-    MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx + x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz - z);
-    MgeGL_Vertex3f(cx - x, cy + y, cz - z); MgeGL_Vertex3f(cx - x, cy + y, cz + z); MgeGL_Vertex3f(cx + x, cy + y, cz + z);
-
+    for (int f = 0; f < 6; f++) {
+        MgeGL_Normal3f(faces[f].n[0], faces[f].n[1], faces[f].n[2]);
+        for (int i = 0; i < 6; i++) {
+            int k = tri[i];
+            MgeGL_TexCoord2f(uv[k][0], uv[k][1]);
+            MgeGL_Vertex3f(faces[f].v[k][0], faces[f].v[k][1], faces[f].v[k][2]);
+        }
+    }
+    MgeGL_TexCoord2f(0.0f, 0.0f);
     MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
     MgeGL_End();
 }

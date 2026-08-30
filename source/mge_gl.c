@@ -25,7 +25,8 @@ typedef struct GlData {
         int vertexCounter;
         unsigned int VBO[5];
         unsigned int VAO;
-        unsigned int defaultTexture;
+        unsigned int defaultTexture; // currently bound texture (white 1x1 by default)
+        unsigned int whiteTexture;   // the 1x1 white texture, kept for restoring
         unsigned int defaultShaderID;
         unsigned int currentShaderID;
         unsigned char colorr, colorg, colorb, colora;
@@ -136,7 +137,8 @@ void MgeGL_Init(int width, int height)
 
     // Load default (white 1x1) texture
     unsigned char pixels[4] = { 255, 255, 255, 255 };
-    MGEGL.State.defaultTexture = MgeGL_LoadTexture(pixels, 1, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    MGEGL.State.whiteTexture = MgeGL_LoadTexture(pixels, 1, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    MGEGL.State.defaultTexture = MGEGL.State.whiteTexture;
 
     // Init default shader
     unsigned int vertex = MgeGL_LoadShader(vertexShaderCode, GL_VERTEX_SHADER, "vertex");
@@ -352,7 +354,12 @@ void MgeGL_Draw(void)
 
 void MgeGL_SetTexture(unsigned int id)
 {
-    MGEGL.State.defaultTexture = id;
+    MGEGL.State.defaultTexture = (id != 0) ? id : MGEGL.State.whiteTexture;
+}
+
+unsigned int MgeGL_GetWhiteTexture(void)
+{
+    return MGEGL.State.whiteTexture;
 }
 
 void MgeGL_MatrixMode(int mode)

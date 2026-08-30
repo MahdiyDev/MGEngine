@@ -74,6 +74,7 @@ unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const c
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);
 void MgeGL_UnloadShaderProgram(unsigned int id);
 void MgeGL_SetTexture(unsigned int id);
+unsigned int MgeGL_GetWhiteTexture(void); // the 1x1 white texture created at init
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(const char* name, const int value);
 void MgeGL_Uniform1f(const char* name, float value);

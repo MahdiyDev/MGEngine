@@ -111,7 +111,8 @@ int main(void)
 
         // combined ambient + diffuse + specular lighting for the whole scene
         Mge_BeginLighting3D(light, camera);
-        Mge_SetMaterial((Material){ .color = DARKGRAY, .shininess = 8.0f });
+        Mge_SetMaterial((Material){ .maps[MATERIAL_MAP_DIFFUSE].color = DARKGRAY,
+            .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8.0f });
         Draw_Cube((Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 24.0f, 0.1f, 24.0f }, DARKGRAY);
         for (int i = 0; i < N; i++)
             Mge_DrawObject(objects[i]);

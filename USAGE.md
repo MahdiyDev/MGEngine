@@ -14,14 +14,16 @@ source/
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
   mge_light.c          Phong lighting (ambient + diffuse + specular)
+  mge_material.c        Material / MaterialMap construction helpers
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
   main.c               demo: fly-camera + TAB edit mode + combined lighting
-test/                  unit tests for math + file utils (no window/GL needed)
+test/                  unit tests for math / file utils / objects / materials (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular
+examples/materials/    textured_cube
 ```
 
 ## Using mlib
@@ -57,7 +59,13 @@ make test            # or:  cd test && make
 ```
 
 `test_math` covers the vector/matrix layer; `test_utils` covers
-`Mge_GetFileExtension` and the file loaders.
+`Mge_GetFileExtension` and the file loaders; `test_object` covers the gizmo
+picking/drag math; `test_material` covers `Material` / `MaterialMap`
+construction. None open a window.
+
+On Windows the test Makefile links the C runtime statically (`LDFLAGS = -static`)
+so that app-control policies (Device Guard / WDAC) don't block the freshly built
+test binaries; override `LDFLAGS=` to get dynamic linking back.
 
 ### Examples
 
@@ -201,13 +209,14 @@ Phong shading with the three classic terms:
   each term (`ambient` / `diffuse` / `specular`). There can be several; you pass
   one to `Mge_BeginLighting3D`.
 - a **`Material`** is the *surface response* and is a field on `Object`
-  (`obj.material`): the surface `color` and its `shininess`. That is the answer
-  to "should lighting be in the material, and attached to the object?" — the
-  *surface* parameters are; the *light* itself is separate.
+  (`obj.material`): a set of `MaterialMap` slots plus a `shininess`. That is the
+  answer to "should lighting be in the material, and attached to the object?" —
+  the *surface* parameters are; the *light* itself is separate.
 
 ```c
 Light    Mge_MakeLight(Vector3 position, Vector3 color); // defaults: ambient .15, diffuse 1, specular .5
-Material Mge_DefaultMaterial(void);                      // WHITE, shininess 32
+Material Mge_DefaultMaterial(void);                      // white diffuse, no textures, shininess 32
+void     Mge_SetMaterialTexture(Material* m, int mapIndex, Texture2D texture);
 void     Mge_BeginLighting3D(Light light, Camera3D camera);
 void     Mge_SetMaterial(Material material);             // per-surface; no-op unless lighting is active
 void     Mge_EndLighting3D(void);                        // restore the default (unlit) shader
@@ -224,7 +233,8 @@ box.material.shininess = 64.0f;
 Mge_BeginMode3D(camera);
     Mge_BeginLighting3D(light, camera);
         Mge_DrawObject(box);                              // lit with box.material
-        Mge_SetMaterial((Material){ .color = GRAY, .shininess = 8 });
+        Mge_SetMaterial((Material){ .maps[MATERIAL_MAP_DIFFUSE].color = GRAY,
+                                   .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8 });
         Draw_Cube((Vector3){ 0, -1, 0 }, (Vector3){ 24, 0.1f, 24 }, GRAY); // lit floor
     Mge_EndLighting3D();
     if (sel >= 0) Mge_DrawObjectGizmo(box, 1.6f);         // overlay lines stay unlit
@@ -239,6 +249,59 @@ so draw them outside the `Begin/EndLighting3D` pair.
 Isolated demos: `examples/lighting/{ambient,diffuse,specular}.c` each switch off
 the other terms so you can see one at a time; `source/main.c` uses all three.
 
+### Materials & material maps
+
+A `Material` is a fixed set of `MaterialMap` slots (indexed by
+`MaterialMapIndex`) plus a Phong `shininess`. Each map carries a **texture**, a
+**color** and a scalar **value**; what those mean depends on the slot:
+
+| slot | `.texture` | `.color` | `.value` |
+| --- | --- | --- | --- |
+| `MATERIAL_MAP_DIFFUSE` | albedo image sampled across the surface (id `0` → a white 1×1, i.e. "untextured") | tint multiplied over the texture | unused |
+| `MATERIAL_MAP_SPECULAR` | unused | unused (reserved) | highlight strength multiplier: `1` = as the light sets it, `0` = matte |
+
+```c
+typedef struct MaterialMap {
+    Texture2D texture;   // id 0 -> engine's white 1x1
+    Color     color;
+    float     value;
+} MaterialMap;
+
+typedef struct Material {
+    MaterialMap maps[MATERIAL_MAP_COUNT];  // [MATERIAL_MAP_DIFFUSE], [MATERIAL_MAP_SPECULAR]
+    float       shininess;
+} Material;
+```
+
+Start from `Mge_DefaultMaterial()` and edit the slots you care about:
+
+```c
+Texture2D wall = Mge_LoadTexture("assets/wall.jpg");
+
+Material m = Mge_DefaultMaterial();
+Mge_SetMaterialTexture(&m, MATERIAL_MAP_DIFFUSE, wall);       // or: m.maps[...].texture = wall;
+m.maps[MATERIAL_MAP_DIFFUSE].color = (Color){ 255, 210, 180, 255 }; // warm tint over the texture
+m.maps[MATERIAL_MAP_SPECULAR].value = 0.0f;                   // matte
+m.shininess = 48.0f;
+
+Mge_BeginLighting3D(light, camera);
+    Mge_SetMaterial(m);
+    Draw_Cube(pos, size, m.maps[MATERIAL_MAP_DIFFUSE].color); // pass the diffuse tint as the vertex colour
+Mge_EndLighting3D();
+```
+
+`Mge_SetMaterial` binds the diffuse texture and sets the specular / shininess
+uniforms; the diffuse **color** reaches the shader through the drawn geometry's
+per-vertex colour, so pass it to `Draw_Cube` (or `MgeGL_Color4ub`).
+`Mge_DrawObject` does this for an `Object` automatically —
+`obj.material.maps[MATERIAL_MAP_DIFFUSE].color` is seeded from the colour you
+gave `Mge_MakeObject3D`. `Draw_Cube` emits per-face UVs so a texture maps one
+full copy onto every face. A texture that fails to load has id `0` and falls
+back to the flat colour.
+
+Demo: `examples/materials/textured_cube.c` — textured/tinted/matte/plain cubes
+side by side under a moving light.
+
 ### Math
 
 `glm` is gone. `mge_math.h` provides plain-C functions — no operator overloads:
@@ -252,41 +315,11 @@ the other terms so you can see one at a time; `source/main.c` uses all three.
 Matrices are stored column-major so `MatrixToFloat(m)` feeds `glUniformMatrix4fv`
 directly.
 
-## Bugs fixed during the C port
-
-- **Heap overflow in the GL batch** — `MgeGL_Init` allocated the vertex / colour /
-  texcoord buffers for `MAX_BUFFER_ELEMENTS` vertices, but every bounds check used
-  `MAX_BUFFER_ELEMENTS * 4`, so a full batch wrote ~4× past each buffer. Buffers
-  are now sized `MAX_BUFFER_ELEMENTS * 4` vertices.
-- **Matrix-stack overflow** — `MgeGL_PushMatrix` logged an error on overflow then
-  wrote past `stack[32]` anyway. The stack is now an mlib `vec` (grows).
-- `Mge_LoadFileText` / `Mge_LoadFileData` called `fclose(NULL)` when the file
-  could not be opened.
-- `Mge_LoadFileData`'s partial-load log had a wrong format string / argument
-  count and truncated the size to `int`.
-- `Mge_GetFps` did `roundf(1.0f / average)` with `average == 0` → `(int)INFINITY`.
-- `MgeGL_LoadShader` returned `EXIT_FAILURE` (a plausible shader id) on failure
-  and passed a possibly-`NULL` source to `glShaderSource`; it now returns `0` and
-  rejects `NULL`.
-- `Draw_TriangleFan` was an empty stub — now implemented.
-- Removed the dead `transform` global and the two duplicate `Draw_Triangle`
-  prototypes.
-- **`glUniform*` on the wrong program** — `MgeGL_Draw` uploaded the matrix
-  uniforms before `glUseProgram`, and `MgeGL_SetShader` never called
-  `glUseProgram` at all, so after a mid-frame shader switch the matrices landed
-  on whichever program was last active and the geometry collapsed to the origin.
-- **Shared VAO vs. custom shaders** — attribute locations were looked up per
-  shader with `glGetAttribLocation`; a custom shader that ordered its inputs
-  differently broke the one shared VAO. Locations are now fixed
-  (`layout(location = N)`, `AttribLocations` enum): 0 pos, 1 color, 2 texcoord,
-  3 normal.
-
 ## Notes / limitations
 
-- Every translation unit compiles clean under `gcc -std=c11 -Wall -Wextra`, the
-  `test/` suite passes (106 checks — math, file I/O, objects/gizmo/material), and `build/MGEngine` links once
-  `3rdparty/glfw/lib/libglfw3.a` exists (`make 3rdparty`). Running the window /
-  renderer needs a real GL context and was not exercised here.
-- Dear ImGui was already fully commented out; its includes and the `-limgui` link
-  flag were removed. `3rdparty/imgui/` is left in place but unused.
-- `3rdparty/glm/` was deleted.
+- Pure C11: every translation unit builds under `gcc -std=c11 -Wall -Wextra`.
+  The `test/` suite needs no window or GL context; the window / renderer itself
+  needs a real GL context.
+- `build/MGEngine` links once `3rdparty/glfw/lib/libglfw3.a` exists (`make 3rdparty`).
+- Dear ImGui and `glm` are not used — `3rdparty/imgui/` is left in place but
+  unlinked, `3rdparty/glm/` is gone.
