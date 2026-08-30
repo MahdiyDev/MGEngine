@@ -14,6 +14,17 @@
     #define MGE_GIZMO_GRAB_PX 12.0f // pixel tolerance for grabbing an axis arrow
 #endif
 
+// selection outline drawn by Mge_DrawObject for selected objects
+#ifndef MGE_SELECT_OUTLINE_COLOR
+    #define MGE_SELECT_OUTLINE_COLOR CLITERAL(Color) { 255, 145, 40, 255 } // bold orange
+#endif
+#ifndef MGE_SELECT_OUTLINE_3D
+    #define MGE_SELECT_OUTLINE_3D 0.16f  // world units added to the box extents
+#endif
+#ifndef MGE_SELECT_OUTLINE_2D
+    #define MGE_SELECT_OUTLINE_2D 12.0f  // pixels added to the rect extents
+#endif
+
 // ----- construction -----
 
 Object Mge_MakeObject2D(float x, float y, float w, float h, Color color)
@@ -49,12 +60,12 @@ void Mge_DrawObject(Object obj)
         };
         Draw_RectangleRec(r, obj.color);
         if (obj.selected)
-            Mge_DrawObjectOutline(obj, 8.0f, WHITE);
+            Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_2D, MGE_SELECT_OUTLINE_COLOR);
     } else {
         Mge_SetMaterial(obj.material); // no-op unless Mge_BeginLighting3D is active
         Draw_Cube(obj.position, obj.size, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
         if (obj.selected)
-            Mge_DrawObjectOutline(obj, 0.08f, WHITE);
+            Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_3D, MGE_SELECT_OUTLINE_COLOR);
     }
 }
 

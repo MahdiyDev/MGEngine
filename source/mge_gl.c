@@ -189,6 +189,11 @@ unsigned int MgeGL_GetDefaultShaderId(void)
     return MGEGL.State.defaultShaderID;
 }
 
+unsigned int MgeGL_GetCurrentShaderId(void)
+{
+    return MGEGL.State.currentShaderID;
+}
+
 void MgeGL_SetShader(unsigned int id)
 {
     if (MGEGL.State.currentShaderID != id) {

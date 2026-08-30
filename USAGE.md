@@ -557,9 +557,9 @@ void Mge_SetStencilMask(unsigned mask);   // stencil bits writes may change
 void Mge_ClearStencil(void);
 ```
 
-**Object outlining** is the built-in use. `Mge_DrawObject` already draws a
-stencil outline (instead of a wireframe) around any `Object` whose `.selected`
-flag is set. For anything else, three calls wrap the technique:
+**Object outlining** is the built-in use. `Mge_DrawObject` draws a bold stencil
+outline (a thick orange border, not a wireframe) around any `Object` whose
+`.selected` flag is set. For anything else, three calls wrap the technique:
 
 ```c
 Mge_BeginStencilMask();                        // stamp the silhouette:
@@ -571,8 +571,11 @@ Mge_EndStencil();                              // restore normal drawing
 
 `Mge_DrawObjectOutline(obj, thickness, color)` does exactly that for one
 `Object` you have already drawn this frame (`thickness` is added to its
-extents). The mask pass turns the depth test off, so a selected object's
-outline shows even when it is partly behind something.
+extents). The mask pass stamps the full silhouette (depth test off) so the
+outline shows even when the object is partly occluded; the border pass draws it
+flat/unlit with `glDepthFunc(GL_ALWAYS)` but still writes depth, so a later
+"draw last" pass such as a skybox can't paint over it. Override the colour /
+thickness with `-DMGE_SELECT_OUTLINE_COLOR` / `_3D` / `_2D`.
 
 Demo: `examples/stencil/object_outline.c` — a walking selection outlines each
 cube in turn, plus one hand-outlined pillar in a custom colour.

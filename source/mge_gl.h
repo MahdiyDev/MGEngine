@@ -89,6 +89,7 @@ void MgeGL_SetFrontFace(int winding);  // FrontFace
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 unsigned int MgeGL_GetDefaultShaderId(void);
+unsigned int MgeGL_GetCurrentShaderId(void);
 void MgeGL_SetShader(unsigned int id);
 unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName);
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);

@@ -26,10 +26,12 @@ void Mge_ClearStencil(void) { MgeGL_ClearStencil(); }
 // ---- outlining ----
 
 static bool s_depthTestWasOn = true;
+static unsigned int s_prevShader = 0;
 
 void Mge_BeginStencilMask(void)
 {
     s_depthTestWasOn = MgeGL_IsDepthTestEnabled();
+    s_prevShader = MgeGL_GetCurrentShaderId();
 
     MgeGL_EnableStencilTest();
     MgeGL_SetStencilOp(STENCIL_KEEP, STENCIL_KEEP, STENCIL_REPLACE);
@@ -44,6 +46,12 @@ void Mge_BeginStencilOutside(void)
     MgeGL_SetStencilFunc(STENCIL_NOTEQUAL, 1, 0xFF);
     MgeGL_SetStencilMask(0x00);  // border pass writes no stencil
     MgeGL_SetColorMask(true);
+    MgeGL_SetShader(MgeGL_GetDefaultShaderId()); // flat, unlit border colour
+
+    // draw the border over everything, but still WRITE depth -- otherwise a
+    // later "draw last" pass (a skybox) paints straight over the outline
+    MgeGL_EnableDepthTest();
+    MgeGL_SetDepthFunc(DEPTH_ALWAYS);
 }
 
 void Mge_EndStencil(void)
@@ -52,6 +60,8 @@ void Mge_EndStencil(void)
     MgeGL_SetStencilMask(0xFF);
     MgeGL_SetStencilFunc(STENCIL_ALWAYS, 0, 0xFF);
     MgeGL_SetColorMask(true);
+    MgeGL_SetDepthFunc(DEPTH_LESS);
+    MgeGL_SetShader(s_prevShader);
 
     if (s_depthTestWasOn)
         MgeGL_EnableDepthTest();

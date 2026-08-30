@@ -18,6 +18,9 @@ static int g_opFail = -1, g_opDepthFail = -1, g_opPass = -1;
 static unsigned int g_lastMask;
 static int g_colorMask = -1;
 static int g_depthEnabled = 1;       // tracked; starts "on"
+static int g_lastDepthFunc = -1;
+static unsigned int g_curShader = 7; // pretend the lighting shader is active
+static unsigned int g_lastSetShader;
 static int g_cubeDraws;
 static Vector3 g_lastCubeSize;
 
@@ -36,6 +39,10 @@ void MgeGL_ClearStencil(void) { g_clearCalls++; }
 bool MgeGL_IsDepthTestEnabled(void) { return g_depthEnabled == 1; }
 void MgeGL_EnableDepthTest(void) { g_depthEnabled = 1; }
 void MgeGL_DisableDepthTest(void) { g_depthEnabled = 0; }
+void MgeGL_SetDepthFunc(int f) { g_lastDepthFunc = f; }
+unsigned int MgeGL_GetDefaultShaderId(void) { return 0; }
+unsigned int MgeGL_GetCurrentShaderId(void) { return g_curShader; }
+void MgeGL_SetShader(unsigned int id) { g_lastSetShader = id; g_curShader = id; }
 
 void Draw_Cube(Vector3 pos, Vector3 size, Color c)
 {
@@ -83,18 +90,28 @@ TEST(begin_stencil_mask_sets_stamp_state)
 
 TEST(begin_stencil_outside_flips_to_border)
 {
+    g_curShader = 7; // "lighting" shader active
+    Mge_BeginStencilMask();
     Mge_BeginStencilOutside();
     CHECK(g_lastFunc == STENCIL_NOTEQUAL && g_lastRef == 1 && g_lastFuncMask == 0xFFu);
     CHECK(g_lastMask == 0x00u);   // border pass writes no stencil
     CHECK(g_colorMask == 1);
+    CHECK(g_lastSetShader == 0);      // flat/unlit shader for the border
+    CHECK(g_depthEnabled == 1);       // depth back on so the border writes depth
+    CHECK(g_lastDepthFunc == DEPTH_ALWAYS); // ...but over everything
+    Mge_EndStencil();
 }
 
 TEST(end_stencil_restores)
 {
     g_depthEnabled = 1;
+    g_curShader = 7;
     Mge_BeginStencilMask();   // turns depth test off, remembers it was on
     Mge_BeginStencilOutside();
     Mge_EndStencil();
+
+    CHECK(g_lastSetShader == 7);         // previous shader restored
+    CHECK(g_lastDepthFunc == DEPTH_LESS);
 
     CHECK(g_stencilEnabled == 0);
     CHECK(g_lastMask == 0xFFu);
