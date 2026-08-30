@@ -19,8 +19,9 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gl.h  mge_gl.c     immediate-mode-ish batched GL renderer (MgeGL_*)
   mge_math.h mge_math.c  Vector2/3/4, Matrix, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
-  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
-  mge_object.c          Object struct + mouse-driven translation gizmo
+  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere ...
+  mge_object.c          Object struct (position/rotation/size) + 3D picking
+  mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
   mge_shadow.c         shadow mapping: directional depth map + point-light depth cube
   mge_material.c        Material / MaterialMap construction helpers
@@ -129,8 +130,9 @@ make test            # or:  cd test && make
 ```
 
 `test_math` covers the vector/matrix layer; `test_utils` covers
-`Mge_GetFileExtension` and the file loaders; `test_object` covers the gizmo
-picking/drag math; `test_material` covers `Material` / `MaterialMap`
+`Mge_GetFileExtension` and the file loaders; `test_object` covers 2D drag +
+3D picking, `test_gizmo` the mode switch + translate/scale drag + rotation
+maths; `test_material` covers `Material` / `MaterialMap`
 construction; `test_light` covers the light constructors, the uniform wiring in
 `Mge_BeginLighting3D(Ex)` and the Blinn/Phong toggle; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
@@ -157,8 +159,9 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~6 engine features (2D shapes, a lit cube, a shadow map,
-a post-fx pass, the skybox, a normal-mapped wall) one frame each, reads the
+GLFW window, renders ~9 engine features (2D shapes, a lit cube, a shadow map,
+a post-fx pass, the skybox, a normal-mapped wall, a rotated cube with each gizmo
+mode) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
@@ -204,10 +207,11 @@ int main(void)
 ```
 
 3D uses a `Camera3D` (passed **by value**) between `Mge_BeginMode3D` /
-`Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Arrow3D` or the
+`Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Sphere` /
+`Draw_Arrow3D` (and the `*Ex` variants) or the
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
-calls. `builder/main.c` shows a fly-camera plus TAB-toggled edit mode with the
-move gizmo.
+calls. `builder/` shows a fly-camera plus TAB-toggled edit mode with the
+translate / rotate / scale gizmo.
 
 ### How the renderer batches
 
@@ -335,62 +339,61 @@ while (!Mge_WindowShouldClose()) {
 }
 ```
 
-### Objects & the move gizmo
+### Objects & the manipulation gizmo
 
-An `Object` is a movable rectangle (`OBJECT_2D`) or axis-aligned box (`OBJECT_3D`)
-with a `position` (centre), `size`, `color`, `id` and `selected` flag.
+An `Object` is a movable rectangle (`OBJECT_2D`) or box (`OBJECT_3D`) with a
+`position` (centre), `size`, `rotation` (XYZ euler degrees, 3D only), `color`,
+`id` and `selected` flag. `Mge_DrawObject` renders it rotated
+(`Draw_CubeEx` — corners + normals are rotated on the CPU; there is no per-object
+model matrix), with a stencil outline when `selected`.
+
+**Picking** (3D): `Mge_PickObject3D(objects, count, camera)` selects the object
+whose screen-projected centre is nearest the cursor on left-click (returns the
+index, or `-1`). `Mge_SetSelectedObject` / `Mge_ClearSelection` /
+`Mge_GetSelectedObject` do it from code. `objects[i].selected` drives the outline.
+
+**Gizmo** (3D): one switchable handle set for a single target, drawn on top of
+the scene (depth test off) with the hovered handle over-stroked white.
 
 ```c
-Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
-Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
-void   Mge_DrawObject(Object obj);                        // filled shape (+ stencil outline when selected)
-void   Mge_DrawObjectGizmo(Object obj, float axisLength); // X/Y (2D) or X/Y/Z (3D) arrows at the position
+typedef enum { GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE } GizmoMode;
+void      Mge_SetGizmoMode(GizmoMode mode);
+GizmoMode Mge_GetGizmoMode(void);
+// rotation / scale may be NULL. Returns true while a handle is being dragged.
+bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 ```
 
-`Mge_ManipulateObjects2D/3D()` does mouse picking and dragging — call it **once
-per frame while the cursor is enabled** (i.e. not in FPS mode).
-`Mge_SetSelectedObject(objects, count, i)` selects one from code with the same
-effect as a click (its gizmo becomes draggable), and `-1` clears. Left-click an
-object to select it, then:
+- **translate** — three axis arrows + a **centre ball**; drag an arrow → move
+  along that axis, drag the ball → move on the view plane.
+- **rotate** — three thin rings (Unreal-style): each is a full circle but only
+  the segments facing the camera are drawn, so an edge-on ring shows its near
+  arc and a face-on ring shows the whole circle. Drag → spin the matching euler
+  component (counter-clockwise on screen = positive).
+- **scale** — axes with cube tips + a centre cube; drag an axis tip → scale that
+  `size` component, drag the centre → uniform scale.
 
-- drag a **gizmo arrow** → the object moves **along that axis only** (the drag is
-  projected onto the arrow's screen direction);
-- drag the object **body** (2D) → free move.
-
-```c
-Object objs[3] = { Mge_MakeObject2D(200, 200, 80, 60, RED), ... };
-const float AXIS = 70.0f;
-
-while (!Mge_WindowShouldClose()) {
-    int sel = Mge_ManipulateObjects2D(objs, 3, AXIS);   // returns selected index or -1
-    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-        Mge_ClearSelection(objs, 3);
-
-    Mge_BeginDrawing();
-    Mge_ClearBackground(DARKGRAY);
-    for (int i = 0; i < 3; i++) Mge_DrawObject(objs[i]);
-    if (sel >= 0) Mge_DrawObjectGizmo(objs[sel], AXIS);
-    Mge_EndDrawing();
-}
-```
-
-3D is the same shape, called inside `Mge_BeginMode3D` for the drawing, with the
-camera passed to the manipulator:
+The gizmo is a **fixed on-screen size** (`size` param) regardless of the object.
+Its translucent parts use `MgeGL_SetBlend` (straight alpha).
 
 ```c
-int sel = Mge_ManipulateObjects3D(objs, n, camera, 1.6f);
 Mge_BeginMode3D(camera);
     for (...) Mge_DrawObject(objs[i]);
-    if (sel >= 0) Mge_DrawObjectGizmo(objs[sel], 1.6f);
+    bool busy = false;
+    if (sel >= 0)
+        busy = Mge_Gizmo3D(&objs[sel].position, &objs[sel].rotation, &objs[sel].size, camera, 2.0f);
 Mge_EndMode3D();
+if (!busy) Mge_PickObject3D(objs, n, camera); // don't re-pick mid-drag
 ```
 
-Supporting pieces this adds: mouse buttons (`IsMouseButtonPressed/Down/Released`,
-`GetMouseDelta`), window size (`Mge_GetScreenWidth/Height`), 3D shapes
-(`Draw_Arrow`, `Draw_Arrow3D`, `Draw_Cube`, `Draw_CubeWires`), and world→screen
-projection (`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
-`Mge_GetCameraProjectionMatrix`). Runnable demos: `examples/objects/gizmo_2d.c`
-and `gizmo_3d.c`.
+2D keeps the old translate-only helper: `Mge_ManipulateObjects2D` (pick + drag)
+plus `Mge_DrawObjectGizmo2D` for the X/Y arrows.
+
+Supporting pieces: mouse buttons (`IsMouseButtonPressed/Down/Released`,
+`GetMouseDelta`), `Mge_GetScreenWidth/Height`, `Draw_CubeEx` / `Draw_CubeWiresEx`,
+`Matrix_RotateXYZ` / `Vector3_RotateAround`, and world→screen projection
+(`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
+`Mge_GetCameraProjectionMatrix`). Demos: `examples/objects/gizmo_2d.c` and
+`gizmo_3d.c` (1/2/3 switch modes); `builder/` uses it in full.
 
 ### Lighting
 
@@ -469,7 +472,7 @@ Mge_BeginMode3D(camera);
                                    .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8 });
         Draw_Cube((Vector3){ 0, -1, 0 }, (Vector3){ 24, 0.1f, 24 }, GRAY); // lit floor
     Mge_EndLighting3D();
-    if (sel >= 0) Mge_DrawObjectGizmo(box, 1.6f);         // overlay lines stay unlit
+    if (sel >= 0) Mge_Gizmo3D(&box.position, &box.rotation, &box.size, camera, 2.0f);
 Mge_EndMode3D();
 ```
 

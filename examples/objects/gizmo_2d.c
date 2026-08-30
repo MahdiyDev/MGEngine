@@ -41,7 +41,7 @@ int main(void)
         for (int i = 0; i < N; i++)
             Mge_DrawObject(objects[i]);
         if (selected >= 0)
-            Mge_DrawObjectGizmo(objects[selected], AXIS);
+            Mge_DrawObjectGizmo2D(objects[selected], AXIS);
 
         Mge_EndDrawing();
     }

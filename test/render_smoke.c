@@ -204,6 +204,31 @@ static void scene_skybox(void)
     Mge_UnloadCubemap(sky);
 }
 
+static void scene_gizmo(GizmoMode mode, const char* name)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 4.0f, 3.5f, 5.5f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.35f;
+
+    Object o = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, (Color){ 130, 170, 210, 255 });
+    o.rotation = (Vector3){ 20.0f, 35.0f, 0.0f }; // exercises Draw_CubeEx
+
+    Mge_SetGizmoMode(mode);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 22, 24, 30, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    Mge_DrawObject(o);
+    Mge_EndLighting3D();
+    Mge_Gizmo3D(&o.position, &o.rotation, &o.size, cam, 2.4f); // no mouse -> just draws
+    Mge_EndMode3D();
+    check(name);
+    Mge_EndDrawing();
+}
+
 static void scene_normal_map(void)
 {
     Texture2D d = Mge_LoadTexture("../assets/brickwall/brickwall.jpg");
@@ -253,6 +278,9 @@ int main(void)
     scene_postfx();
     scene_skybox();
     scene_normal_map();
+    scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
+    scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");
+    scene_gizmo(GIZMO_SCALE, "gizmo_scale");
 
     Mge_CloseWindow();
 

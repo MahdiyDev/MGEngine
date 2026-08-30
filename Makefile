@@ -141,8 +141,9 @@ $(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
 	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 # --- builder app: a plain-C consumer of the library + its headers ---
-$(APP): builder/main.c $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $< -o $@ $(APP_LIBS) $(APP_EXTRA)
+BUILDER_SRC = $(wildcard builder/*.c)
+$(APP): $(BUILDER_SRC) $(wildcard builder/*.h) $(ENGINE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $(BUILDER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp
 

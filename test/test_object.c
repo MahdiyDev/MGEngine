@@ -14,6 +14,7 @@ static bool feq(float a, float b) { return fabsf(a - b) < 1e-3f; }
 void Draw_RectangleRec(Rectangle r, Color c) { (void)r; (void)c; }
 void Draw_RectangleLines(int a, int b, int w, int h, Color c) { (void)a; (void)b; (void)w; (void)h; (void)c; }
 void Draw_Cube(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
+void Draw_CubeEx(Vector3 a, Vector3 b, Vector3 r, Color c) { (void)a; (void)b; (void)r; (void)c; }
 void Draw_CubeWires(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 void Draw_Arrow(Vector2 a, Vector2 b, float s, Color c) { (void)a; (void)b; (void)s; (void)c; }
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
@@ -187,39 +188,15 @@ TEST(manipulate_2d_axis_constrained_drag)
     Mge_ClearSelection(objs, 1);
 }
 
-TEST(manipulate_3d_axis_drag_moves_along_axis)
+TEST(object_rotation_defaults_to_zero)
 {
-    Object objs[1] = { Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED) };
-    Camera3D cam = { .position = { 0, 0, 10 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 },
-        .fovy = 60.0f, .projection = CAMERA_PERSPECTIVE };
-    Mge_ClearSelection(objs, 1);
-    float axis = 2.0f;
-
-    // select by clicking near the object's screen centre (~400,300)
-    press_at(400.0f, 300.0f);
-    CHECK(Mge_ManipulateObjects3D(objs, 1, cam, axis) == 0);
-    release();
-    Mge_ManipulateObjects3D(objs, 1, cam, axis);
-
-    // the +X axis runs horizontally on screen; grab it just right of centre
-    Vector2 xTip = Mge_GetWorldToScreenEx((Vector3){ axis, 0, 0 }, cam, 800, 600);
-    Vector2 origin = Mge_GetWorldToScreenEx((Vector3){ 0, 0, 0 }, cam, 800, 600);
-    press_at((origin.x + xTip.x) * 0.5f, (origin.y + xTip.y) * 0.5f);
-    Mge_ManipulateObjects3D(objs, 1, cam, axis);
-
-    // drag the mouse to the right -> object moves along +X, y/z barely change
-    drag_to(g_mouse.x + 40.0f, g_mouse.y);
-    Mge_ManipulateObjects3D(objs, 1, cam, axis);
-    CHECK(objs[0].position.x > 0.05f);
-    CHECK_F(objs[0].position.y, 0.0f);
-    CHECK_F(objs[0].position.z, 0.0f);
-    release();
-    Mge_ManipulateObjects3D(objs, 1, cam, axis);
-
-    Mge_ClearSelection(objs, 1);
+    Object o = Mge_MakeObject3D((Vector3){ 1, 2, 3 }, (Vector3){ 1, 1, 1 }, RED);
+    CHECK_F(o.rotation.x, 0.0f);
+    CHECK_F(o.rotation.y, 0.0f);
+    CHECK_F(o.rotation.z, 0.0f);
 }
 
-TEST(set_selected_object_matches_a_click)
+TEST(pick_object_3d_selects_nearest_screen_centre)
 {
     Object objs[2] = {
         Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED),
@@ -227,28 +204,35 @@ TEST(set_selected_object_matches_a_click)
     };
     Camera3D cam = { .position = { 0, 0, 10 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 },
         .fovy = 60.0f, .projection = CAMERA_PERSPECTIVE };
-    float axis = 2.0f;
     Mge_ClearSelection(objs, 2);
 
-    // select object 1 programmatically -- like the sidebar does
+    Vector2 c1 = Mge_GetWorldToScreenEx(objs[1].position, cam, 800, 600);
+    press_at(c1.x, c1.y);
+    CHECK(Mge_PickObject3D(objs, 2, cam) == 1);
+    CHECK(objs[1].selected && !objs[0].selected);
+    release();
+
+    // clicking far from any centre deselects
+    press_at(5.0f, 5.0f);
+    CHECK(Mge_PickObject3D(objs, 2, cam) == -1);
+    release();
+
+    Mge_ClearSelection(objs, 2);
+}
+
+TEST(set_selected_object_matches_a_pick)
+{
+    Object objs[2] = {
+        Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED),
+        Mge_MakeObject3D((Vector3){ 4, 0, 0 }, (Vector3){ 1, 1, 1 }, GREEN),
+    };
+    Mge_ClearSelection(objs, 2);
+
     Mge_SetSelectedObject(objs, 2, 1);
     CHECK(Mge_GetSelectedObject() == 1);
     CHECK(objs[1].selected && !objs[0].selected);
 
-    // its gizmo is now grabbable: grab the +X arrow and drag it
-    frame();
-    Vector2 origin = Mge_GetWorldToScreenEx(objs[1].position, cam, 800, 600);
-    Vector2 xTip = Mge_GetWorldToScreenEx((Vector3){ objs[1].position.x + axis, 0, 0 }, cam, 800, 600);
-    press_at((origin.x + xTip.x) * 0.5f, (origin.y + xTip.y) * 0.5f);
-    Mge_ManipulateObjects3D(objs, 2, cam, axis);
-    drag_to(g_mouse.x + 40.0f, g_mouse.y);
-    Mge_ManipulateObjects3D(objs, 2, cam, axis);
-    CHECK(objs[1].position.x > 4.05f); // moved along +X from its start (x=4)
-    release();
-    Mge_ManipulateObjects3D(objs, 2, cam, axis);
-
-    // out-of-range clears
-    Mge_SetSelectedObject(objs, 2, 7);
+    Mge_SetSelectedObject(objs, 2, 7); // out of range -> clears
     CHECK(Mge_GetSelectedObject() == -1);
 
     Mge_ClearSelection(objs, 2);
@@ -262,7 +246,8 @@ int main(void)
     RUN(world_to_screen);
     RUN(manipulate_2d_select_and_body_drag);
     RUN(manipulate_2d_axis_constrained_drag);
-    RUN(manipulate_3d_axis_drag_moves_along_axis);
-    RUN(set_selected_object_matches_a_click);
+    RUN(object_rotation_defaults_to_zero);
+    RUN(pick_object_3d_selects_nearest_screen_centre);
+    RUN(set_selected_object_matches_a_pick);
     return test_summary();
 }

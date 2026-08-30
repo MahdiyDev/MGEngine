@@ -73,7 +73,7 @@ void Mge_DrawObjectOutline(Object obj, float thickness, Color color)
 {
     Mge_BeginStencilMask();
     if (obj.kind == OBJECT_3D) {
-        Draw_Cube(obj.position, obj.size, obj.color);
+        Draw_CubeEx(obj.position, obj.size, obj.rotation, obj.color);
     } else {
         Rectangle r = { obj.position.x - obj.size.x * 0.5f, obj.position.y - obj.size.y * 0.5f,
             obj.size.x, obj.size.y };
@@ -83,7 +83,7 @@ void Mge_DrawObjectOutline(Object obj, float thickness, Color color)
     Mge_BeginStencilOutside();
     if (obj.kind == OBJECT_3D) {
         Vector3 big = { obj.size.x + thickness, obj.size.y + thickness, obj.size.z + thickness };
-        Draw_Cube(obj.position, big, color);
+        Draw_CubeEx(obj.position, big, obj.rotation, color);
     } else {
         float w = obj.size.x + thickness;
         float h = obj.size.y + thickness;

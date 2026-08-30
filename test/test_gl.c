@@ -272,6 +272,13 @@ TEST(srgb_and_sample_count)
     glstub.sampleCount = 4;
     CHECK(MgeGL_GetSampleCount() == 4);
     glstub.sampleCount = 0;
+
+    MgeGL_SetBlend(true);
+    CHECK(glstub_is_enabled(GL_BLEND));
+    CHECK(glstub.blendFunc.src == GL_SRC_ALPHA);
+    CHECK(glstub.blendFunc.dst == GL_ONE_MINUS_SRC_ALPHA);
+    MgeGL_SetBlend(false);
+    CHECK(!glstub_is_enabled(GL_BLEND));
 }
 
 // ---- textures ----

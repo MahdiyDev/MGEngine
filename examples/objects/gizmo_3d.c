@@ -1,7 +1,8 @@
-// 3D object move gizmo.
-//   left-click an object -> select it
-//   drag a gizmo arrow   -> move along that axis (X red, Y green, Z blue)
-//   right-click          -> deselect
+// 3D manipulation gizmo.
+//   left-click an object   -> select it
+//   1 / 2 / 3              -> translate / rotate / scale mode
+//   drag a handle          -> move / rotate / scale the selected object
+//   right-click            -> deselect
 #include "mge.h"
 #include "mge_math.h"
 #include "mge_utils.h"
@@ -22,7 +23,6 @@ int main(void)
     signal(SIGINT, signal_handler);
 
     const int N = 3;
-    const float AXIS = 1.6f;
     Object objects[3] = {
         Mge_MakeObject3D((Vector3){ -2.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f }, RED),
         Mge_MakeObject3D((Vector3){ 1.5f, 0.0f, -1.0f }, (Vector3){ 1.4f, 0.8f, 1.0f }, GREEN),
@@ -35,23 +35,39 @@ int main(void)
         .fovy = 55.0f,
         .projection = CAMERA_PERSPECTIVE,
     };
-    // point the camera at the scene origin (Mge_BeginMode3D looks at position + target)
     camera.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0.0f, 0.0f, 0.0f }, camera.position));
 
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 1.0f, 1.0f, 1.0f });
+    sun.ambient = 0.35f;
+
     while (!Mge_WindowShouldClose()) {
-        int selected = Mge_ManipulateObjects3D(objects, N, camera, AXIS);
+        if (IsKeyPressed(KEY_ONE))
+            Mge_SetGizmoMode(GIZMO_TRANSLATE);
+        if (IsKeyPressed(KEY_TWO))
+            Mge_SetGizmoMode(GIZMO_ROTATE);
+        if (IsKeyPressed(KEY_THREE))
+            Mge_SetGizmoMode(GIZMO_SCALE);
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
             Mge_ClearSelection(objects, N);
 
+        int sel = Mge_GetSelectedObject();
+
         Mge_BeginDrawing();
-        Mge_ClearBackground(DARKGREEN);
+        Mge_ClearBackground((Color){ 26, 30, 34, 255 });
 
         Mge_BeginMode3D(camera);
+        Mge_BeginLighting3D(sun, camera);
         for (int i = 0; i < N; i++)
             Mge_DrawObject(objects[i]);
-        if (selected >= 0)
-            Mge_DrawObjectGizmo(objects[selected], AXIS);
+        Mge_EndLighting3D();
+
+        bool busy = false;
+        if (sel >= 0)
+            busy = Mge_Gizmo3D(&objects[sel].position, &objects[sel].rotation, &objects[sel].size, camera, 2.0f);
         Mge_EndMode3D();
+
+        if (!busy)
+            Mge_PickObject3D(objects, N, camera);
 
         Mge_EndDrawing();
     }

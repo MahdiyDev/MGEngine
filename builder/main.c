@@ -1,24 +1,27 @@
 // MGEngine builder -- a tiny scene editor built on the engine library.
 //
-//   TAB                     fly-camera (cursor locked)  <->  edit mode (cursor free)
-//   fly-camera              WASD move, mouse look
+//   TAB                  VIEW mode (fly-camera, cursor locked)  <->  EDIT mode
+//   fly-camera           WASD move, mouse look
 //   edit mode
-//     hold RIGHT mouse      look around; WASD flies while held
-//     left-click a cube     select it, drag its gizmo arrow to move it
-//     sidebar               FPS + draw count, a shadows toggle, plus pick any
-//                           object/light and edit its fields
+//     hold RIGHT mouse   look around; WASD flies while held
+//     left-click         select an object / the lamp
+//     drag a gizmo       move / rotate / scale it (switch mode in the sidebar)
+//     sidebar            mode, FPS, shadows, gizmo mode, entity list + inspector
 //
-// The sun (first light) casts a shadow map by default.
+// This file: the window, the frame loop and the camera. Scene data + rendering
+// live in scene.c; every Mge_Gui* call lives in sidebar.c.
 #include <mge.h>
-#include <mge_gui.h>
+#include <mge_gui.h> // only the input-gate queries + lifecycle; widgets are in sidebar.c
 #include <mge_math.h>
 
 #include <math.h>
-#include <stdio.h>
+
+#include "scene.h"
+#include "sidebar.h"
 
 static const int width = 1280, height = 720;
 
-// --- shared camera orientation ---
+// --- camera orientation shared by fly + edit look ---
 static float yaw = -90.0f, pitch = 0.0f;
 
 static Vector3 FrontFromYawPitch(void)
@@ -38,87 +41,27 @@ static void ApplyLook(Camera3D* camera, float sensitivity)
     camera->target = Vector3Normalize(FrontFromYawPitch());
 }
 
-static void MoveAlongView(Camera3D* camera, float forward, float strafe)
-{
-    Vector3 right = Vector3Normalize(Vector3Cross(camera->target, camera->up));
-    camera->position = Vector3_Add(camera->position, Vector3_Scale(camera->target, forward));
-    camera->position = Vector3_Add(camera->position, Vector3_Scale(right, strafe));
-}
-
-// WASD along the current facing (W/S forward-back, A/D strafe)
 static void MoveWASD(Camera3D* camera)
 {
     const float speed = 6.0f * (float)Mge_GetDeltaTime();
     float f = (IsKeyDown(KEY_W) ? speed : 0.0f) - (IsKeyDown(KEY_S) ? speed : 0.0f);
     float s = (IsKeyDown(KEY_D) ? speed : 0.0f) - (IsKeyDown(KEY_A) ? speed : 0.0f);
-    if (f != 0.0f || s != 0.0f)
-        MoveAlongView(camera, f, s);
-}
-
-// fly mode: WASD + mouse look, cursor locked
-static void FlyCamera(Camera3D* camera)
-{
-    MoveWASD(camera);
-    ApplyLook(camera, 0.1f);
-}
-
-// --- selection ---
-enum { SEL_NONE, SEL_OBJECT, SEL_LIGHT };
-static int selKind = SEL_NONE;
-static int selIndex = 0;
-
-// raw cube geometry for the shadow depth pass (no materials / no outline shader)
-static void DrawOccluders(const Object objects[], int n)
-{
-    for (int i = 0; i < n; i++)
-        Draw_Cube(objects[i].position, objects[i].size, objects[i].color);
-}
-
-// --- inspectors: only "draw box / draw input" abstract calls, no ImGui here ---
-
-static void InspectObject(Object* o)
-{
-    Mge_GuiLabel(o->kind == OBJECT_3D ? "box (3D)" : "rect (2D)");
-    Mge_GuiInputVec3("position", &o->position);
-    Mge_GuiInputVec3("size", &o->size);
-    Mge_GuiInputColor("color", &o->color);
-    Mge_GuiSeparator();
-    Mge_GuiLabel("material");
-    Mge_GuiInputColor("diffuse", &o->material.maps[MATERIAL_MAP_DIFFUSE].color);
-    Mge_GuiSliderFloat("specular", &o->material.maps[MATERIAL_MAP_SPECULAR].value, 0.0f, 1.0f);
-    Mge_GuiInputFloat("shininess", &o->material.shininess);
-}
-
-static void InspectLight(Light* l)
-{
-    static const char* kinds[3] = { "directional", "point", "spot" };
-    Mge_GuiLabel(kinds[l->type]);
-    Mge_GuiCheckbox("enabled", &l->enabled);
-    Mge_GuiInputColorRGB("color", &l->color);
-    Mge_GuiSliderFloat("ambient", &l->ambient, 0.0f, 1.0f);
-    Mge_GuiSliderFloat("diffuse", &l->diffuse, 0.0f, 2.0f);
-    Mge_GuiSliderFloat("specular", &l->specular, 0.0f, 2.0f);
-    if (l->type != LIGHT_DIRECTIONAL) {
-        Mge_GuiSeparator();
-        Mge_GuiInputVec3("position", &l->position);
-        Mge_GuiInputFloat("linear", &l->linear);
-        Mge_GuiInputFloat("quadratic", &l->quadratic);
-    }
-    if (l->type != LIGHT_POINT) {
-        Mge_GuiSeparator();
-        Mge_GuiInputVec3("direction", &l->direction);
-    }
+    if (f == 0.0f && s == 0.0f)
+        return;
+    Vector3 right = Vector3Normalize(Vector3Cross(camera->target, camera->up));
+    camera->position = Vector3_Add(camera->position, Vector3_Scale(camera->target, f));
+    camera->position = Vector3_Add(camera->position, Vector3_Scale(right, s));
 }
 
 int main(void)
 {
-    Mge_SetMSAA(4); // 4x anti-aliasing: smooth edges on every shape/object/model
+    Mge_SetMSAA(4); // 4x anti-aliasing on every shape / object / model
     Mge_InitWindow(width, height, "MGEngine builder");
     Mge_SetTargetFPS(60);
 
-    bool flyMode = true;
-    bool looking = false; // dragging with RIGHT mouse in edit mode
-    DisableCursor();       // start in fly-camera mode
+    bool editMode = false; // start in fly / VIEW mode
+    bool looking = false;   // holding RIGHT mouse in edit mode
+    DisableCursor();
 
     Camera3D camera = {
         .position = { 0.0f, 3.5f, 13.0f },
@@ -128,56 +71,36 @@ int main(void)
         .projection = CAMERA_PERSPECTIVE,
     };
 
-    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
-    sun.ambient = 0.22f; // fill so shadowed faces aren't pitch black
-    Light lamp = Mge_MakePointLight((Vector3){ 3.0f, 5.0f, 2.0f }, (Vector3){ 1.0f, 0.85f, 0.6f });
+    Scene scene;
+    Scene_Init(&scene);
 
-    // the sun (lights[0]) casts shadows; framed on a box around the scene
-    ShadowMap shadow = Mge_LoadShadowMap(2048);
-    bool shadowsOn = true;
-    const Vector3 sceneCenter = { 0.0f, 0.0f, 0.0f };
-    const float sceneRadius = 14.0f;
-
-    Cubemap sky = Mge_LoadCubemapDir("assets/skybox");
-    if (sky.id == 0)
-        sky = Mge_LoadCubemapDir("../assets/skybox");
-
-    const int N = 4;
-    const float AXIS = 1.6f; // object move-gizmo arrow length
-    Object objects[4] = {
-        Mge_MakeObject3D((Vector3){ 0.0f, -1.1f, 0.0f }, (Vector3){ 24.0f, 0.2f, 24.0f }, (Color){ 90, 95, 105, 255 }),
-        Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 }),
-        Mge_MakeObject3D((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 190, 110, 255 }),
-        Mge_MakeObject3D((Vector3){ 3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 130, 210, 255 }),
-    };
-
-    int fpsShown = 0;
-    int drawsShown = 0;
-    double fpsUpdatedAt = 0.0;
+    int fpsShown = 0, drawsShown = 0;
+    double fpsAt = 0.0;
 
     while (!Mge_WindowShouldClose()) {
         bool guiKeyboard = Mge_GuiWantsKeyboard();
         bool guiMouse = Mge_GuiWantsMouse();
 
-        if (Mge_GetTime() - fpsUpdatedAt >= 1.0) {
+        if (Mge_GetTime() - fpsAt >= 1.0) {
             fpsShown = Mge_GetFps();
             drawsShown = Mge_GetDrawCalls();
-            fpsUpdatedAt = Mge_GetTime();
+            fpsAt = Mge_GetTime();
         }
 
         if (IsKeyPressed(KEY_TAB) && !guiKeyboard) {
-            flyMode = !flyMode;
+            editMode = !editMode;
             looking = false;
-            if (flyMode)
-                DisableCursor();
-            else
+            if (editMode)
                 EnableCursor();
+            else
+                DisableCursor();
         }
 
-        if (flyMode) {
-            FlyCamera(&camera);
+        // --- camera ---
+        if (!editMode) {
+            MoveWASD(&camera);
+            ApplyLook(&camera, 0.1f);
         } else {
-            // hold RIGHT mouse to look around; lock the cursor while dragging
             if (!looking && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !guiMouse) {
                 looking = true;
                 DisableCursor();
@@ -186,104 +109,26 @@ int main(void)
                 looking = false;
                 EnableCursor();
             }
-
             if (looking) {
-                // hold RIGHT mouse: look with the mouse, fly with WASD
                 ApplyLook(&camera, 0.15f);
                 MoveWASD(&camera);
-            } else if (!guiMouse) {
-                int hit = Mge_ManipulateObjects3D(objects, N, camera, AXIS);
-                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    if (hit >= 0) {
-                        selKind = SEL_OBJECT;
-                        selIndex = hit;
-                    } else if (selKind == SEL_OBJECT) {
-                        selKind = SEL_NONE; // clicked empty space
-                    }
-                }
             }
         }
 
-        for (int i = 0; i < N; i++)
-            objects[i].selected = (selKind == SEL_OBJECT && selIndex == i);
-
-        Light lights[2] = { sun, lamp };
+        bool interact = editMode && !looking && !guiMouse;
 
         Mge_BeginDrawing();
 
-        // pass 1: depth from the sun's point of view (before ClearBackground)
-        if (shadowsOn) {
-            Mge_BeginShadowPass(&shadow, sun, sceneCenter, sceneRadius);
-            DrawOccluders(objects, N);
-            Mge_EndShadowPass();
-        }
+        bool gizmoBusy = Scene_Draw(&scene, camera, interact);
+        if (interact && !gizmoBusy)
+            Scene_Pick(&scene, camera);
 
-        Mge_ClearBackground((Color){ 20, 21, 26, 255 });
-
-        Mge_BeginMode3D(camera);
-        if (shadowsOn)
-            Mge_BeginLighting3DShadowed(lights, 2, camera, shadow);
-        else
-            Mge_BeginLighting3DEx(lights, 2, camera);
-        for (int i = 0; i < N; i++)
-            Mge_DrawObject(objects[i]);
-        Mge_EndLighting3D();
-
-        Draw_Cube(lamp.position, (Vector3){ 0.3f, 0.3f, 0.3f }, (Color){ 255, 235, 180, 255 });
-        if (selKind == SEL_OBJECT)
-            Mge_DrawObjectGizmo(objects[selIndex], AXIS);
-        if (sky.id != 0)
-            Mge_DrawSkybox(sky, camera); // fills whatever the scene didn't
-        Mge_EndMode3D();
-
-        // --- sidebar ---
-        Mge_GuiBeginFrame();
-        if (Mge_GuiBeginSidebar("Scene", 300.0f, false)) {
-            char fpsRow[40];
-            snprintf(fpsRow, sizeof(fpsRow), "FPS: %d   draws: %d", fpsShown, drawsShown);
-            Mge_GuiLabel(fpsRow);
-            Mge_GuiCheckbox("shadows", &shadowsOn);
-            Mge_GuiSeparator();
-
-            Mge_GuiLabel("OBJECTS");
-            for (int i = 0; i < N; i++) {
-                char row[32];
-                snprintf(row, sizeof(row), "%s %d", (i == 0) ? "Floor" : "Cube", i);
-                if (Mge_GuiSelectable(row, selKind == SEL_OBJECT && selIndex == i)) {
-                    // same as clicking the object -> its gizmo is now draggable
-                    Mge_SetSelectedObject(objects, N, i);
-                    selKind = SEL_OBJECT;
-                    selIndex = i;
-                }
-            }
-            Mge_GuiSeparator();
-            Mge_GuiLabel("LIGHTS");
-            const char* lightRows[2] = { "Sun", "Lamp" };
-            for (int i = 0; i < 2; i++)
-                if (Mge_GuiSelectable(lightRows[i], selKind == SEL_LIGHT && selIndex == i)) {
-                    Mge_ClearSelection(objects, N); // no object gizmo for a light
-                    selKind = SEL_LIGHT;
-                    selIndex = i;
-                }
-
-            Mge_GuiSeparator();
-            Mge_GuiLabel("INSPECTOR");
-            Mge_GuiSpacing();
-            if (selKind == SEL_OBJECT)
-                InspectObject(&objects[selIndex]);
-            else if (selKind == SEL_LIGHT)
-                InspectLight((selIndex == 0) ? &sun : &lamp);
-            else
-                Mge_GuiLabel("(nothing selected)");
-        }
-        Mge_GuiEndSidebar();
-        Mge_GuiEndFrame();
+        Sidebar_Draw(&scene, editMode, fpsShown, drawsShown);
 
         Mge_EndDrawing();
     }
 
-    Mge_UnloadShadowMap(&shadow);
-    Mge_UnloadCubemap(sky);
+    Scene_Shutdown(&scene);
     Mge_GuiShutdown();
     Mge_CloseWindow();
     return 0;

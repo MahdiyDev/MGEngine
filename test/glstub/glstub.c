@@ -140,6 +140,7 @@ void glStencilOp(GLenum sf, GLenum df, GLenum dp) { glstub.stencilOp.sfail = sf;
 void glStencilMask(GLuint m) { glstub.stencilMask = m; }
 void glColorMask(GLboolean r, GLboolean g, GLboolean b, GLboolean a) { (void)g; (void)b; (void)a; glstub.colorMask = r; }
 void glPolygonOffset(GLfloat factor, GLfloat units) { glstub.polygonOffset.factor = factor; glstub.polygonOffset.units = units; }
+void glBlendFunc(GLenum s, GLenum d) { glstub.blendFunc.src = s; glstub.blendFunc.dst = d; }
 void glGetIntegerv(GLenum pname, GLint* data) { *data = (pname == GL_SAMPLES) ? glstub.sampleCount : 0; }
 
 void glEnable(GLenum cap)

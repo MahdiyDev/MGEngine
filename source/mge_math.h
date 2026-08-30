@@ -64,12 +64,15 @@ Vector3 Vector3Cross(Vector3 v1, Vector3 v2);
 Vector3 Vector3Normalize(Vector3 v);
 
 Vector4 Vector4_Transform(Vector4 v, Matrix mat); // column-major mat * v
+// rotate `p` about `pivot` by `rot` (a Matrix_Rotate / Matrix_RotateXYZ result)
+Vector3 Vector3_RotateAround(Vector3 p, Vector3 pivot, Matrix rot);
 
 Matrix Matrix_Identity(void);
 Matrix Matrix_Multiply(Matrix left, Matrix right);
 Matrix Matrix_Translate(float x, float y, float z);
 Matrix Matrix_Scale(float x, float y, float z);
 Matrix Matrix_Rotate(Vector3 axis, float angle);
+Matrix Matrix_RotateXYZ(Vector3 eulerRad); // apply X, then Y, then Z
 Matrix MatrixOrtho(double left, double right, double bottom, double top, double nearPlane, double farPlane);
 Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double farPlane);
 Matrix MatrixLookAt(Vector3 eye, Vector3 target, Vector3 up);

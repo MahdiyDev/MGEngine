@@ -96,6 +96,7 @@ void MgeGL_SetFrontFace(int winding);  // FrontFace
 
 int MgeGL_GetSampleCount(void);        // GL_SAMPLES of the current framebuffer (0 = not multisampled)
 void MgeGL_SetFramebufferSRGB(bool enabled); // GL_FRAMEBUFFER_SRGB: linear->sRGB on write (gamma correction)
+void MgeGL_SetBlend(bool enabled);           // straight alpha blending (SRC_ALPHA / ONE_MINUS_SRC_ALPHA)
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 void MgeGL_RegisterDrawCall(void);     // feature modules issuing their own gl draw* call this

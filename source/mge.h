@@ -531,6 +531,7 @@ typedef struct Object {
 	ObjectKind kind;
 	Vector3 position;   // centre; z is unused for OBJECT_2D
 	Vector3 size;       // full extents (2D: {w, h, 0})
+	Vector3 rotation;   // XYZ euler degrees (3D only); {0} = axis-aligned
 	Color color;
 	Material material;  // surface response for 3D lit rendering
 	int id;
@@ -807,6 +808,12 @@ void Draw_Arrow(Vector2 start, Vector2 end, float headSize, Color color);   // 2
 void Draw_Arrow3D(Vector3 start, Vector3 end, Color color);                 // call inside Mge_BeginMode3D
 void Draw_Cube(Vector3 center, Vector3 size, Color color);
 void Draw_CubeWires(Vector3 center, Vector3 size, Color color);
+// ...Ex: rotationDeg is XYZ euler degrees, applied about `center` (X then Y then Z).
+// Corners + face normals are rotated on the CPU -- no per-object model matrix.
+void Draw_CubeEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color);
+void Draw_CubeWiresEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color);
+void Draw_Sphere(Vector3 center, float radius, Color color);                       // UV sphere (8x14)
+void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color color);
 
 // Camera / projection helpers (3D)
 Matrix Mge_GetCameraViewMatrix(Camera3D camera);
@@ -817,8 +824,7 @@ Vector2 Mge_GetWorldToScreenEx(Vector3 position, Camera3D camera, int screenWidt
 // Objects
 Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
 Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
-void   Mge_DrawObject(Object obj);
-void   Mge_DrawObjectGizmo(Object obj, float axisLength);   // X/Y (2D) or X/Y/Z (3D) arrows at obj.position
+void   Mge_DrawObject(Object obj); // respects obj.rotation for 3D objects
 
 // Mesh -- copies the arrays you pass, then owns them. Upload once, draw many.
 Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
@@ -858,14 +864,35 @@ void Mge_UpdateModelBatch(ModelBatch* batch, const Matrix* transforms, int count
 void Mge_DrawModelBatch(ModelBatch batch, Light light, Camera3D camera);           // inside Mge_BeginMode3D
 void Mge_UnloadModelBatch(ModelBatch* batch);
 
-// Mouse-driven manipulation. Call once per frame while the cursor is enabled.
-// Left-click an object to select it, then drag a gizmo arrow to move along that
-// axis, or drag the body to move freely. Returns the selected index, or -1.
+// 2D: left-click an object to select it, then drag an arrow / the body to move.
 int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength);
-int Mge_ManipulateObjects3D(Object* objects, int count, Camera3D camera, float axisLength);
-void Mge_ClearSelection(Object* objects, int count); // deselect all, cancel any drag
+void Mge_DrawObjectGizmo2D(Object obj, float axisLength); // X (red) / Y (green) arrows
+
+// 3D picking: on left-click, select whichever object's screen-projected centre
+// is nearest the cursor (within a pixel tolerance). Returns the index, or -1.
+// Does not drag -- use Mge_Gizmo3D for that.
+int Mge_PickObject3D(Object* objects, int count, Camera3D camera);
+void Mge_ClearSelection(Object* objects, int count); // deselect all
 int Mge_GetSelectedObject(void);                     // index of the selected object, or -1
 void Mge_SetSelectedObject(Object* objects, int count, int index); // select as if clicked; -1 clears
+
+// --- Manipulation gizmo (3D) ----------------------------------------------
+//
+// One switchable gizmo for a single target. Call once per frame while the
+// cursor is enabled, inside Mge_BeginMode3D (it draws itself on top of the
+// scene). `rotation` (XYZ euler degrees) and `scale` may be NULL. Returns true
+// while a handle is being dragged -- gate camera control / picking on !that.
+//
+//   Mge_SetGizmoMode(GIZMO_ROTATE);
+//   bool busy = Mge_Gizmo3D(&obj.position, &obj.rotation, &obj.size, camera, 2.0f);
+typedef enum {
+	GIZMO_TRANSLATE = 0, // axis arrows
+	GIZMO_ROTATE,        // three rings
+	GIZMO_SCALE          // axes with cube tips (+ a centre cube for uniform)
+} GizmoMode;
+void      Mge_SetGizmoMode(GizmoMode mode);
+GizmoMode Mge_GetGizmoMode(void);
+bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 
 #ifndef MGE_MAX_LIGHTS
 	#define MGE_MAX_LIGHTS 8   // shader hard limit; extra lights are ignored

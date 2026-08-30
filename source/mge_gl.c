@@ -986,6 +986,17 @@ int MgeGL_GetSampleCount(void)
     return (int)samples;
 }
 
+void MgeGL_SetBlend(bool enabled)
+{
+    MgeGL_Draw(); // flush geometry drawn under the previous blend state
+    if (enabled) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // straight alpha
+    } else {
+        glDisable(GL_BLEND);
+    }
+}
+
 void MgeGL_SetFramebufferSRGB(bool enabled)
 {
     // GL_FRAMEBUFFER_SRGB: the GPU encodes linear -> sRGB on every write to an

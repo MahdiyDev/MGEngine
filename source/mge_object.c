@@ -63,24 +63,17 @@ void Mge_DrawObject(Object obj)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_2D, MGE_SELECT_OUTLINE_COLOR);
     } else {
         Mge_SetMaterial(obj.material); // no-op unless Mge_BeginLighting3D is active
-        Draw_Cube(obj.position, obj.size, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
+        Draw_CubeEx(obj.position, obj.size, obj.rotation, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
         if (obj.selected)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_3D, MGE_SELECT_OUTLINE_COLOR);
     }
 }
 
-void Mge_DrawObjectGizmo(Object obj, float axisLength)
+void Mge_DrawObjectGizmo2D(Object obj, float axisLength)
 {
-    Vector3 p = obj.position;
-    if (obj.kind == OBJECT_2D) {
-        Vector2 o = { p.x, p.y };
-        Draw_Arrow(o, (Vector2){ o.x + axisLength, o.y }, 12.0f, RED);   // +X (right)
-        Draw_Arrow(o, (Vector2){ o.x, o.y - axisLength }, 12.0f, GREEN); // +Y (up on screen)
-    } else {
-        Draw_Arrow3D(p, (Vector3){ p.x + axisLength, p.y, p.z }, RED);
-        Draw_Arrow3D(p, (Vector3){ p.x, p.y + axisLength, p.z }, GREEN);
-        Draw_Arrow3D(p, (Vector3){ p.x, p.y, p.z + axisLength }, BLUE);
-    }
+    Vector2 o = { obj.position.x, obj.position.y };
+    Draw_Arrow(o, (Vector2){ o.x + axisLength, o.y }, 12.0f, RED);   // +X (right)
+    Draw_Arrow(o, (Vector2){ o.x, o.y - axisLength }, 12.0f, GREEN); // +Y (up on screen)
 }
 
 // ----- camera / projection -----
@@ -256,86 +249,30 @@ int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength)
     return g_active;
 }
 
-int Mge_ManipulateObjects3D(Object* objects, int count, Camera3D camera, float axisLength)
+int Mge_PickObject3D(Object* objects, int count, Camera3D camera)
 {
     if (objects == NULL || count <= 0)
         return -1;
 
-    Vector2 m = GetMousePosition();
-    int w = Mge_GetScreenWidth();
-    int h = Mge_GetScreenHeight();
-
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        g_drag = DRAG_NONE;
+        Vector2 m = GetMousePosition();
+        int w = Mge_GetScreenWidth();
+        int h = Mge_GetScreenHeight();
 
-        // 1. axis arrows of the currently selected object (projected to screen)
-        if (g_active >= 0 && g_active < count) {
-            Vector3 p = objects[g_active].position;
-            Vector2 s0 = Mge_GetWorldToScreenEx(p, camera, w, h);
-            Vector2 sx = Mge_GetWorldToScreenEx((Vector3){ p.x + axisLength, p.y, p.z }, camera, w, h);
-            Vector2 sy = Mge_GetWorldToScreenEx((Vector3){ p.x, p.y + axisLength, p.z }, camera, w, h);
-            Vector2 sz = Mge_GetWorldToScreenEx((Vector3){ p.x, p.y, p.z + axisLength }, camera, w, h);
-            float best = MGE_GIZMO_GRAB_PX;
-            float dx = DistPointSegment(m, s0, sx);
-            float dy = DistPointSegment(m, s0, sy);
-            float dz = DistPointSegment(m, s0, sz);
-            if (dx < best) {
-                best = dx;
-                g_drag = DRAG_X;
-            }
-            if (dy < best) {
-                best = dy;
-                g_drag = DRAG_Y;
-            }
-            if (dz < best) {
-                best = dz;
-                g_drag = DRAG_Z;
+        int hit = -1;
+        float bestD = 48.0f; // pixel radius around each object's screen centre
+        for (int i = 0; i < count; i++) {
+            if (objects[i].kind != OBJECT_3D)
+                continue;
+            Vector2 sc = Mge_GetWorldToScreenEx(objects[i].position, camera, w, h);
+            float dd = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
+            if (dd < bestD) {
+                bestD = dd;
+                hit = i;
             }
         }
-
-        // 2. otherwise pick the object whose screen centre is nearest the mouse
-        if (g_drag == DRAG_NONE) {
-            int hit = -1;
-            float bestD = 48.0f;
-            for (int i = 0; i < count; i++) {
-                if (objects[i].kind != OBJECT_3D)
-                    continue;
-                Vector2 sc = Mge_GetWorldToScreenEx(objects[i].position, camera, w, h);
-                float dd = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
-                if (dd < bestD) {
-                    bestD = dd;
-                    hit = i;
-                }
-            }
-            SelectOnly(objects, count, hit);
-        }
-
-        if (g_drag != DRAG_NONE && g_active >= 0) {
-            g_dragStartPos = objects[g_active].position;
-            g_dragStartMouse = m;
-        }
+        SelectOnly(objects, count, hit);
     }
-
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && g_drag != DRAG_NONE && g_active >= 0 && g_active < count) {
-        Vector3 axis = (g_drag == DRAG_X) ? (Vector3){ 1, 0, 0 }
-            : (g_drag == DRAG_Y)          ? (Vector3){ 0, 1, 0 }
-                                          : (Vector3){ 0, 0, 1 };
-
-        // move along `axis` by the mouse motion projected onto the axis' screen direction
-        Vector2 s0 = Mge_GetWorldToScreenEx(g_dragStartPos, camera, w, h);
-        Vector2 s1 = Mge_GetWorldToScreenEx(Vector3_Add(g_dragStartPos, Vector3_Scale(axis, axisLength)), camera, w, h);
-        Vector2 sd = { s1.x - s0.x, s1.y - s0.y };
-        float sd2 = sd.x * sd.x + sd.y * sd.y;
-
-        if (sd2 > 0.001f) {
-            Vector2 total = { m.x - g_dragStartMouse.x, m.y - g_dragStartMouse.y };
-            float t = (total.x * sd.x + total.y * sd.y) / sd2; // fraction of axisLength
-            objects[g_active].position = Vector3_Add(g_dragStartPos, Vector3_Scale(axis, t * axisLength));
-        }
-    }
-
-    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
-        g_drag = DRAG_NONE;
 
     return g_active;
 }

@@ -16,7 +16,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -69,6 +69,9 @@ test_utils$(EXE): test_utils.c ../source/mge_utils.c $(MLIB)/test.h
 
 test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c -lm
+
+test_gizmo$(EXE): test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c -lm
 
 test_material$(EXE): test_material.c ../source/mge_material.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_material.c ../source/mge_material.c

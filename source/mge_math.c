@@ -151,6 +151,22 @@ Matrix Matrix_Scale(float x, float y, float z)
     return result;
 }
 
+Matrix Matrix_RotateXYZ(Vector3 eulerRad)
+{
+    Matrix rx = Matrix_Rotate((Vector3){ 1.0f, 0.0f, 0.0f }, eulerRad.x);
+    Matrix ry = Matrix_Rotate((Vector3){ 0.0f, 1.0f, 0.0f }, eulerRad.y);
+    Matrix rz = Matrix_Rotate((Vector3){ 0.0f, 0.0f, 1.0f }, eulerRad.z);
+    // Matrix_Multiply(A, B) == "apply A, then B"
+    return Matrix_Multiply(rx, Matrix_Multiply(ry, rz));
+}
+
+Vector3 Vector3_RotateAround(Vector3 p, Vector3 pivot, Matrix rot)
+{
+    Vector3 d = Vector3_Subtract(p, pivot);
+    Vector4 r = Vector4_Transform((Vector4){ d.x, d.y, d.z, 0.0f }, rot);
+    return (Vector3){ pivot.x + r.x, pivot.y + r.y, pivot.z + r.z };
+}
+
 Matrix Matrix_Rotate(Vector3 axis, float angle)
 {
     Matrix result = { 0 };

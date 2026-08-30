@@ -67,6 +67,9 @@ void glDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei 
 #define GL_LINES     0x0001
 #define GL_TRIANGLES 0x0004
 
+#define GL_BLEND               0x0BE2
+#define GL_SRC_ALPHA           0x0302
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
 #define GL_DEPTH_TEST          0x0B71
 #define GL_STENCIL_TEST        0x0B90
 #define GL_MULTISAMPLE         0x809D
@@ -138,6 +141,7 @@ void glAttachShader(GLuint program, GLuint shader);
 void glBindBuffer(GLenum target, GLuint buffer);
 void glBindTexture(GLenum target, GLuint texture);
 void glBindVertexArray(GLuint array);
+void glBlendFunc(GLenum sfactor, GLenum dfactor);
 void glBufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage);
 void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data);
 void glClear(GLbitfield mask);

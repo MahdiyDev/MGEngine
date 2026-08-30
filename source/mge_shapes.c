@@ -225,24 +225,34 @@ void Draw_Arrow3D(Vector3 start, Vector3 end, Color color)
     MgeGL_End();
 }
 
-void Draw_Cube(Vector3 center, Vector3 size, Color color)
+// true if any component is non-zero (skip the rotation maths for the common case)
+static bool has_rotation(Vector3 deg)
+{
+    return deg.x != 0.0f || deg.y != 0.0f || deg.z != 0.0f;
+}
+
+void Draw_CubeEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color)
 {
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
-    float cx = center.x, cy = center.y, cz = center.z;
 
-    // 6 faces, each: outward normal + its 4 corners (bottom-left, bottom-right,
-    // top-right, top-left as seen from outside). Two triangles + per-corner UVs
-    // per face so material textures map one full copy onto every face.
+    const bool rot = has_rotation(rotationDeg);
+    const Matrix R = rot
+        ? Matrix_RotateXYZ((Vector3){ rotationDeg.x * DEG2RAD, rotationDeg.y * DEG2RAD, rotationDeg.z * DEG2RAD })
+        : Matrix_Identity();
+
+    // 6 faces, each: outward normal + its 4 corner OFFSETS from centre (bottom-
+    // left, bottom-right, top-right, top-left seen from outside). Rotated about
+    // the centre, then translated. Per-corner UVs so a texture maps once per face.
     const struct {
         float n[3];
         float v[4][3];
     } faces[6] = {
-        { { 0, 0, 1 },  { { cx - x, cy - y, cz + z }, { cx + x, cy - y, cz + z }, { cx + x, cy + y, cz + z }, { cx - x, cy + y, cz + z } } }, // +Z
-        { { 0, 0, -1 }, { { cx + x, cy - y, cz - z }, { cx - x, cy - y, cz - z }, { cx - x, cy + y, cz - z }, { cx + x, cy + y, cz - z } } }, // -Z
-        { { 1, 0, 0 },  { { cx + x, cy - y, cz + z }, { cx + x, cy - y, cz - z }, { cx + x, cy + y, cz - z }, { cx + x, cy + y, cz + z } } }, // +X
-        { { -1, 0, 0 }, { { cx - x, cy - y, cz - z }, { cx - x, cy - y, cz + z }, { cx - x, cy + y, cz + z }, { cx - x, cy + y, cz - z } } }, // -X
-        { { 0, 1, 0 },  { { cx - x, cy + y, cz + z }, { cx + x, cy + y, cz + z }, { cx + x, cy + y, cz - z }, { cx - x, cy + y, cz - z } } }, // +Y
-        { { 0, -1, 0 }, { { cx - x, cy - y, cz - z }, { cx + x, cy - y, cz - z }, { cx + x, cy - y, cz + z }, { cx - x, cy - y, cz + z } } }, // -Y
+        { { 0, 0, 1 },  { { -x, -y, z }, { x, -y, z }, { x, y, z }, { -x, y, z } } },     // +Z
+        { { 0, 0, -1 }, { { x, -y, -z }, { -x, -y, -z }, { -x, y, -z }, { x, y, -z } } }, // -Z
+        { { 1, 0, 0 },  { { x, -y, z }, { x, -y, -z }, { x, y, -z }, { x, y, z } } },     // +X
+        { { -1, 0, 0 }, { { -x, -y, -z }, { -x, -y, z }, { -x, y, z }, { -x, y, -z } } }, // -X
+        { { 0, 1, 0 },  { { -x, y, z }, { x, y, z }, { x, y, -z }, { -x, y, -z } } },     // +Y
+        { { 0, -1, 0 }, { { -x, -y, -z }, { x, -y, -z }, { x, -y, z }, { -x, -y, z } } }, // -Y
     };
     const float uv[4][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
     const int tri[6] = { 0, 1, 2, 0, 2, 3 };
@@ -250,11 +260,19 @@ void Draw_Cube(Vector3 center, Vector3 size, Color color)
     MgeGL_Begin(MGEGL_TRIANGLES);
     MgeGL_Color4ub(color.r, color.g, color.b, color.a);
     for (int f = 0; f < 6; f++) {
-        MgeGL_Normal3f(faces[f].n[0], faces[f].n[1], faces[f].n[2]);
+        Vector3 n = { faces[f].n[0], faces[f].n[1], faces[f].n[2] };
+        if (rot) {
+            Vector4 rn = Vector4_Transform((Vector4){ n.x, n.y, n.z, 0.0f }, R);
+            n = (Vector3){ rn.x, rn.y, rn.z };
+        }
+        MgeGL_Normal3f(n.x, n.y, n.z);
         for (int i = 0; i < 6; i++) {
             int k = tri[i];
+            Vector3 o = { faces[f].v[k][0], faces[f].v[k][1], faces[f].v[k][2] };
+            Vector3 p = rot ? Vector3_RotateAround((Vector3){ center.x + o.x, center.y + o.y, center.z + o.z }, center, R)
+                            : (Vector3){ center.x + o.x, center.y + o.y, center.z + o.z };
             MgeGL_TexCoord2f(uv[k][0], uv[k][1]);
-            MgeGL_Vertex3f(faces[f].v[k][0], faces[f].v[k][1], faces[f].v[k][2]);
+            MgeGL_Vertex3f(p.x, p.y, p.z);
         }
     }
     MgeGL_TexCoord2f(0.0f, 0.0f);
@@ -262,16 +280,30 @@ void Draw_Cube(Vector3 center, Vector3 size, Color color)
     MgeGL_End();
 }
 
-void Draw_CubeWires(Vector3 center, Vector3 size, Color color)
+void Draw_Cube(Vector3 center, Vector3 size, Color color)
+{
+    Draw_CubeEx(center, size, (Vector3){ 0.0f, 0.0f, 0.0f }, color);
+}
+
+void Draw_CubeWiresEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color)
 {
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
-    float cx = center.x, cy = center.y, cz = center.z;
+
+    const bool rot = has_rotation(rotationDeg);
+    const Matrix R = rot
+        ? Matrix_RotateXYZ((Vector3){ rotationDeg.x * DEG2RAD, rotationDeg.y * DEG2RAD, rotationDeg.z * DEG2RAD })
+        : Matrix_Identity();
+
     Vector3 c[8] = {
-        { cx - x, cy - y, cz - z }, { cx + x, cy - y, cz - z },
-        { cx + x, cy + y, cz - z }, { cx - x, cy + y, cz - z },
-        { cx - x, cy - y, cz + z }, { cx + x, cy - y, cz + z },
-        { cx + x, cy + y, cz + z }, { cx - x, cy + y, cz + z },
+        { -x, -y, -z }, { x, -y, -z }, { x, y, -z }, { -x, y, -z },
+        { -x, -y, z }, { x, -y, z }, { x, y, z }, { -x, y, z },
     };
+    for (int i = 0; i < 8; i++) {
+        c[i] = (Vector3){ center.x + c[i].x, center.y + c[i].y, center.z + c[i].z };
+        if (rot)
+            c[i] = Vector3_RotateAround(c[i], center, R);
+    }
+
     int e[12][2] = { { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 }, { 4, 5 }, { 5, 6 },
         { 6, 7 }, { 7, 4 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
 
@@ -282,4 +314,56 @@ void Draw_CubeWires(Vector3 center, Vector3 size, Color color)
         MgeGL_Vertex3f(c[e[i][1]].x, c[e[i][1]].y, c[e[i][1]].z);
     }
     MgeGL_End();
+}
+
+void Draw_CubeWires(Vector3 center, Vector3 size, Color color)
+{
+    Draw_CubeWiresEx(center, size, (Vector3){ 0.0f, 0.0f, 0.0f }, color);
+}
+
+void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color color)
+{
+    if (rings < 2)
+        rings = 2;
+    if (slices < 3)
+        slices = 3;
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+
+    for (int i = 0; i < rings; i++) {
+        float lat0 = PI * (-0.5f + (float)i / (float)rings);
+        float lat1 = PI * (-0.5f + (float)(i + 1) / (float)rings);
+        float y0 = sinf(lat0), cr0 = cosf(lat0);
+        float y1 = sinf(lat1), cr1 = cosf(lat1);
+
+        for (int j = 0; j < slices; j++) {
+            float lng0 = 2.0f * PI * (float)j / (float)slices;
+            float lng1 = 2.0f * PI * (float)(j + 1) / (float)slices;
+            float cx0 = cosf(lng0), sz0 = sinf(lng0);
+            float cx1 = cosf(lng1), sz1 = sinf(lng1);
+
+            // unit-sphere corners; the position doubles as the normal
+            Vector3 n[4] = {
+                { cx0 * cr0, y0, sz0 * cr0 }, { cx1 * cr0, y0, sz1 * cr0 },
+                { cx1 * cr1, y1, sz1 * cr1 }, { cx0 * cr1, y1, sz0 * cr1 },
+            };
+            const int tri[6] = { 0, 1, 2, 0, 2, 3 };
+            for (int k = 0; k < 6; k++) {
+                Vector3 u = n[tri[k]];
+                MgeGL_Normal3f(u.x, u.y, u.z);
+                MgeGL_TexCoord2f(0.0f, 0.0f);
+                MgeGL_Vertex3f(center.x + u.x * radius, center.y + u.y * radius, center.z + u.z * radius);
+            }
+        }
+    }
+
+    MgeGL_TexCoord2f(0.0f, 0.0f);
+    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
+    MgeGL_End();
+}
+
+void Draw_Sphere(Vector3 center, float radius, Color color)
+{
+    Draw_SphereEx(center, radius, 8, 14, color);
 }

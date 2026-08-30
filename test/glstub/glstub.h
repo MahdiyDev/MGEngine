@@ -32,6 +32,7 @@ typedef struct {
     GLuint stencilMask;
     GLboolean colorMask; // r channel (all four are set the same by the engine)
     struct { GLfloat factor, units; } polygonOffset;
+    struct { GLenum src, dst; } blendFunc;
 
     GLenum activeTexture;         // last glActiveTexture
     GLuint slotTexture[8];        // texture id bound while unit N was active

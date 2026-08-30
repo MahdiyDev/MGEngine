@@ -1,62 +1,54 @@
 # MGEngine builder
 
 A minimal scene editor built on top of the engine library — see
-[../USAGE.md](../USAGE.md) for the engine itself. `builder/main.c` is a plain-C
-consumer: `#include <mge.h>` / `<mge_gui.h>` and link `-lmgengine`.
+[../USAGE.md](../USAGE.md) for the engine itself. `builder/` is a plain-C
+consumer (`#include <mge.h>` + link `-lmgengine`), now split into three units:
+
+| file | contents |
+| --- | --- |
+| `main.c` | the window, the frame loop, the camera (fly + edit look/move), the **TAB** toggle |
+| `scene.c` / `scene.h` | `Scene`: objects, lights, selection, picking, and the render passes (shadow + lit + gizmo + skybox) |
+| `sidebar.c` / `sidebar.h` | every `Mge_Gui*` call — the mode label, gizmo switch, entity list and inspector |
 
 ```sh
 make            # from the repo root -> build/mgengine(.exe)
 ```
 
 `build/libmgengine.dll` sits next to the executable, so run it from `build/`.
-
-The builder calls `Mge_SetMSAA(4)` before `Mge_InitWindow`, so the viewport is
-4x anti-aliased — every shape, object and model edge is smoothed. See the
-Anti-aliasing section in [../USAGE.md](../USAGE.md).
+The builder calls `Mge_SetMSAA(4)` before `Mge_InitWindow` (4x anti-aliasing).
 
 ## Controls
 
 | | |
 | --- | --- |
-| **TAB** | switch between *fly-camera* (cursor locked) and *edit mode* (cursor free) |
-| fly-camera | **WASD** move, mouse look |
-| edit mode -- camera | hold **RIGHT mouse** to look; **WASD** flies while it is held |
-| edit mode -- objects | **left-click** a cube to select it (its move gizmo appears); drag a **gizmo arrow** to move it; click empty space to deselect |
+| **TAB** | switch between **VIEW** mode (fly-camera, cursor locked) and **EDIT** mode (cursor free) |
+| VIEW / fly-camera | **WASD** move, mouse look |
+| EDIT — camera | hold **RIGHT mouse** to look; **WASD** flies while it is held |
+| EDIT — select | **left-click** an object or the lamp; click empty space to deselect |
+| EDIT — gizmo | drag a handle to **move / rotate / scale** the selection (switch mode in the sidebar). Translate has axis arrows + a centre ball (view-plane move); rotate shows the camera-facing part of each ring (Unreal-style); scale has cube tips. The hovered handle highlights white; the gizmo is a fixed size and draws on top of everything |
 
-The sidebar is only clickable in edit mode. Keyboard/mouse input to the engine
-is suppressed while a widget has focus (the app checks `Mge_GuiWantsMouse()` /
-`Mge_GuiWantsKeyboard()`); the right-mouse rotate only starts when the press
-lands outside the sidebar.
+The sidebar is only clickable in EDIT mode. Engine input is suppressed while a
+widget has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
 
 ## The sidebar
 
-A full-height panel on the left, drawn every frame with the engine's UI
-abstraction (`Mge_GuiBeginSidebar`, `Mge_GuiSelectable`, `Mge_GuiInput*` — no
-ImGui in the app's code).
-
-- **FPS** and **draws** — frames per second and the previous frame's GL draw-call
-  count (the batcher keeps it small) at the top, refreshed once a second.
-- **shadows** — a checkbox; on by default. The first light (Sun) casts a
-  2048² shadow map over the scene each frame (`Mge_BeginShadowPass` +
-  `Mge_BeginLighting3DShadowed`). Editing the Sun's direction moves the shadows.
-- **OBJECTS / LIGHTS** — every scene entity as a selectable row. Selecting a
-  cube here is exactly like clicking it in the viewport (via
-  `Mge_SetSelectedObject`): it gets the outline **and** its move gizmo, so you
-  can drag its arrows straight away. A viewport pick updates the sidebar too.
-- **INSPECTOR** — the fields of the current selection, editable live. What it
-  shows depends on *what* is selected:
+- **MODE** — `EDIT` or `VIEW`, at the very top.
+- **FPS / draws** — refreshed once a second (`Mge_GetFps` / `Mge_GetDrawCalls`).
+- **shadows** — checkbox, on by default. The Sun (first light) casts a 2048²
+  shadow map each frame; editing its direction moves the shadows.
+- **GIZMO** — Move / Rotate / Scale, one active (`Mge_SetGizmoMode`).
+- **OBJECTS / LIGHTS** — every entity as a selectable row; picking in the
+  viewport updates it and vice-versa. The lamp (point light) is movable; the Sun
+  (directional) is not.
+- **INSPECTOR** — the current selection's fields, live:
 
   | selection | fields |
   | --- | --- |
-  | **Object** (box / rect) | position, size, colour; material diffuse colour, specular, shininess |
-  | **Light** | kind, enabled, colour, ambient / diffuse / specular; plus position + attenuation for point/spot, and direction for directional/spot |
-
-Every edit writes straight into the live struct, so the scene updates the same
-frame.
+  | **Object** | position, **rotation** (euler °), size, colour; material diffuse colour, specular, shininess |
+  | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 
 ## Extending it
 
-Add an entity to the `objects[]` / lights, give it a row in the sidebar loop,
-and (for a new type) write an `Inspect<Type>()` that calls `Mge_GuiInput*` on
-its fields. Adding a whole new inspectable kind is: a `SEL_*` enum value, a row
-loop, and one inspector function.
+Scene data + rendering: `scene.c`. UI: `sidebar.c` (add a row + an `inspect_*`
+for a new kind). A new movable kind also needs a `Scene_Sel*` accessor so
+`Mge_Gizmo3D` can reach its transform.
