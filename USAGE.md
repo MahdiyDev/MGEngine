@@ -160,9 +160,9 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~11 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~12 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a rotated cube with each gizmo
-mode, the rotate gizmo from head-on angles) one frame each, reads the
+mode, the rotate gizmo head-on, a scripted rotate drag) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
@@ -358,8 +358,11 @@ the scene (depth test off) with the hovered handle over-stroked white.
 
 ```c
 typedef enum { GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE } GizmoMode;
-void      Mge_SetGizmoMode(GizmoMode mode);
-GizmoMode Mge_GetGizmoMode(void);
+typedef enum { GIZMO_WORLD, GIZMO_LOCAL } GizmoSpace;
+void       Mge_SetGizmoMode(GizmoMode mode);
+GizmoMode  Mge_GetGizmoMode(void);
+void       Mge_SetGizmoSpace(GizmoSpace space); // WORLD = global axes; LOCAL = the object's own
+GizmoSpace Mge_GetGizmoSpace(void);
 // rotation / scale may be NULL. Returns true while a handle is being dragged.
 bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 ```
@@ -372,6 +375,11 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
   component (counter-clockwise on screen = positive).
 - **scale** — axes with cube tips + a centre cube; drag an axis tip → scale that
   `size` component, drag the centre → uniform scale.
+
+**Space** — `GIZMO_WORLD` keeps the axes on global X/Y/Z; `GIZMO_LOCAL` aligns
+them to the object's `rotation` (translate moves along a local axis, rotate spins
+about it — composed via matrix, so it doesn't drift). Scale is always local.
+Lights (`rotation == NULL`) ignore the setting.
 
 The gizmo is a **fixed on-screen size** (`size` param) regardless of the object.
 Its translucent parts use `MgeGL_SetBlend` (straight alpha).
@@ -391,10 +399,17 @@ plus `Mge_DrawObjectGizmo2D` for the X/Y arrows.
 
 Supporting pieces: mouse buttons (`IsMouseButtonPressed/Down/Released`,
 `GetMouseDelta`), `Mge_GetScreenWidth/Height`, `Draw_CubeEx` / `Draw_CubeWiresEx`,
-`Matrix_RotateXYZ` / `Vector3_RotateAround`, and world→screen projection
-(`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
+`Matrix_RotateXYZ` / `Matrix_ToEulerXYZ` / `Vector3_RotateAround`, and world→screen
+projection (`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
 `Mge_GetCameraProjectionMatrix`). Demos: `examples/objects/gizmo_2d.c` and
 `gizmo_3d.c` (1/2/3 switch modes); `builder/` uses it in full.
+
+**Testing a drag without a mouse** — `Mge_SetMouseOverride(pos, leftDown)` feeds a
+fake cursor to `GetMousePosition` / `GetMouseDelta` / `IsMouseButton*(LEFT)`.
+Each call is one frame, so call it with `leftDown = true` to press, again (moved)
+to drag, then `false` to release; `Mge_ClearMouseOverride()` restores the real
+mouse. The `make render` harness uses this to script a rotate drag and screenshot
+the result, and `test_gizmo` stubs the same functions for headless drag tests.
 
 ### Lighting
 

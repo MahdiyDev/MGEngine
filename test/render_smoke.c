@@ -20,6 +20,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <math.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -253,6 +255,48 @@ static void scene_rotate_gizmo(Vector3 camPos, const char* name)
     Mge_EndDrawing();
 }
 
+// a scripted mouse drag on the rotate gizmo -- Mge_SetMouseOverride feeds fake
+// press / drag / release across three frames; the object must end up rotated
+static void scene_scripted_rotate(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 3.5f, 3.0f, 6.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.4f;
+    Object o = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1.8f, 1.8f, 1.8f }, (Color){ 150, 130, 110, 255 });
+    Mge_SetGizmoMode(GIZMO_ROTATE);
+    Mge_SetGizmoSpace(GIZMO_WORLD);
+
+    Vector2 gc = Mge_GetWorldToScreen((Vector3){ 0, 0, 0 }, cam);
+    Vector2 grab = Mge_GetWorldToScreen((Vector3){ 1.7f, 0.9f, 0.0f }, cam); // a point on a ring
+    Vector2 radial = { grab.x - gc.x, grab.y - gc.y };
+    Vector2 dragTo = { grab.x - radial.y * 0.5f, grab.y + radial.x * 0.5f }; // ~tangential nudge
+
+    for (int f = 0; f < 3; f++) {
+        Mge_SetMouseOverride(f == 0 ? grab : dragTo, f < 2); // press, drag, release
+        Mge_BeginDrawing();
+        Mge_ClearBackground((Color){ 24, 26, 32, 255 });
+        Mge_BeginMode3D(cam);
+        Mge_BeginLighting3D(sun, cam);
+        Mge_DrawObject(o);
+        Mge_EndLighting3D();
+        Mge_Gizmo3D(&o.position, &o.rotation, &o.size, cam, 1.9f);
+        Mge_EndMode3D();
+        if (f == 2)
+            check("scripted_rotate");
+        Mge_EndDrawing();
+    }
+    Mge_ClearMouseOverride();
+
+    printf("    scripted drag -> object euler (%.0f, %.0f, %.0f)\n",
+        (double)o.rotation.x, (double)o.rotation.y, (double)o.rotation.z);
+    if (fabsf(o.rotation.x) + fabsf(o.rotation.y) + fabsf(o.rotation.z) < 1.0f) {
+        printf("    scripted_rotate  FAIL  -- the drag did not rotate the object\n");
+        g_fails++;
+    }
+}
+
 static void scene_normal_map(void)
 {
     Texture2D d = Mge_LoadTexture("../assets/brickwall/brickwall.jpg");
@@ -307,6 +351,7 @@ int main(void)
     scene_gizmo(GIZMO_SCALE, "gizmo_scale");
     scene_rotate_gizmo((Vector3){ 0.2f, 0.3f, 6.0f }, "rot_facing_z"); // face-on -> full ring
     scene_rotate_gizmo((Vector3){ 6.0f, 0.3f, 0.2f }, "rot_facing_x");
+    scene_scripted_rotate();
 
     Mge_CloseWindow();
 

@@ -160,6 +160,24 @@ Matrix Matrix_RotateXYZ(Vector3 eulerRad)
     return Matrix_Multiply(rx, Matrix_Multiply(ry, rz));
 }
 
+Vector3 Matrix_ToEulerXYZ(Matrix m)
+{
+    // for R = Matrix_RotateXYZ({x,y,z}): m2 = -sin(y), and the rest follow
+    Vector3 e;
+    float sy = m.m2;
+    sy = (sy > 1.0f) ? 1.0f : (sy < -1.0f) ? -1.0f : sy;
+    e.y = asinf(-sy);
+
+    if (fabsf(cosf(e.y)) > 1e-4f) {
+        e.x = atan2f(m.m6, m.m10);
+        e.z = atan2f(m.m1, m.m0);
+    } else { // gimbal lock: pin z, fold everything into x
+        e.x = atan2f(-m.m9, m.m5);
+        e.z = 0.0f;
+    }
+    return e;
+}
+
 Vector3 Vector3_RotateAround(Vector3 p, Vector3 pivot, Matrix rot)
 {
     Vector3 d = Vector3_Subtract(p, pivot);

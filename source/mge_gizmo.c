@@ -26,30 +26,57 @@
 enum { H_NONE = -1, H_X = 0, H_Y = 1, H_Z = 2, H_UNIFORM = 3, H_CENTER = 4 };
 
 static GizmoMode s_mode = GIZMO_TRANSLATE;
+static GizmoSpace s_space = GIZMO_WORLD;
 static int s_drag = H_NONE;
 static Vector3 s_startPos, s_startRot, s_startScale;
+static Vector3 s_dragAxis;      // world direction of the grabbed axis, captured at drag start
 static Vector2 s_startMouse;
 static float s_startAngle;
 
+// gizmo axis frame for this call -- world axes, or the object's own (local space)
+static Vector3 s_ax[3], s_pu[3], s_pv[3];
+
 void Mge_SetGizmoMode(GizmoMode mode) { s_mode = mode; }
 GizmoMode Mge_GetGizmoMode(void) { return s_mode; }
+void Mge_SetGizmoSpace(GizmoSpace space) { s_space = space; }
+GizmoSpace Mge_GetGizmoSpace(void) { return s_space; }
 
 // ---- small helpers ----
 
-static Vector3 axis_vec(int a)
-{
-    return (a == H_X) ? (Vector3){ 1, 0, 0 } : (a == H_Y) ? (Vector3){ 0, 1, 0 } : (Vector3){ 0, 0, 1 };
-}
-static void axis_perp(int a, Vector3* u, Vector3* v)
-{
-    if (a == H_X) { *u = (Vector3){ 0, 1, 0 }; *v = (Vector3){ 0, 0, 1 }; }
-    else if (a == H_Y) { *u = (Vector3){ 1, 0, 0 }; *v = (Vector3){ 0, 0, 1 }; }
-    else { *u = (Vector3){ 1, 0, 0 }; *v = (Vector3){ 0, 1, 0 }; }
-}
+static Vector3 axis_vec(int a) { return s_ax[a]; }
+static void axis_perp(int a, Vector3* u, Vector3* v) { *u = s_pu[a]; *v = s_pv[a]; }
 static Color axis_col(int a) { return (a == H_X) ? GZ_X : (a == H_Y) ? GZ_Y : GZ_Z; }
 static Vector3 add3(Vector3 a, Vector3 b) { return (Vector3){ a.x + b.x, a.y + b.y, a.z + b.z }; }
 static Vector3 mul3(Vector3 a, float s) { return (Vector3){ a.x * s, a.y * s, a.z * s }; }
 static float dot3(Vector3 a, Vector3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+static Vector3 rot_dir(Vector3 v, Matrix R)
+{
+    Vector4 r = Vector4_Transform((Vector4){ v.x, v.y, v.z, 0.0f }, R);
+    return (Vector3){ r.x, r.y, r.z };
+}
+static void perp_basis(Vector3 n, Vector3* u, Vector3* v)
+{
+    Vector3 ref = (fabsf(n.y) < 0.9f) ? (Vector3){ 0, 1, 0 } : (Vector3){ 1, 0, 0 };
+    *u = Vector3Normalize(Vector3Cross(ref, n));
+    *v = Vector3Cross(n, *u);
+}
+
+// set s_ax / s_pu / s_pv for this frame (world, or object-local when in local
+// space -- and scale is always local since world non-uniform scale is not
+// representable by `size`).
+static void set_axes(const Vector3* rotationDeg)
+{
+    static const Vector3 world[3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
+    bool local = rotationDeg != NULL && (s_space == GIZMO_LOCAL || s_mode == GIZMO_SCALE)
+        && (rotationDeg->x != 0.0f || rotationDeg->y != 0.0f || rotationDeg->z != 0.0f);
+    Matrix R = local
+        ? Matrix_RotateXYZ((Vector3){ rotationDeg->x * DEG2RAD, rotationDeg->y * DEG2RAD, rotationDeg->z * DEG2RAD })
+        : Matrix_Identity();
+    for (int a = 0; a < 3; a++) {
+        s_ax[a] = local ? rot_dir(world[a], R) : world[a];
+        perp_basis(s_ax[a], &s_pu[a], &s_pv[a]);
+    }
+}
 
 static Vector3 to_camera(Vector3 from, Camera3D cam)
 {
@@ -69,13 +96,37 @@ static float dist_seg(Vector2 p, Vector2 a, Vector2 b)
 
 // ---- drawing (all inside a depth-disabled overlay) ----
 
-static void axis_box(Vector3 c, int a, float len, float thick, Color col)
+// a thin box from `c` along axis `a` -- oriented, so it follows local axes too
+static void axis_box(Vector3 c, int a, float len, float half, Color col)
 {
-    Vector3 shaftC = add3(c, mul3(axis_vec(a), len * 0.5f));
-    Vector3 s = (a == H_X) ? (Vector3){ len, thick, thick }
-        : (a == H_Y)      ? (Vector3){ thick, len, thick }
-                          : (Vector3){ thick, thick, len };
-    Draw_Cube(shaftC, s, col);
+    Vector3 A = s_ax[a], U = s_pu[a], V = s_pv[a];
+    Vector3 e = add3(c, mul3(A, len));
+    Vector3 q0[4] = {
+        add3(add3(c, mul3(U, half)), mul3(V, half)),
+        add3(add3(c, mul3(U, -half)), mul3(V, half)),
+        add3(add3(c, mul3(U, -half)), mul3(V, -half)),
+        add3(add3(c, mul3(U, half)), mul3(V, -half)),
+    };
+    Vector3 q1[4];
+    for (int i = 0; i < 4; i++)
+        q1[i] = add3(q0[i], mul3(A, len));
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(col.r, col.g, col.b, col.a);
+    for (int i = 0; i < 4; i++) {
+        int j = (i + 1) % 4;
+        Vector3 p[6] = { q0[i], q0[j], q1[j], q0[i], q1[j], q1[i] };
+        for (int k = 0; k < 6; k++)
+            MgeGL_Vertex3f(p[k].x, p[k].y, p[k].z);
+    }
+    // end caps
+    Vector3 cap[12] = { c, q0[0], q0[1], c, q0[1], q0[2], c, q0[2], q0[3], c, q0[3], q0[0] };
+    for (int k = 0; k < 12; k++)
+        MgeGL_Vertex3f(cap[k].x, cap[k].y, cap[k].z);
+    Vector3 cap2[12] = { e, q1[0], q1[1], e, q1[1], q1[2], e, q1[2], q1[3], e, q1[3], q1[0] };
+    for (int k = 0; k < 12; k++)
+        MgeGL_Vertex3f(cap2[k].x, cap2[k].y, cap2[k].z);
+    MgeGL_End();
 }
 
 // `base` sits at the end of the shaft; the tip points `h` further out
@@ -193,6 +244,8 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
     float len = size;
     float thick = size * 0.045f;
 
+    set_axes(rotation); // world axes, or the object's own (local space / scale)
+
     // which handle is under the cursor this frame
     int hot = (s_drag != H_NONE) ? s_drag
         : (s_mode == GIZMO_ROTATE) ? hot_rotate(c, len, camera, w, h, m)
@@ -205,6 +258,7 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
         s_startRot = rotation ? *rotation : (Vector3){ 0, 0, 0 };
         s_startScale = scale ? *scale : (Vector3){ 1, 1, 1 };
         s_startMouse = m;
+        s_dragAxis = (hot >= 0 && hot < 3) ? s_ax[hot] : (Vector3){ 1, 0, 0 };
         Vector2 sc = Mge_GetWorldToScreenEx(c, camera, w, h);
         s_startAngle = atan2f(sc.y - m.y, m.x - sc.x);
     }
@@ -215,13 +269,17 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
     if (s_drag != H_NONE && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
         if (s_mode == GIZMO_ROTATE && rotation) {
             Vector2 sc = Mge_GetWorldToScreenEx(s_startPos, camera, w, h);
-            // screen y is down -> flip it so dragging up reads as counter-clockwise
+            // screen y is down -> flip it so dragging counter-clockwise reads as +
             float now = atan2f(sc.y - m.y, m.x - sc.x);
-            float deg = (now - s_startAngle) * (float)RAD2DEG;
-            *rotation = s_startRot;
-            if (s_drag == H_X) rotation->x = s_startRot.x + deg;
-            else if (s_drag == H_Y) rotation->y = s_startRot.y - deg;
-            else rotation->z = s_startRot.z + deg;
+            float rad = now - s_startAngle;
+            // consistent sense whichever side of the ring you view it from
+            if (dot3(s_dragAxis, to_camera(s_startPos, camera)) < 0.0f)
+                rad = -rad;
+            Matrix newR = Matrix_Multiply(
+                Matrix_RotateXYZ((Vector3){ s_startRot.x * DEG2RAD, s_startRot.y * DEG2RAD, s_startRot.z * DEG2RAD }),
+                Matrix_Rotate(s_dragAxis, rad));
+            Vector3 e = Matrix_ToEulerXYZ(newR);
+            *rotation = (Vector3){ e.x * (float)RAD2DEG, e.y * (float)RAD2DEG, e.z * (float)RAD2DEG };
         } else if (s_drag == H_CENTER) {
             // screen-plane move: solve for the world offset that matches the drag
             Vector3 fwd = Vector3Normalize(camera.target);
@@ -286,7 +344,7 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
         for (int a = 0; a < 3; a++) {
             Color col = (hot == a) ? GZ_HOT : axis_col(a);
             Vector3 end = add3(c, mul3(axis_vec(a), len)); // shaft end
-            axis_box(c, a, len, (hot == a) ? thick * 1.5f : thick, col);
+            axis_box(c, a, len, (hot == a) ? thick * 0.8f : thick * 0.5f, col); // half-width
             if (s_mode == GIZMO_SCALE) {
                 Vector3 tip = add3(end, mul3(axis_vec(a), size * 0.09f)); // clear of the shaft
                 Draw_Cube(tip, (Vector3){ size * 0.15f, size * 0.15f, size * 0.15f }, col);

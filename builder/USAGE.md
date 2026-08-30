@@ -36,7 +36,9 @@ widget has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
 - **FPS / draws** — refreshed once a second (`Mge_GetFps` / `Mge_GetDrawCalls`).
 - **shadows** — checkbox, on by default. The Sun (first light) casts a 2048²
   shadow map each frame; editing its direction moves the shadows.
-- **GIZMO** — Move / Rotate / Scale, one active (`Mge_SetGizmoMode`).
+- **GIZMO** — Move / Rotate / Scale, one active (`Mge_SetGizmoMode`); and
+  **SPACE** World / Local (`Mge_SetGizmoSpace`), shown as `SPACE: World|Local`.
+  Local aligns the handles to a rotated object's own axes.
 - **OBJECTS / LIGHTS** — every entity as a selectable row; picking in the
   viewport updates it and vice-versa. The lamp (point light) is movable; the Sun
   (directional) is not.

@@ -590,6 +590,13 @@ float GetMouseY(void);
 Vector2 GetMousePosition(void);
 Vector2 GetMouseDelta(void);
 void SetMousePosition(int x, int y);
+
+// Fake the mouse (for headless tests / scripted drags). Each call is one frame,
+// so button edges work: call with leftDown=true to "press", again to "drag",
+// then leftDown=false to "release". Mge_ClearMouseOverride returns to the real
+// mouse. Overrides GetMousePosition / GetMouseDelta / IsMouseButton*(LEFT).
+void Mge_SetMouseOverride(Vector2 position, bool leftDown);
+void Mge_ClearMouseOverride(void);
 void ShowCursor(void);       // make the cursor visible
 void HideCursor(void);       // hide the cursor (still free to move)
 void EnableCursor(void);     // show + unlock the cursor
@@ -890,8 +897,14 @@ typedef enum {
 	GIZMO_ROTATE,        // three rings
 	GIZMO_SCALE          // axes with cube tips (+ a centre cube for uniform)
 } GizmoMode;
-void      Mge_SetGizmoMode(GizmoMode mode);
-GizmoMode Mge_GetGizmoMode(void);
+typedef enum {
+	GIZMO_WORLD = 0, // axes aligned to global X/Y/Z
+	GIZMO_LOCAL      // axes aligned to the object's own rotation (scale is always local)
+} GizmoSpace;
+void       Mge_SetGizmoMode(GizmoMode mode);
+GizmoMode  Mge_GetGizmoMode(void);
+void       Mge_SetGizmoSpace(GizmoSpace space);
+GizmoSpace Mge_GetGizmoSpace(void);
 bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 
 #ifndef MGE_MAX_LIGHTS

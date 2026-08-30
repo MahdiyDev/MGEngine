@@ -48,6 +48,14 @@ static void gizmo_switch(void)
         Mge_SetGizmoMode(GIZMO_ROTATE);
     if (Mge_GuiSelectable("Scale", mode == GIZMO_SCALE))
         Mge_SetGizmoMode(GIZMO_SCALE);
+
+    Mge_GuiSpacing();
+    GizmoSpace space = Mge_GetGizmoSpace();
+    Mge_GuiLabel(space == GIZMO_LOCAL ? "SPACE: Local" : "SPACE: World");
+    if (Mge_GuiSelectable("World", space == GIZMO_WORLD))
+        Mge_SetGizmoSpace(GIZMO_WORLD);
+    if (Mge_GuiSelectable("Local", space == GIZMO_LOCAL))
+        Mge_SetGizmoSpace(GIZMO_LOCAL);
 }
 
 void Sidebar_Draw(Scene* s, bool editMode, int fps, int draws)

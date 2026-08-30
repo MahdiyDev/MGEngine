@@ -73,6 +73,7 @@ Matrix Matrix_Translate(float x, float y, float z);
 Matrix Matrix_Scale(float x, float y, float z);
 Matrix Matrix_Rotate(Vector3 axis, float angle);
 Matrix Matrix_RotateXYZ(Vector3 eulerRad); // apply X, then Y, then Z
+Vector3 Matrix_ToEulerXYZ(Matrix m);       // inverse of Matrix_RotateXYZ (radians)
 Matrix MatrixOrtho(double left, double right, double bottom, double top, double nearPlane, double farPlane);
 Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double farPlane);
 Matrix MatrixLookAt(Vector3 eye, Vector3 target, Vector3 up);

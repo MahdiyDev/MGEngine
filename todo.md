@@ -33,3 +33,4 @@
 - [x] `make render`: headless screenshot smoke test (hidden window, renders ~6 features, checks GL error + blank frame, dumps TGAs)
 - [x] manipulation gizmo: Object.rotation + Draw_CubeEx; mge_gizmo.c translate/rotate/scale (Mge_SetGizmoMode / Mge_Gizmo3D), drawn on top, hot-handle highlight
 - [x] builder split into main.c / scene.c / sidebar.c; sidebar shows EDIT/VIEW mode + gizmo switch; lamp movable by gizmo
+- [x] gizmo world/local space (Mge_SetGizmoSpace, shown in sidebar); Mge_SetMouseOverride for headless drag tests

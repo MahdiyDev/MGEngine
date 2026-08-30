@@ -382,8 +382,31 @@ float GetMouseY(void)
     return (CORE.Input.Mouse.currentPosition.y + CORE.Input.Mouse.offset.y) * CORE.Input.Mouse.scale.y;
 }
 
+// --- scripted mouse override (headless tests) ---
+static bool s_mouseOvr = false;
+static Vector2 s_ovrPos, s_ovrPrevPos;
+static int s_ovrDown, s_ovrPrevDown;
+
+void Mge_SetMouseOverride(Vector2 position, bool leftDown)
+{
+    if (s_mouseOvr) {
+        s_ovrPrevPos = s_ovrPos;
+        s_ovrPrevDown = s_ovrDown;
+    } else {
+        s_ovrPrevPos = position;
+        s_ovrPrevDown = 0; // first activation starts "up" so the first leftDown=true is a press
+    }
+    s_mouseOvr = true;
+    s_ovrPos = position;
+    s_ovrDown = leftDown ? 1 : 0;
+}
+
+void Mge_ClearMouseOverride(void) { s_mouseOvr = false; }
+
 Vector2 GetMousePosition(void)
 {
+    if (s_mouseOvr)
+        return s_ovrPos;
     Vector2 position = { 0 };
     position.x = (CORE.Input.Mouse.currentPosition.x + CORE.Input.Mouse.offset.x) * CORE.Input.Mouse.scale.x;
     position.y = (CORE.Input.Mouse.currentPosition.y + CORE.Input.Mouse.offset.y) * CORE.Input.Mouse.scale.y;
@@ -392,6 +415,8 @@ Vector2 GetMousePosition(void)
 
 Vector2 GetMouseDelta(void)
 {
+    if (s_mouseOvr)
+        return (Vector2){ s_ovrPos.x - s_ovrPrevPos.x, s_ovrPos.y - s_ovrPrevPos.y };
     Vector2 d;
     d.x = CORE.Input.Mouse.currentPosition.x - CORE.Input.Mouse.previousPosition.x;
     d.y = CORE.Input.Mouse.currentPosition.y - CORE.Input.Mouse.previousPosition.y;
@@ -400,6 +425,8 @@ Vector2 GetMouseDelta(void)
 
 bool IsMouseButtonPressed(int button)
 {
+    if (s_mouseOvr && button == MOUSE_BUTTON_LEFT)
+        return !s_ovrPrevDown && s_ovrDown;
     if ((button >= 0) && (button < MAX_MOUSE_BUTTONS)) {
         return (CORE.Input.Mouse.previousButtonState[button] == 0) && (CORE.Input.Mouse.currentButtonState[button] == 1);
     }
@@ -408,6 +435,8 @@ bool IsMouseButtonPressed(int button)
 
 bool IsMouseButtonDown(int button)
 {
+    if (s_mouseOvr && button == MOUSE_BUTTON_LEFT)
+        return s_ovrDown != 0;
     if ((button >= 0) && (button < MAX_MOUSE_BUTTONS)) {
         return CORE.Input.Mouse.currentButtonState[button] == 1;
     }
@@ -416,6 +445,8 @@ bool IsMouseButtonDown(int button)
 
 bool IsMouseButtonReleased(int button)
 {
+    if (s_mouseOvr && button == MOUSE_BUTTON_LEFT)
+        return s_ovrPrevDown && !s_ovrDown;
     if ((button >= 0) && (button < MAX_MOUSE_BUTTONS)) {
         return (CORE.Input.Mouse.previousButtonState[button] == 1) && (CORE.Input.Mouse.currentButtonState[button] == 0);
     }

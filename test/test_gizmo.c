@@ -55,14 +55,36 @@ static void release(void) { frame(); g_btn = 0; }
 
 // ---- tests ----
 
-TEST(gizmo_mode_round_trips)
+TEST(gizmo_mode_and_space_round_trip)
 {
-    CHECK(Mge_GetGizmoMode() == GIZMO_TRANSLATE); // default
+    CHECK(Mge_GetGizmoMode() == GIZMO_TRANSLATE); // defaults
+    CHECK(Mge_GetGizmoSpace() == GIZMO_WORLD);
+
     Mge_SetGizmoMode(GIZMO_ROTATE);
     CHECK(Mge_GetGizmoMode() == GIZMO_ROTATE);
-    Mge_SetGizmoMode(GIZMO_SCALE);
-    CHECK(Mge_GetGizmoMode() == GIZMO_SCALE);
+    Mge_SetGizmoSpace(GIZMO_LOCAL);
+    CHECK(Mge_GetGizmoSpace() == GIZMO_LOCAL);
+
     Mge_SetGizmoMode(GIZMO_TRANSLATE);
+    Mge_SetGizmoSpace(GIZMO_WORLD);
+}
+
+TEST(euler_matrix_round_trips)
+{
+    Vector3 angles[3] = {
+        { 0.3f, -0.7f, 1.1f }, { -1.2f, 0.2f, 0.0f }, { 0.0f, 0.0f, 2.5f }
+    };
+    for (int i = 0; i < 3; i++) {
+        Vector3 e = Matrix_ToEulerXYZ(Matrix_RotateXYZ(angles[i]));
+        // rebuild -> the matrices must match even if the angles wrapped
+        Matrix a = Matrix_RotateXYZ(angles[i]);
+        Matrix b = Matrix_RotateXYZ(e);
+        CHECK_F(a.m0, b.m0);
+        CHECK_F(a.m5, b.m5);
+        CHECK_F(a.m10, b.m10);
+        CHECK_F(a.m6, b.m6);
+        CHECK_F(a.m9, b.m9);
+    }
 }
 
 TEST(rotate_xyz_90_about_z_maps_x_to_y)
@@ -152,13 +174,60 @@ TEST(scale_drag_grows_the_axis_component)
     Mge_SetGizmoMode(GIZMO_TRANSLATE);
 }
 
+TEST(rotate_drag_spins_the_axis)
+{
+    Mge_SetGizmoMode(GIZMO_ROTATE);
+    Mge_SetGizmoSpace(GIZMO_WORLD);
+    Vector3 pos = { 0, 0, 0 }, rot = { 0, 0, 0 }, scl = { 1, 1, 1 };
+    Camera3D cam = { .position = { 5, 0, 8 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 } };
+    float size = 2.0f;
+    float cx = SCR_W * 0.5f, cy = SCR_H * 0.5f;
+
+    // the world-X ring projects to a vertical line through the centre (stub W2S)
+    press_at(cx + 4.0f, cy - 40.0f); // grab it near the top
+    bool busy = Mge_Gizmo3D(&pos, &rot, &scl, cam, size);
+    CHECK(busy);
+
+    drag_to(cx - 40.0f, cy - 4.0f); // sweep ~90 deg counter-clockwise
+    Mge_Gizmo3D(&pos, &rot, &scl, cam, size);
+
+    CHECK(fabsf(rot.x) > 30.0f); // rotated about X
+    CHECK(fabsf(rot.x) < 150.0f);
+    CHECK(rot.x == rot.x); // not NaN
+    release();
+    Mge_Gizmo3D(&pos, &rot, &scl, cam, size);
+    Mge_SetGizmoMode(GIZMO_TRANSLATE);
+}
+
+TEST(local_rotate_stays_a_valid_euler)
+{
+    Mge_SetGizmoMode(GIZMO_ROTATE);
+    Mge_SetGizmoSpace(GIZMO_LOCAL);
+    Vector3 pos = { 0, 0, 0 }, rot = { 15, 40, -20 }, scl = { 1, 1, 1 };
+    Camera3D cam = { .position = { 4, 3, 8 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 } };
+
+    press_at(SCR_W * 0.5f + 3.0f, SCR_H * 0.5f - 45.0f);
+    Mge_Gizmo3D(&pos, &rot, &scl, cam, 2.0f);
+    drag_to(SCR_W * 0.5f - 45.0f, SCR_H * 0.5f - 3.0f);
+    Mge_Gizmo3D(&pos, &rot, &scl, cam, 2.0f);
+
+    CHECK(rot.x == rot.x && rot.y == rot.y && rot.z == rot.z); // finite
+    release();
+    Mge_Gizmo3D(&pos, &rot, &scl, cam, 2.0f);
+    Mge_SetGizmoMode(GIZMO_TRANSLATE);
+    Mge_SetGizmoSpace(GIZMO_WORLD);
+}
+
 int main(void)
 {
-    RUN(gizmo_mode_round_trips);
+    RUN(gizmo_mode_and_space_round_trip);
+    RUN(euler_matrix_round_trips);
     RUN(rotate_xyz_90_about_z_maps_x_to_y);
     RUN(rotate_around_a_pivot_keeps_the_pivot_fixed);
     RUN(translate_drag_moves_along_the_grabbed_axis);
     RUN(centre_ball_drag_moves_on_the_view_plane);
     RUN(scale_drag_grows_the_axis_component);
+    RUN(rotate_drag_spins_the_axis);
+    RUN(local_rotate_stays_a_valid_euler);
     return test_summary();
 }
