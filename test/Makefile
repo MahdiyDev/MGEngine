@@ -1,13 +1,16 @@
 # Unit tests for the parts of MGEngine that need no window / GL context.
 #
 #   make            build and run every suite
+#   make model      build and run test_model (needs `make vendor` for Assimp)
 #   make clean
 
 ifeq ($(origin CC),default)
 CC := gcc
 endif
+CXX ?= g++
 
 MLIB   := ../vendor/mlib
+ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
@@ -31,13 +34,17 @@ else
     LDFLAGS ?=
 endif
 
-.PHONY: all test clean $(TESTS)
+.PHONY: all test model clean $(TESTS)
 
 all: test
 test: $(TESTS)
 
 $(TESTS): %: %$(EXE)
 	$(call runexe,$<)
+
+# not part of `make test`: needs the vendored Assimp lib (run `make vendor`)
+model: test_model$(EXE)
+	$(call runexe,test_model$(EXE))
 
 test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_math.c ../source/mge_math.c -lm
@@ -57,5 +64,13 @@ test_light$(EXE): test_light.c ../source/mge_light.c $(MLIB)/test.h
 test_mesh$(EXE): test_mesh.c ../source/mge_mesh.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_mesh.c ../source/mge_mesh.c
 
+# compiled as C11 with gcc, linked with g++ (Assimp is C++)
+test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(ASSIMP)/include -c test_model.c -o test_model_t.o
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(ASSIMP)/include -c ../source/mge_model.c -o test_model_m.o
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c ../source/mge_mesh.c -o test_model_mesh.o
+	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) test_model_t.o test_model_m.o test_model_mesh.o -L$(ASSIMP)/lib -lassimp -lzlibstatic
+	-$(RM) $(call native,test_model_t.o test_model_m.o test_model_mesh.o)
+
 clean:
-	-$(RM) $(call native,$(addsuffix $(EXE),$(TESTS)) _mge_utils.tmp)
+	-$(RM) $(call native,$(addsuffix $(EXE),$(TESTS)) test_model$(EXE) _mge_utils.tmp _model_test.obj)

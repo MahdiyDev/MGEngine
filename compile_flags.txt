@@ -6,5 +6,6 @@
 -I./vendor/glad/include
 -I./vendor/stb
 -I./vendor/glfw/include
+-I./vendor/assimp/include
 -I./vendor/mlib
 -I./vendor/mlib/vec

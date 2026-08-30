@@ -1,0 +1,11 @@
+Model Information:
+* title:	Sliced Musk Melon
+* source:	https://sketchfab.com/3d-models/sliced-musk-melon-bb71097528224362afa2df6b7b81676d
+* author:	naka2012 (https://sketchfab.com/naka2012)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Sliced Musk Melon" (https://sketchfab.com/3d-models/sliced-musk-melon-bb71097528224362afa2df6b7b81676d) by naka2012 (https://sketchfab.com/naka2012) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

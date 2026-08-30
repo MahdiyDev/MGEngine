@@ -200,30 +200,48 @@ void MgeGL_SetShader(unsigned int id)
 
 int MgeGL_LoadTexture(const void* data, int width, int height, int format, int mipmapCount)
 {
-    (void)format;
     (void)mipmapCount;
     unsigned int id = 0;
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    if (data == NULL) {
+        TRACE_LOG(LOG_WARNING, "TEXTURE: no pixel data to upload");
+        return 0;
+    }
+
+    // map the engine's PixelFormat to a GL channel layout
+    GLint internalFmt = GL_RGB8;
+    GLenum channels = GL_RGB;
+    int gray = 0; // 1 = R -> RRR1, 2 = RG -> RRRG
+
+    switch (format) {
+    case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE:  internalFmt = GL_R8;    channels = GL_RED;  gray = 1; break;
+    case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: internalFmt = GL_RG8;   channels = GL_RG;   gray = 2; break;
+    case PIXELFORMAT_UNCOMPRESSED_R8G8B8:     internalFmt = GL_RGB8;  channels = GL_RGB;  break;
+    case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8:   internalFmt = GL_RGBA8; channels = GL_RGBA; break;
+    default:                                  internalFmt = GL_RGB8;  channels = GL_RGB;  break;
+    }
 
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_2D, id);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // rows are not guaranteed 4-byte aligned
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, width, height, 0, channels, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    if (data != NULL) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    } else {
-        TRACE_LOG(LOG_INFO, "could not load texture");
+    if (gray == 1) {
+        GLint swz[4] = { GL_RED, GL_RED, GL_RED, GL_ONE };
+        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swz);
+    } else if (gray == 2) {
+        GLint swz[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
+        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swz);
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    glBindTexture(GL_TEXTURE_2D, 0);
     return (int)id;
 }
 

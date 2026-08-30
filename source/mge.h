@@ -430,6 +430,19 @@ typedef struct Mesh {
 	unsigned int vao, vbo, ebo; // 0 until Mge_UploadMesh
 } Mesh;
 
+// --- Model -------------------------------------------------------------------
+//
+// A `Model` is what `Mge_LoadModel` produces from a file on disk (glTF, OBJ, FBX
+// -- anything the vendored Assimp build imports): a flat list of `Mesh`es with
+// their node transforms baked into the vertices and their textures loaded from
+// `directory`. The meshes are already uploaded to the GPU.
+typedef struct Model {
+	Mesh* meshes;
+	int meshCount;
+	char directory[512];       // folder the model was loaded from
+	Vector3 bboxMin, bboxMax;  // axis-aligned bounds over every vertex
+} Model;
+
 typedef struct Object {
 	ObjectKind kind;
 	Vector3 position;   // centre; z is unused for OBJECT_2D
@@ -536,6 +549,11 @@ Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
 void Mge_UploadMesh(Mesh* mesh);   // create the GPU buffers (no-op if already uploaded)
 void Mge_DrawMesh(Mesh mesh);      // inside Mge_BeginMode3D (+ Mge_BeginLighting3D for lighting)
 void Mge_UnloadMesh(Mesh* mesh);   // free GPU + CPU data and zero the struct
+
+// Model -- load a mesh file via Assimp; meshes come back GPU-ready.
+Model Mge_LoadModel(const char* path);
+void  Mge_DrawModel(Model model);   // draws every mesh; inside Mge_BeginMode3D
+void  Mge_UnloadModel(Model* model);
 
 // Mouse-driven manipulation. Call once per frame while the cursor is enabled.
 // Left-click an object to select it, then drag a gizmo arrow to move along that

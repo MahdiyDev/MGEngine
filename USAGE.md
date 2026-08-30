@@ -18,6 +18,7 @@ source/
   mge_light.c          Phong lighting; directional / point / spot lights
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
+  mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
@@ -35,6 +36,7 @@ examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular, directional, point, spotlight
 examples/materials/    textured_cube
 examples/meshes/       textured_quad
+examples/models/       load_melon
 ```
 
 ## Using mlib
@@ -81,8 +83,12 @@ make test            # or:  cd test && make
 `Mge_GetFileExtension` and the file loaders; `test_object` covers the gizmo
 picking/drag math; `test_material` covers `Material` / `MaterialMap`
 construction; `test_light` covers the light constructors and the uniform
-wiring in `Mge_BeginLighting3D(Ex)` (with a stubbed GL backend). None open a
-window.
+wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
+handling. All use a stubbed GL backend -- none open a window.
+
+`test_model` is separate (`cd test && make model`) because it links the
+vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
+if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 On Windows the test Makefile links the C runtime statically (`LDFLAGS = -static`)
 so that app-control policies (Device Guard / WDAC) don't block the freshly built
@@ -407,6 +413,49 @@ no colour attribute, so the diffuse texture is shown untinted.
 
 Demo: `examples/meshes/textured_quad.c` — a textured wall + an untextured floor,
 both hand-built meshes, under a moving point light.
+
+### Model
+
+`Mge_LoadModel` runs a file through the vendored [Assimp](https://github.com/assimp/assimp)
+(OBJ / glTF2 / FBX in this build) and returns a flat list of GPU-ready meshes.
+
+```c
+typedef struct Model {
+    Mesh* meshes;   int meshCount;
+    char  directory[512];       // where the file (and its textures) live
+    Vector3 bboxMin, bboxMax;   // bounds over every vertex
+} Model;
+
+Model Mge_LoadModel(const char* path);
+void  Mge_DrawModel(Model model);    // draws every mesh; inside Mge_BeginMode3D
+void  Mge_UnloadModel(Model* model);
+```
+
+```c
+Model melon = Mge_LoadModel("assets/sliced_musk_melon/scene.gltf");
+
+Vector3 c = Vector3_Scale(Vector3_Add(melon.bboxMin, melon.bboxMax), 0.5f);
+float r = Vector3_Length(Vector3_Subtract(melon.bboxMax, melon.bboxMin)) * 0.5f;
+// ... position the camera at c + (0, r*0.25, r*2.2), looking at c ...
+
+Mge_BeginMode3D(camera);
+    Mge_BeginLighting3D(light, camera);
+        Mge_DrawModel(melon);
+    Mge_EndLighting3D();
+Mge_EndMode3D();
+
+Mge_UnloadModel(&melon);
+```
+
+The private processor (in `mge_model.c`) walks the Assimp node tree once,
+**bakes each node's transform into its meshes' vertices** (the engine has no
+per-object matrix), copies positions / normals / the first UV set into `Vertex`,
+flattens the faces into a 32-bit index array, and loads each material's
+base-colour / diffuse texture from `directory` (de-duplicated per load). Every
+mesh is uploaded to the GPU before `Mge_LoadModel` returns.
+
+Demo: `examples/models/load_melon.c` — loads `assets/sliced_musk_melon/`, frames
+it from its bounding box, orbits a point light around it. Needs `make vendor`.
 
 ### Math
 
