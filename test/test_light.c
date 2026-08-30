@@ -46,6 +46,7 @@ Shader Mge_LoadShaderFromMemory(const char* vs, const char* fs)
 }
 void MgeGL_SetShader(unsigned int id) { (void)id; }
 void MgeGL_SetTexture(unsigned int id) { (void)id; }
+void MgeGL_SetTextureSlot(int slot, unsigned int id) { (void)slot; (void)id; }
 void MgeGL_Draw(void) {}
 unsigned int MgeGL_GetWhiteTexture(void) { return 1; }
 unsigned int MgeGL_GetDefaultShaderId(void) { return 0; }
@@ -151,9 +152,11 @@ TEST(begin_lighting_ex_uploads_every_light)
     CHECK(feq(rec_f("shininess"), 32.0f));
     CHECK(rec_i("shadowsEnabled") == 0);      // plain lighting -> shadows off
     CHECK(rec_i("pointShadowEnabled") == 0);
+    CHECK(rec_i("useNormalMap") == 0);
     CHECK(rec_i("sampleTex") == 0);           // diffuse -> unit 0
     CHECK(rec_i("shadowMap") == 1);           // directional depth -> unit 1
     CHECK(rec_i("pointShadowMap") == 2);      // point depth cube -> unit 2
+    CHECK(rec_i("normalMap") == 3);           // normal map -> unit 3
 
     Vector3 vp = rec_v("viewPos");
     CHECK(feq(vp.z, 9.0f));

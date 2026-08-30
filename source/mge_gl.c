@@ -425,6 +425,13 @@ void MgeGL_Draw(void)
     MgeGL_DrawList_append(&MGEGL.State.draws, (MgeGL_DrawCall){ .mode = MGEGL_QUADS });
 }
 
+void MgeGL_SetTextureSlot(int slot, unsigned int id)
+{
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glActiveTexture(GL_TEXTURE0); // leave unit 0 active for the batcher
+}
+
 void MgeGL_SetTexture(unsigned int id)
 {
     unsigned int tex = (id != 0) ? id : MGEGL.State.whiteTexture;
@@ -1071,7 +1078,7 @@ void MgeGL_UploadMeshBatched(unsigned int* vao, unsigned int* vbo, unsigned int*
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
+void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId, unsigned int normalTextureId)
 {
     if (vao == 0 || indexCount <= 0)
         return;
@@ -1081,6 +1088,12 @@ void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
     glUseProgram(MGEGL.State.currentShaderID);
     MgeGL_UniformMatrix4fv("modelview", MGEGL.State.modelview);
     MgeGL_UniformMatrix4fv("projection", MGEGL.State.projection);
+
+    // normal map on unit 3; tell the lighting shader whether to use it
+    // (no-op glUniform on shaders without these locations)
+    MgeGL_SetTextureSlot(3, normalTextureId);
+    MgeGL_Uniform1i("normalMap", 3);
+    MgeGL_Uniform1i("useNormalMap", (normalTextureId != 0) ? 1 : 0);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, (textureId != 0) ? textureId : MGEGL.State.whiteTexture);
@@ -1093,6 +1106,7 @@ void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)0);
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    MgeGL_SetTextureSlot(3, 0);
 
     MGEGL.State.drawCalls++;
 }

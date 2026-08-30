@@ -115,9 +115,28 @@ static const char* lightFragCode =
     "    }\n"
     "    return sh / 20.0;\n"
     "}\n"
+    "uniform sampler2D normalMap;\n"
+    "uniform int useNormalMap;\n"
+    "vec3 ApplyNormalMap(vec3 N)\n"
+    "{\n"
+    // TBN from screen-space derivatives (no tangent attribute needed)
+    "    vec3 dp1 = dFdx(vFragPos);\n"
+    "    vec3 dp2 = dFdy(vFragPos);\n"
+    "    vec2 duv1 = dFdx(vTexCoord);\n"
+    "    vec2 duv2 = dFdy(vTexCoord);\n"
+    "    vec3 dp2perp = cross(dp2, N);\n"
+    "    vec3 dp1perp = cross(N, dp1);\n"
+    "    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;\n"
+    "    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;\n"
+    "    float invmax = inversesqrt(max(dot(T, T), dot(B, B)));\n"
+    "    mat3 TBN = mat3(T * invmax, B * invmax, N);\n"
+    "    vec3 m = texture(normalMap, vTexCoord).xyz * 2.0 - 1.0;\n"
+    "    return normalize(TBN * m);\n"
+    "}\n"
     "void main()\n"
     "{\n"
     "    vec3 N = normalize(vNormal);\n"
+    "    if (useNormalMap == 1) N = ApplyNormalMap(N);\n"
     "    vec3 V = normalize(viewPos - vFragPos);\n"
     "    vec4 base = texture(sampleTex, vTexCoord) * vColor;\n"   // MATERIAL_MAP_DIFFUSE: texture * colour
     "    vec3 lit = vec3(0.0);\n"
@@ -275,6 +294,8 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
     MgeGL_Uniform1i("sampleTex", 0);      // diffuse
     MgeGL_Uniform1i("shadowMap", 1);      // directional/spot depth (2D)
     MgeGL_Uniform1i("pointShadowMap", 2); // point-light depth (cube); distinct units per sampler
+    MgeGL_Uniform1i("normalMap", 3);      // tangent-space normal map
+    MgeGL_Uniform1i("useNormalMap", 0);   // Mge_SetMaterial / Mge_DrawMesh turn this on
     MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform1f("shininess", 32.0f);
     MgeGL_Uniform1i("blinn", (s_model == LIGHTING_PHONG) ? 0 : 1);
@@ -302,6 +323,11 @@ void Mge_SetMaterial(Material material)
     // colour is applied through the per-vertex colour of the geometry you draw.
     MgeGL_SetTexture(material.maps[MATERIAL_MAP_DIFFUSE].texture.id);
 
+    // MATERIAL_MAP_NORMAL: per-pixel normals on unit 3 when the slot has a texture
+    unsigned int normalId = material.maps[MATERIAL_MAP_NORMAL].texture.id;
+    MgeGL_SetTextureSlot(3, normalId);
+    MgeGL_Uniform1i("useNormalMap", (normalId != 0) ? 1 : 0);
+
     MgeGL_Uniform1f("matSpecular", material.maps[MATERIAL_MAP_SPECULAR].value);
     MgeGL_Uniform1f("shininess", material.shininess);
 }
@@ -313,5 +339,6 @@ void Mge_EndLighting3D(void)
 
     s_active = false;
     MgeGL_SetTexture(MgeGL_GetWhiteTexture()); // don't leak a material texture into unlit draws
+    MgeGL_SetTextureSlot(3, 0);                // ...or a normal map
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
 }

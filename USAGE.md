@@ -21,7 +21,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
-  mge_light.c          Blinn-Phong lighting; directional / point / spot lights
+  mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
   mge_shadow.c         shadow mapping: directional depth map + point-light depth cube
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
@@ -54,7 +54,7 @@ vendor/
 test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows, normal_mapping
 examples/materials/    textured_cube
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -514,6 +514,27 @@ casts one kind or the other. The 2D map is on texture unit 1, the cube on unit 2
 Demo: `examples/lighting/point_shadows.c` — a lamp bobbing inside a room, cubes
 casting onto the walls, floor and ceiling.
 
+### Normal mapping
+
+Put a tangent-space normal map in `MATERIAL_MAP_NORMAL` and lit surfaces pick up
+per-pixel bumps — no tangent vertex attribute needed: the lighting shader builds
+the TBN frame from screen-space derivatives of position and UV.
+
+```c
+Material wall = Mge_DefaultMaterial();
+Mge_SetMaterialTexture(&wall, MATERIAL_MAP_DIFFUSE, Mge_LoadTexture("brick.jpg"));
+Mge_SetMaterialTexture(&wall, MATERIAL_MAP_NORMAL, Mge_LoadTexture("brick_normal.jpg"));
+// ... Mge_SetMaterial(wall); Draw_Cube(...);   // inside Mge_BeginLighting3D
+```
+
+Load the normal map **linear** (`Mge_LoadTexture`, never `...Ex(path, true)`) — it
+is vector data, not colour. OpenGL-convention maps (green = +Y) work as-is. It
+binds to texture unit 3. `Mge_LoadModel` picks up `NORMALS` / `HEIGHT` textures
+automatically, so imported models are normal-mapped without extra code.
+
+Demo: `examples/lighting/normal_mapping.c` — `assets/brickwall/` on a flat quad,
+SPACE toggles the map.
+
 ### Materials & material maps
 
 A `Material` is a fixed set of `MaterialMap` slots (indexed by
@@ -524,6 +545,7 @@ A `Material` is a fixed set of `MaterialMap` slots (indexed by
 | --- | --- | --- | --- |
 | `MATERIAL_MAP_DIFFUSE` | albedo image sampled across the surface (id `0` → a white 1×1, i.e. "untextured") | tint multiplied over the texture | unused |
 | `MATERIAL_MAP_SPECULAR` | unused | unused (reserved) | highlight strength multiplier: `1` = as the light sets it, `0` = matte |
+| `MATERIAL_MAP_NORMAL` | tangent-space normal map (RGB = XYZ); load it linear. Unset → the vertex normal is used | unused | unused |
 
 ```c
 typedef struct MaterialMap {
@@ -585,6 +607,7 @@ typedef struct Vertex {
 typedef struct MeshTexture { Texture2D texture; MeshTextureType type; } MeshTexture;
 // MESH_TEXTURE_DIFFUSE -> sampled as the surface colour
 // MESH_TEXTURE_SPECULAR -> stored on the mesh, not sampled by the built-in shader yet
+// MESH_TEXTURE_NORMAL  -> tangent-space normal map, applied when the mesh is lit
 
 Mesh Mge_MakeMesh(const Vertex* v, int vc, const unsigned int* idx, int ic,
                   const MeshTexture* tex, int tc);   // copies all three arrays
@@ -617,9 +640,10 @@ Mge_UnloadMesh(&quad);
 ```
 
 Indices are `unsigned int` (32-bit), 3 per triangle. `Mge_DrawMesh` binds the
-first `MESH_TEXTURE_DIFFUSE` texture (or a white 1×1 if there is none) and draws
-with whatever shader is active — the unlit default or the lighting shader. It has
-no colour attribute, so the diffuse texture is shown untinted.
+first `MESH_TEXTURE_DIFFUSE` texture (or a white 1×1 if there is none), plus the
+first `MESH_TEXTURE_NORMAL` if present, and draws with whatever shader is active
+— the unlit default or the lighting shader. It has no colour attribute, so the
+diffuse texture is shown untinted.
 
 **Batched vertex attributes.** If you'd rather keep positions / normals /
 texcoords in separate arrays than interleave them into `Vertex[]`, use

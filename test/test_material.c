@@ -29,7 +29,8 @@ TEST(map_slots)
     // the slots are distinct and COUNT is the last
     CHECK(MATERIAL_MAP_DIFFUSE == 0);
     CHECK(MATERIAL_MAP_SPECULAR == 1);
-    CHECK(MATERIAL_MAP_COUNT == 2);
+    CHECK(MATERIAL_MAP_NORMAL == 2);
+    CHECK(MATERIAL_MAP_COUNT == 3);
 }
 
 TEST(set_material_texture)

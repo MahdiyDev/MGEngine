@@ -82,13 +82,13 @@ void Mge_UploadMesh(Mesh* mesh)
     }
 }
 
-static unsigned int diffuse_texture_id(Mesh mesh)
+static unsigned int mesh_texture_id(Mesh mesh, MeshTextureType type)
 {
     for (int i = 0; i < mesh.textureCount; i++) {
-        if (mesh.textures[i].type == MESH_TEXTURE_DIFFUSE)
+        if (mesh.textures[i].type == type)
             return mesh.textures[i].texture.id;
     }
-    return 0; // -> white 1x1
+    return 0; // -> white 1x1 (diffuse) / no map (normal)
 }
 
 void Mge_DrawMesh(Mesh mesh)
@@ -96,7 +96,9 @@ void Mge_DrawMesh(Mesh mesh)
     if (mesh.vao == 0)
         return; // not uploaded
 
-    MgeGL_DrawMesh(mesh.vao, mesh.indexCount, diffuse_texture_id(mesh));
+    MgeGL_DrawMesh(mesh.vao, mesh.indexCount,
+        mesh_texture_id(mesh, MESH_TEXTURE_DIFFUSE),
+        mesh_texture_id(mesh, MESH_TEXTURE_NORMAL));
 }
 
 void Mge_UnloadMesh(Mesh* mesh)

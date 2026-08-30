@@ -130,6 +130,9 @@ static Mesh process_mesh(const struct aiMesh* am, const struct aiScene* scene,
         if (tcount == 0)
             tcount += collect_textures(mat, aiTextureType_DIFFUSE, MESH_TEXTURE_DIFFUSE, dir, cache, tex + tcount, 8 - tcount);
         tcount += collect_textures(mat, aiTextureType_SPECULAR, MESH_TEXTURE_SPECULAR, dir, cache, tex + tcount, 8 - tcount);
+        tcount += collect_textures(mat, aiTextureType_NORMALS, MESH_TEXTURE_NORMAL, dir, cache, tex + tcount, 8 - tcount);
+        if (tcount < 8) // OBJ stores normal maps under "bump"/HEIGHT
+            tcount += collect_textures(mat, aiTextureType_HEIGHT, MESH_TEXTURE_NORMAL, dir, cache, tex + tcount, 8 - tcount);
     }
 
     Mesh mesh = Mge_MakeMesh(verts, vcount, indices, icount, tex, tcount);

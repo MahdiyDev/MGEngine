@@ -13,7 +13,7 @@
 static int g_uploadCalls, g_drawCalls, g_unloadCalls;
 static int g_lastUploadVerts, g_lastUploadIndices;
 static int g_batchedUploadCalls, g_batchedHadNormals, g_batchedHadUV;
-static unsigned int g_lastDrawVao, g_lastDrawTex;
+static unsigned int g_lastDrawVao, g_lastDrawTex, g_lastDrawNormalTex;
 static int g_lastDrawIndexCount;
 static unsigned int g_lastUnload[3];
 
@@ -22,7 +22,7 @@ static void backend_reset(void)
     g_uploadCalls = g_drawCalls = g_unloadCalls = 0;
     g_lastUploadVerts = g_lastUploadIndices = 0;
     g_batchedUploadCalls = g_batchedHadNormals = g_batchedHadUV = 0;
-    g_lastDrawVao = g_lastDrawTex = 0;
+    g_lastDrawVao = g_lastDrawTex = g_lastDrawNormalTex = 0;
     g_lastDrawIndexCount = 0;
     memset(g_lastUnload, 0, sizeof(g_lastUnload));
 }
@@ -56,12 +56,13 @@ void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
     *ebo = 12;
 }
 
-void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
+void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId, unsigned int normalTextureId)
 {
     g_drawCalls++;
     g_lastDrawVao = vao;
     g_lastDrawIndexCount = indexCount;
     g_lastDrawTex = textureId;
+    g_lastDrawNormalTex = normalTextureId;
 }
 
 void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo)
@@ -163,6 +164,24 @@ TEST(draw_uses_the_diffuse_texture)
     CHECK(g_lastDrawVao == 10);
     CHECK(g_lastDrawIndexCount == 3);
     CHECK(g_lastDrawTex == 9); // the diffuse one, not the specular
+    CHECK(g_lastDrawNormalTex == 0); // no normal map on this mesh
+
+    Mge_UnloadMesh(&m);
+}
+
+TEST(draw_passes_the_normal_map)
+{
+    backend_reset();
+    MeshTexture tex[2] = {
+        { .texture = { .id = 9 }, .type = MESH_TEXTURE_DIFFUSE },
+        { .texture = { .id = 4 }, .type = MESH_TEXTURE_NORMAL },
+    };
+    Mesh m = Mge_MakeMesh(tri_verts, 3, tri_idx, 3, tex, 2);
+    Mge_UploadMesh(&m);
+
+    Mge_DrawMesh(m);
+    CHECK(g_lastDrawTex == 9);
+    CHECK(g_lastDrawNormalTex == 4);
 
     Mge_UnloadMesh(&m);
 }
@@ -259,6 +278,7 @@ int main(void)
     RUN(upload_sets_handles_once);
     RUN(upload_skips_incomplete_mesh);
     RUN(draw_uses_the_diffuse_texture);
+    RUN(draw_passes_the_normal_map);
     RUN(draw_without_diffuse_passes_zero);
     RUN(draw_before_upload_is_noop);
     RUN(unload_frees_and_zeros);

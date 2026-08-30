@@ -34,9 +34,9 @@ void MgeGL_UploadMeshBatched(unsigned int* vao, unsigned int* vbo, unsigned int*
     g_uploadCalls++;
     *vao = 1; *vbo = 2; *ebo = 3;
 }
-void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
+void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId, unsigned int normalTextureId)
 {
-    (void)vao; (void)indexCount; (void)textureId;
+    (void)vao; (void)indexCount; (void)textureId; (void)normalTextureId;
     g_drawCalls++;
 }
 void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo)

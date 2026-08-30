@@ -402,9 +402,15 @@ typedef enum {
 //                          .color    unused (reserved for a coloured highlight)
 //                          .value    specular strength multiplier (1 = as-is,
 //                                    0 = no highlight)
+//   MATERIAL_MAP_NORMAL    .texture  tangent-space normal map (RGB = XYZ). When
+//                                    set, per-pixel normals replace the vertex
+//                                    normal (TBN is derived in the shader from
+//                                    screen-space derivatives -- no tangent
+//                                    attribute needed). Load it LINEAR, not sRGB.
 typedef enum {
 	MATERIAL_MAP_DIFFUSE = 0,   // base colour / albedo
 	MATERIAL_MAP_SPECULAR,      // specular highlight strength
+	MATERIAL_MAP_NORMAL,        // tangent-space normal map
 	MATERIAL_MAP_COUNT
 } MaterialMapIndex;
 
@@ -472,7 +478,8 @@ typedef struct Vertex {
 
 typedef enum {
 	MESH_TEXTURE_DIFFUSE = 0, // sampled as the surface colour
-	MESH_TEXTURE_SPECULAR     // kept on the mesh; not sampled by the built-in shader yet
+	MESH_TEXTURE_SPECULAR,    // kept on the mesh; not sampled by the built-in shader yet
+	MESH_TEXTURE_NORMAL       // tangent-space normal map (used when lit)
 } MeshTextureType;
 
 typedef struct MeshTexture {
