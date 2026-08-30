@@ -279,7 +279,7 @@ so draw them outside the `Begin/EndLighting3D` pair.
 Demos: `examples/lighting/` — `ambient` / `diffuse` / `specular` isolate the
 three terms; `directional` / `point` / `spotlight` isolate the three light types
 (spotlight shows a hard vs. a soft cone side by side); `source/main.c` combines
-directional + point + a camera flashlight.
+a directional fill with an orbiting point light.
 
 ### Materials & material maps
 
