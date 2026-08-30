@@ -72,7 +72,9 @@ int main(void)
     camera.fovy = 60.0f;
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Light light = Mge_MakeLight((Vector3){ 4.0f, 6.0f, 4.0f }, (Vector3){ 1.0f, 1.0f, 1.0f });
+    // a dim directional fill + an orbiting point light + a camera flashlight
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.6f, -1.0f, -0.4f }, (Vector3){ 0.6f, 0.6f, 0.7f });
+    Light lamp = Mge_MakePointLight((Vector3){ 4.0f, 6.0f, 4.0f }, (Vector3){ 1.0f, 0.9f, 0.7f });
 
     const int N = 4;
     const float AXIS = 1.6f;
@@ -100,17 +102,19 @@ int main(void)
             HandleCameraMovement(&camera);
         }
 
-        // orbit the light so the specular highlight moves across the boxes
+        // orbit the point light so the specular highlight moves across the boxes
         double t = Mge_GetTime();
-        light.position = (Vector3){ (float)cos(t) * 6.0f, 6.0f, (float)sin(t) * 6.0f };
+        lamp.position = (Vector3){ (float)cos(t) * 6.0f, 6.0f, (float)sin(t) * 6.0f };
+
+        Light lights[3] = { sun, lamp, Mge_MakeFlashlight(camera, (Vector3){ 1.0f, 1.0f, 0.9f }) };
 
         Mge_BeginDrawing();
         Mge_ClearBackground((Color){ 18, 18, 22, 255 }); // dark room
 
         Mge_BeginMode3D(camera);
 
-        // combined ambient + diffuse + specular lighting for the whole scene
-        Mge_BeginLighting3D(light, camera);
+        // directional + point + spot, all in one pass
+        Mge_BeginLighting3DEx(lights, 3, camera);
         Mge_SetMaterial((Material){ .maps[MATERIAL_MAP_DIFFUSE].color = DARKGRAY,
             .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8.0f });
         Draw_Cube((Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 24.0f, 0.1f, 24.0f }, DARKGRAY);

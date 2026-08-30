@@ -358,12 +358,40 @@ typedef struct Material {
 	float shininess;                      // Phong specular exponent (higher = tighter highlight)
 } Material;
 
+// Light kinds:
+//   LIGHT_DIRECTIONAL  infinitely far away, parallel rays (the sun). Uses
+//                      `direction` only; no position, no distance falloff.
+//   LIGHT_POINT        a bulb at `position`, radiating in every direction and
+//                      fading with distance (constant/linear/quadratic).
+//   LIGHT_SPOT         a point light restricted to a cone aimed along
+//                      `direction`; full brightness inside `innerCutoff`,
+//                      fading to nothing by `outerCutoff` (soft edge).
+typedef enum {
+	LIGHT_DIRECTIONAL = 0,
+	LIGHT_POINT,
+	LIGHT_SPOT
+} LightType;
+
 typedef struct Light {
-	Vector3 position;   // world-space position of the light
-	Vector3 color;      // linear RGB, roughly 0..1
-	float ambient;      // strength of the ambient term  (constant fill)
-	float diffuse;      // strength of the diffuse term  (Lambert)
-	float specular;     // strength of the specular term (Phong highlight)
+	LightType type;
+	bool enabled;      // skipped by the shader when false
+
+	Vector3 position;  // world-space position   (POINT, SPOT)
+	Vector3 direction; // direction the light points (DIRECTIONAL, SPOT)
+	Vector3 color;     // linear RGB, roughly 0..1
+
+	float ambient;     // strength of the ambient term  (constant fill)
+	float diffuse;     // strength of the diffuse term  (Lambert)
+	float specular;    // strength of the specular term (Phong highlight)
+
+	// distance attenuation 1 / (constant + linear*d + quadratic*d^2)  (POINT, SPOT)
+	float constant;
+	float linear;
+	float quadratic;
+
+	// spot cone, stored as cosines (cos(inner) >= cos(outer)).  (SPOT)
+	float innerCutoff; // full brightness within this angle
+	float outerCutoff; // zero brightness beyond this angle; gap = soft edge
 } Light;
 
 typedef struct Object {
@@ -473,17 +501,34 @@ int Mge_ManipulateObjects3D(Object* objects, int count, Camera3D camera, float a
 void Mge_ClearSelection(Object* objects, int count); // deselect all, cancel any drag
 int Mge_GetSelectedObject(void);                     // index of the selected object, or -1
 
+#ifndef MGE_MAX_LIGHTS
+	#define MGE_MAX_LIGHTS 8   // shader hard limit; extra lights are ignored
+#endif
+
 // Lighting. Call inside Mge_BeginMode3D:
 //
-//   Mge_BeginLighting3D(light, camera);
-//       Mge_SetMaterial(mat);   Draw_Cube(...);   // one or more lit surfaces
+//   Light sun   = Mge_MakeDirectionalLight((Vector3){ -1, -2, -1 }, (Vector3){ 1, 1, 1 });
+//   Light lamp  = Mge_MakePointLight((Vector3){ 3, 4, 2 }, (Vector3){ 1, .6f, .2f });
+//   Light torch = Mge_MakeFlashlight(camera, (Vector3){ 1, 1, 1 });
+//   Light lights[] = { sun, lamp, torch };
+//
+//   Mge_BeginLighting3DEx(lights, 3, camera);      // or Mge_BeginLighting3D(sun, camera) for one
+//       Mge_SetMaterial(mat);   Draw_Cube(...);
 //   Mge_EndLighting3D();
 //
 // Mge_DrawObject() already calls Mge_SetMaterial(obj.material) for you, so an
 // Object drawn between Begin/End is lit with its own material automatically.
-Light    Mge_MakeLight(Vector3 position, Vector3 color); // sensible default term strengths
 Material Mge_DefaultMaterial(void);                      // white diffuse, no textures, shininess 32
 void     Mge_SetMaterialTexture(Material* material, int mapIndex, Texture2D texture); // assign one map's texture
-void     Mge_BeginLighting3D(Light light, Camera3D camera);
-void     Mge_SetMaterial(Material material);             // no-op unless lighting is active
-void     Mge_EndLighting3D(void);
+
+Light Mge_MakeLight(Vector3 position, Vector3 color);            // point light, no distance falloff (legacy default)
+Light Mge_MakeDirectionalLight(Vector3 direction, Vector3 color); // the sun: parallel rays, no position
+Light Mge_MakePointLight(Vector3 position, Vector3 color);        // a bulb: radiates + fades with distance
+Light Mge_MakeSpotLight(Vector3 position, Vector3 direction, Vector3 color,
+    float innerAngleDeg, float outerAngleDeg);                    // a cone; inner<outer gives a soft edge
+Light Mge_MakeFlashlight(Camera3D camera, Vector3 color);         // a tight spot at the camera, aimed where it looks
+
+void Mge_BeginLighting3D(Light light, Camera3D camera);                       // one light
+void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera);  // up to MGE_MAX_LIGHTS
+void Mge_SetMaterial(Material material);                 // no-op unless lighting is active
+void Mge_EndLighting3D(void);

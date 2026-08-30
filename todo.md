@@ -6,5 +6,6 @@
 - [x] add gizmo (2D, 3D)
 - [x] lighting: ambient + diffuse + specular (Phong), Material on Object, Light as a scene entity
 - [x] material maps: MaterialMap (texture + color + value) slots on Material (diffuse / specular)
+- [x] light types: directional / point / spot (+ flashlight, soft cone edges), multi-light pass
 - [ ] batch rendering
 - [ ] multiple vertex rendering

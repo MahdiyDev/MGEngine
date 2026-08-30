@@ -13,16 +13,16 @@ source/
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
-  mge_light.c          Phong lighting (ambient + diffuse + specular)
+  mge_light.c          Phong lighting; directional / point / spot lights
   mge_material.c        Material / MaterialMap construction helpers
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
   main.c               demo: fly-camera + TAB edit mode + combined lighting
-test/                  unit tests for math / file utils / objects / materials (no window/GL needed)
+test/                  unit tests for math / file utils / objects / materials / lights (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight
 examples/materials/    textured_cube
 ```
 
@@ -61,7 +61,9 @@ make test            # or:  cd test && make
 `test_math` covers the vector/matrix layer; `test_utils` covers
 `Mge_GetFileExtension` and the file loaders; `test_object` covers the gizmo
 picking/drag math; `test_material` covers `Material` / `MaterialMap`
-construction. None open a window.
+construction; `test_light` covers the light constructors and the uniform
+wiring in `Mge_BeginLighting3D(Ex)` (with a stubbed GL backend). None open a
+window.
 
 On Windows the test Makefile links the C runtime statically (`LDFLAGS = -static`)
 so that app-control policies (Device Guard / WDAC) don't block the freshly built
@@ -205,33 +207,58 @@ Phong shading with the three classic terms:
 
 **Where do the knobs live?** — the two halves of the equation split cleanly:
 
-- a **`Light`** is a *scene entity*: its `position`, `color`, and the strength of
-  each term (`ambient` / `diffuse` / `specular`). There can be several; you pass
-  one to `Mge_BeginLighting3D`.
+- a **`Light`** is a *scene entity*: its type, `color`, and the strength of each
+  term. You can mix up to `MGE_MAX_LIGHTS` (8) in one pass.
 - a **`Material`** is the *surface response* and is a field on `Object`
-  (`obj.material`): a set of `MaterialMap` slots plus a `shininess`. That is the
-  answer to "should lighting be in the material, and attached to the object?" —
-  the *surface* parameters are; the *light* itself is separate.
+  (`obj.material`): a set of `MaterialMap` slots plus a `shininess`. The
+  *surface* parameters live here; the *light* itself is separate.
+
+#### Light types — one constructor each
 
 ```c
-Light    Mge_MakeLight(Vector3 position, Vector3 color); // defaults: ambient .15, diffuse 1, specular .5
-Material Mge_DefaultMaterial(void);                      // white diffuse, no textures, shininess 32
-void     Mge_SetMaterialTexture(Material* m, int mapIndex, Texture2D texture);
-void     Mge_BeginLighting3D(Light light, Camera3D camera);
-void     Mge_SetMaterial(Material material);             // per-surface; no-op unless lighting is active
-void     Mge_EndLighting3D(void);                        // restore the default (unlit) shader
+Light Mge_MakeDirectionalLight(Vector3 direction, Vector3 color); // the sun: parallel rays, no falloff
+Light Mge_MakePointLight(Vector3 position, Vector3 color);        // a bulb: radiates + fades with distance
+Light Mge_MakeSpotLight(Vector3 position, Vector3 direction, Vector3 color,
+                        float innerAngleDeg, float outerAngleDeg); // a cone; inner < outer = soft edge
+Light Mge_MakeFlashlight(Camera3D camera, Vector3 color);         // a tight spot at the camera, aimed where it looks
+Light Mge_MakeLight(Vector3 position, Vector3 color);             // legacy: point light, no distance falloff
 ```
 
-Call it inside `Mge_BeginMode3D`. `Mge_DrawObject` sets the object's own material
+- **Directional** ignores position; set `.direction`. Attenuation never applies.
+- **Point / spot** fade with distance via `.constant / .linear / .quadratic`
+  (`Mge_MakePointLight` presets a ~50-unit reach).
+- **Spot** adds a cone: full brightness inside `innerAngleDeg`, fading to nothing
+  by `outerAngleDeg`. Equal angles → a hard edge; a gap → a **soft edge**.
+  Stored as cosines in `.innerCutoff / .outerCutoff`.
+- Every light has `.enabled` (skip it without removing it from the array) and
+  per-term `.ambient / .diffuse / .specular` scalars.
+
+#### Drawing with them
+
+```c
+Material Mge_DefaultMaterial(void);
+void Mge_SetMaterialTexture(Material* m, int mapIndex, Texture2D texture);
+
+void Mge_BeginLighting3D(Light light, Camera3D camera);                       // one light
+void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera);  // up to MGE_MAX_LIGHTS
+void Mge_SetMaterial(Material material);   // per-surface; no-op unless lighting is active
+void Mge_EndLighting3D(void);              // restore the default (unlit) shader
+```
+
+Call inside `Mge_BeginMode3D`. `Mge_DrawObject` sets the object's own material
 for you, so lit objects just work:
 
 ```c
-Light light = Mge_MakeLight((Vector3){ 4, 6, 4 }, (Vector3){ 1, 1, 1 });
-Object box  = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED);
+Light sun   = Mge_MakeDirectionalLight((Vector3){ -1, -2, -1 }, (Vector3){ .6f, .6f, .7f });
+Light lamp  = Mge_MakePointLight((Vector3){ 4, 6, 4 }, (Vector3){ 1, .9f, .7f });
+Light torch = Mge_MakeFlashlight(camera, (Vector3){ 1, 1, 1 });
+Light lights[3] = { sun, lamp, torch };
+
+Object box = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED);
 box.material.shininess = 64.0f;
 
 Mge_BeginMode3D(camera);
-    Mge_BeginLighting3D(light, camera);
+    Mge_BeginLighting3DEx(lights, 3, camera);
         Mge_DrawObject(box);                              // lit with box.material
         Mge_SetMaterial((Material){ .maps[MATERIAL_MAP_DIFFUSE].color = GRAY,
                                    .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8 });
@@ -241,13 +268,18 @@ Mge_BeginMode3D(camera);
 Mge_EndMode3D();
 ```
 
+For a single light, `Mge_BeginLighting3D(sun, camera)` is the same as
+`Mge_BeginLighting3DEx(&sun, 1, camera)`.
+
 Only geometry with per-vertex normals is shaded correctly — `Draw_Cube` emits
 them; `MgeGL_Normal3f(x, y, z)` sets the current normal for your own
 `MgeGL_Vertex3f` calls. Lines (`Draw_Arrow3D`, `Draw_CubeWires`) have no normals,
 so draw them outside the `Begin/EndLighting3D` pair.
 
-Isolated demos: `examples/lighting/{ambient,diffuse,specular}.c` each switch off
-the other terms so you can see one at a time; `source/main.c` uses all three.
+Demos: `examples/lighting/` — `ambient` / `diffuse` / `specular` isolate the
+three terms; `directional` / `point` / `spotlight` isolate the three light types
+(spotlight shows a hard vs. a soft cone side by side); `source/main.c` combines
+directional + point + a camera flashlight.
 
 ### Materials & material maps
 
