@@ -229,6 +229,30 @@ static void scene_gizmo(GizmoMode mode, const char* name)
     Mge_EndDrawing();
 }
 
+// the rotate gizmo: a ring the camera faces head-on must draw as a full circle
+static void scene_rotate_gizmo(Vector3 camPos, const char* name)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = camPos;
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.4f;
+
+    Object o = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1.6f, 1.6f, 1.6f }, (Color){ 120, 130, 140, 255 });
+    Mge_SetGizmoMode(GIZMO_ROTATE);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 24, 26, 32, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    Mge_DrawObject(o);
+    Mge_EndLighting3D();
+    Mge_Gizmo3D(&o.position, &o.rotation, &o.size, cam, 1.7f);
+    Mge_EndMode3D();
+    check(name);
+    Mge_EndDrawing();
+}
+
 static void scene_normal_map(void)
 {
     Texture2D d = Mge_LoadTexture("../assets/brickwall/brickwall.jpg");
@@ -281,6 +305,8 @@ int main(void)
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");
     scene_gizmo(GIZMO_SCALE, "gizmo_scale");
+    scene_rotate_gizmo((Vector3){ 0.2f, 0.3f, 6.0f }, "rot_facing_z"); // face-on -> full ring
+    scene_rotate_gizmo((Vector3){ 6.0f, 0.3f, 0.2f }, "rot_facing_x");
 
     Mge_CloseWindow();
 

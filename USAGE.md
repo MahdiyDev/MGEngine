@@ -41,9 +41,10 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-builder/
-  main.c               THE APP -- scene editor: fly-camera + TAB edit mode + a
-                       sidebar/inspector; #include <mge.h> / <mge_gui.h>, links -lmgengine
+builder/               THE APP -- scene editor (fly-camera + TAB edit mode + gizmo + sidebar)
+  main.c               window, loop, camera
+  scene.c/.h           entities, selection, picking, the render passes
+  sidebar.c/.h         all the Mge_Gui* widgets
   USAGE.md             builder docs
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
@@ -159,9 +160,9 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~9 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~11 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a rotated cube with each gizmo
-mode) one frame each, reads the
+mode, the rotate gizmo from head-on angles) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
