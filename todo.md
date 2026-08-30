@@ -28,3 +28,4 @@
 - [x] shadow mapping: ShadowMap + Mge_BeginShadowPass / Mge_BeginLighting3DShadowed (depth pass + 3x3 PCF, directional/spot)
 - [x] point shadows: PointShadowMap depth cubemap (6-face pass) + Mge_BeginLighting3DPointShadowed (20-tap PCF)
 - [x] normal mapping: MATERIAL_MAP_NORMAL / MESH_TEXTURE_NORMAL; TBN from screen-space derivatives (no tangent attribute)
+- [x] test_gl: unit-test mge_gl.c against a fake glad (test/glstub) -- matrix stack, batch merging, ring, enum mapping

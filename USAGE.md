@@ -51,7 +51,7 @@ vendor/
   glfw/                GLFW -- vendored source; `make vendor-glfw` builds lib/ + include/
   assimp/              Assimp OBJ/glTF2/FBX importers -- pruned source under
                        source/; `make vendor-assimp` builds lib/ + include/
-test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
+test/                  unit tests (no window/GL); test/glstub/ = a fake glad so mge_gl.c itself is testable
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows, normal_mapping
@@ -140,8 +140,15 @@ the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
 contract and the `Matrix_Scale` / composition math behind the transforms;
 `test_msaa` covers the `Mge_SetMSAA` request clamping; `test_gamma` covers the
 `Mge_SetGammaCorrection` state + forwarding; `test_shadow` covers the `ShadowMap` /
-`PointShadowMap` struct contract. All use a stubbed GL backend -- none open a
-window.
+`PointShadowMap` struct contract.
+
+`test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
+`<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
+renderer backend's own logic — the matrix stack, draw-call merging and alignment,
+vertex accumulation, the triple-buffer ring, the draw-call counter, and every
+engine-enum → GL-enum mapping in the state setters.
+
+All suites use a stubbed GL backend — none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,

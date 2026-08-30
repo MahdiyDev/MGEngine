@@ -14,7 +14,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -96,6 +96,11 @@ test_gamma$(EXE): test_gamma.c ../source/mge_gamma.c $(MLIB)/test.h
 # ShadowMap struct only; the depth FBO + PCF shader need a live context
 test_shadow$(EXE): test_shadow.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_shadow.c ../source/mge_math.c -lm
+
+# the renderer backend against a fake <glad/glad.h> (test/glstub/), which records
+# every GL call -- no context, no window
+test_gl$(EXE): test_gl.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c glstub/glad/glad.h glstub/glstub.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) -Iglstub $(CFLAGS) -o $@ $(LDFLAGS) test_gl.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c -lm
 
 # compiled as C11 with gcc, linked with g++ (Assimp is C++)
 test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB)/test.h
