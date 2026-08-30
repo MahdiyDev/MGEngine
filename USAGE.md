@@ -35,6 +35,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
   mge_msaa.c           MSAA request (Mge_SetMSAA / Mge_GetMSAA)
   mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
+  mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -140,7 +141,8 @@ the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
 contract and the `Matrix_Scale` / composition math behind the transforms;
 `test_msaa` covers the `Mge_SetMSAA` request clamping; `test_gamma` covers the
 `Mge_SetGammaCorrection` state + forwarding; `test_shadow` covers the `ShadowMap` /
-`PointShadowMap` struct contract.
+`PointShadowMap` struct contract; `test_debug` covers the `Mge_SetDebugOutput`
+toggle and callback registration.
 
 `test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
 `<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
@@ -277,6 +279,21 @@ maps and leaves specular linear) and treat `Light.color` as linear.
 
 Demo: `examples/lighting/gamma_correction.c` — a lit scene + a black→white ramp,
 toggling correction every 3 s (or SPACE).
+
+### GL debug output
+
+The driver can report invalid API use, undefined behaviour and performance
+warnings through a callback the instant they happen — so a broken draw is a loud
+`GL DEBUG [...]` log line, not a silently wrong frame.
+
+```c
+Mge_SetDebugOutput(false);   // before Mge_InitWindow; default: on unless built -DNDEBUG
+```
+
+On in normal builds, off in `make release`. It requests a debug GL context and
+registers a synchronous `glDebugMessageCallback`; the `SEVERITY_NOTIFICATION`
+chatter is muted. It catches *invalid* GL, not *valid-but-wrong* rendering — a
+screenshot check is what catches that.
 
 ### Cursor
 

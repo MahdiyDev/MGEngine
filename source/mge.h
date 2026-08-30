@@ -539,6 +539,12 @@ typedef struct Object {
 
 // Core
 
+// OpenGL debug output: the driver logs invalid API use / UB / perf warnings as
+// they happen. On in debug builds, off with -DNDEBUG. Call before Mge_InitWindow.
+void Mge_SetDebugOutput(bool enabled);
+bool Mge_GetDebugOutput(void);
+void Mge_ApplyDebugOutput(void);     // internal: register the callback (called by Mge_InitWindow)
+
 // Gamma correction. Off by default. When on, the GPU encodes the window's final
 // pixels linear -> sRGB (GL_FRAMEBUFFER_SRGB) so lighting maths land on screen at
 // the right brightness. Call after Mge_InitWindow. For a correct result also load

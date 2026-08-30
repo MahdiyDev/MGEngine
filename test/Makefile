@@ -14,7 +14,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -101,6 +101,9 @@ test_shadow$(EXE): test_shadow.c ../source/mge_math.c $(MLIB)/test.h
 # every GL call -- no context, no window
 test_gl$(EXE): test_gl.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c glstub/glad/glad.h glstub/glstub.h $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) -Iglstub $(CFLAGS) -o $@ $(LDFLAGS) test_gl.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c -lm
+
+test_debug$(EXE): test_debug.c ../source/mge_debug.c glstub/glstub.c glstub/glad/glad.h glstub/glstub.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) -Iglstub $(CFLAGS) -o $@ $(LDFLAGS) test_debug.c ../source/mge_debug.c glstub/glstub.c -lm
 
 # compiled as C11 with gcc, linked with g++ (Assimp is C++)
 test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB)/test.h

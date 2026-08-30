@@ -29,3 +29,4 @@
 - [x] point shadows: PointShadowMap depth cubemap (6-face pass) + Mge_BeginLighting3DPointShadowed (20-tap PCF)
 - [x] normal mapping: MATERIAL_MAP_NORMAL / MESH_TEXTURE_NORMAL; TBN from screen-space derivatives (no tangent attribute)
 - [x] test_gl: unit-test mge_gl.c against a fake glad (test/glstub) -- matrix stack, batch merging, ring, enum mapping
+- [x] GL debug output: Mge_SetDebugOutput -> glDebugMessageCallback (on in debug builds, off with -DNDEBUG)

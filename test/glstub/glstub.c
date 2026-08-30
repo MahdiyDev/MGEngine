@@ -156,3 +156,11 @@ void glDisable(GLenum cap)
         }
 }
 GLboolean glIsEnabled(GLenum cap) { return (GLboolean)(glstub_is_enabled(cap) ? GL_TRUE : GL_FALSE); }
+
+// ---- KHR_debug ----
+static void stub_debugMessageCallback(GLDEBUGPROC cb, const void* user) { (void)user; glstub.debugCallback = cb; }
+PFNGLDEBUGMESSAGECALLBACKPROC glad_glDebugMessageCallback = stub_debugMessageCallback;
+void glDebugMessageControl(GLenum s, GLenum t, GLenum sev, GLsizei n, const GLuint* ids, GLboolean e)
+{
+    (void)s; (void)t; (void)sev; (void)n; (void)ids; (void)e;
+}

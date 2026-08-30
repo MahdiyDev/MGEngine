@@ -23,6 +23,17 @@ typedef ptrdiff_t     GLintptr;
 typedef void* (*GLADloadproc)(const char* name);
 int gladLoadGLLoader(GLADloadproc load);
 
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+typedef void (APIENTRY* GLDEBUGPROC)(GLenum source, GLenum type, GLuint id, GLenum severity,
+    GLsizei length, const GLchar* message, const void* userParam);
+typedef void (*PFNGLDEBUGMESSAGECALLBACKPROC)(GLDEBUGPROC callback, const void* userParam);
+extern PFNGLDEBUGMESSAGECALLBACKPROC glad_glDebugMessageCallback; // real glad exposes it as a pointer
+#define glDebugMessageCallback glad_glDebugMessageCallback
+void glDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei count,
+    const GLuint* ids, GLboolean enabled);
+
 #define GL_FALSE 0
 #define GL_TRUE  1
 #define GL_NONE  0
@@ -105,6 +116,17 @@ int gladLoadGLLoader(GLADloadproc load);
 #define GL_FRAGMENT_SHADER 0x8B30
 
 #define GL_SAMPLES 0x80A8
+
+#define GL_DONT_CARE                     0x1100
+#define GL_DEBUG_OUTPUT                   0x92E0
+#define GL_DEBUG_OUTPUT_SYNCHRONOUS       0x8242
+#define GL_DEBUG_SEVERITY_HIGH           0x9146
+#define GL_DEBUG_SEVERITY_MEDIUM         0x9147
+#define GL_DEBUG_SEVERITY_LOW            0x9148
+#define GL_DEBUG_SEVERITY_NOTIFICATION   0x826B
+#define GL_DEBUG_SOURCE_API             0x8246
+#define GL_DEBUG_SOURCE_WINDOW_SYSTEM   0x8247
+#define GL_DEBUG_SOURCE_SHADER_COMPILER 0x8248
 
 #define GL_VENDOR                   0x1F00
 #define GL_RENDERER                 0x1F01

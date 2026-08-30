@@ -59,6 +59,8 @@ typedef struct {
     // VAO bind history (to observe the batch-buffer ring)
     GLuint vaoBinds[GLSTUB_MAX_DRAWS];
     int vaoBindCount;
+
+    GLDEBUGPROC debugCallback; // last glDebugMessageCallback
 } GLStub;
 
 extern GLStub glstub;

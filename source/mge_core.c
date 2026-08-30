@@ -49,7 +49,8 @@ void Mge_InitWindow(uint32_t width, uint32_t height, const char* title)
     InitPlatform();
 
     MgeGL_Init((int)CORE.Window.screen.width, (int)CORE.Window.screen.height);
-    Mge_ApplyGammaState(); // honour any Mge_SetGammaCorrection made before the window
+    Mge_ApplyDebugOutput(); // register the GL debug callback (see Mge_SetDebugOutput)
+    Mge_ApplyGammaState();  // honour any Mge_SetGammaCorrection made before the window
 
     SetupViewport(CORE.Window.screen.width, CORE.Window.screen.height);
 
