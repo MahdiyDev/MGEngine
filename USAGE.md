@@ -28,6 +28,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_depth.c          depth test / clip planes / polygon offset / depth preview
   mge_stencil.c        stencil test + Mge_DrawObjectOutline
   mge_cull.c           face culling on/off + cull face / winding
+  mge_framebuffer.c    RenderTexture + full-screen post-processing effects
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -54,6 +55,7 @@ examples/models/       load_melon
 examples/depth/        depth_buffer
 examples/stencil/      object_outline
 examples/culling/      backface_cull
+examples/framebuffer/  post_process
 ```
 
 ## Using mlib
@@ -112,8 +114,9 @@ construction; `test_light` covers the light constructors and the uniform
 wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
 depth-preview wiring; `test_stencil` covers the stencil forwarding and the
-outline state sequence; `test_cull` covers face-culling forwarding. All use a
-stubbed GL backend -- none open a window.
+outline state sequence; `test_cull` covers face-culling forwarding;
+`test_framebuffer` covers the `PostFX` enum. All use a stubbed GL backend --
+none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -588,6 +591,44 @@ void Mge_SetFrontFace(int winding);  // WINDING_CCW (default) / WINDING_CW
 works". 2D shapes have mixed winding — disable culling before drawing them (or
 only enable it inside `Mge_BeginMode3D`). Demo:
 `examples/culling/backface_cull.c` cycles off / back / front.
+
+### Framebuffers & post-processing
+
+Render the scene into a `RenderTexture` (an FBO with a colour texture + a
+depth/stencil renderbuffer), then draw that texture full-screen through an
+effect shader.
+
+```c
+RenderTexture Mge_LoadRenderTexture(int width, int height); // usually the window size
+void Mge_UnloadRenderTexture(RenderTexture target);
+void Mge_BeginTextureMode(RenderTexture target);   // drawing now goes into target
+void Mge_EndTextureMode(void);                     // back to the window
+void Mge_DrawRenderTextureFX(RenderTexture target, int effect); // a PostFX
+```
+
+```c
+RenderTexture rt = Mge_LoadRenderTexture(w, h);
+
+Mge_BeginDrawing();
+    Mge_BeginTextureMode(rt);
+        Mge_ClearBackground(DARKGRAY);
+        Mge_BeginMode3D(cam);
+            Mge_BeginLighting3DEx(&light, 1, cam); /* ... */ Mge_EndLighting3D();
+        Mge_EndMode3D();
+    Mge_EndTextureMode();
+
+    Mge_ClearBackground(BLACK);
+    Mge_DrawRenderTextureFX(rt, POSTFX_EDGE);
+Mge_EndDrawing();
+```
+
+`PostFX`: `POSTFX_NONE` (blit), `POSTFX_INVERT`, `POSTFX_GRAYSCALE`,
+`POSTFX_SHARPEN`, `POSTFX_BLUR`, `POSTFX_EDGE` — the last three are 3×3 kernels
+(`texelSize` = 1 / render-texture size). One shader program handles all of them,
+switched by the `effect` uniform. Keep the render texture the same size as the
+window so 2D coordinates and 3D aspect line up.
+
+Demo: `examples/framebuffer/post_process.c` cycles through every effect.
 
 ### GUI (`mge_gui.h`)
 

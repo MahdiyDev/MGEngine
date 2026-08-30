@@ -231,6 +231,24 @@ typedef struct Image {
     int format;             // Data format (PixelFormat type)
 } Image;
 
+// Offscreen framebuffer: a colour texture + a depth/stencil renderbuffer.
+typedef struct RenderTexture {
+    unsigned int fbo;
+    Texture2D texture;         // colour attachment -- sample this
+    unsigned int depthStencil; // renderbuffer (not sampleable)
+    int width, height;
+} RenderTexture;
+
+// Built-in post-processing effects for Mge_DrawRenderTextureFX.
+typedef enum {
+    POSTFX_NONE = 0,   // straight copy
+    POSTFX_INVERT,     // 1 - colour
+    POSTFX_GRAYSCALE,  // luminance
+    POSTFX_SHARPEN,    // 3x3 sharpen kernel
+    POSTFX_BLUR,       // 3x3 gaussian kernel
+    POSTFX_EDGE        // 3x3 edge-detection kernel
+} PostFX;
+
 #define RED			CLITERAL(Color) { 255, 0, 0, 255 }
 #define GREEN		CLITERAL(Color) { 0, 255, 0, 255 }
 #define BLUE		CLITERAL(Color) { 0, 0, 255, 255 }
@@ -517,6 +535,22 @@ void Mge_BeginDrawing(void);
 void Mge_EndDrawing(void);
 void Mge_BeginMode3D(Camera3D camera);
 void Mge_EndMode3D(void);
+
+// Framebuffers / post-processing. Render the scene into a RenderTexture, then
+// draw that texture full-screen through an effect shader:
+//
+//   RenderTexture rt = Mge_LoadRenderTexture(w, h);   // usually the window size
+//   ...
+//   Mge_BeginTextureMode(rt);
+//       Mge_ClearBackground(...);  Mge_BeginMode3D(cam); ... Mge_EndMode3D();
+//   Mge_EndTextureMode();
+//   Mge_DrawRenderTextureFX(rt, POSTFX_EDGE);         // full-screen, on the window
+//
+RenderTexture Mge_LoadRenderTexture(int width, int height);
+void Mge_UnloadRenderTexture(RenderTexture target);
+void Mge_BeginTextureMode(RenderTexture target); // redirect drawing into `target`
+void Mge_EndTextureMode(void);                   // back to the window framebuffer
+void Mge_DrawRenderTextureFX(RenderTexture target, int effect); // a PostFX; POSTFX_NONE just blits
 
 // --- Depth testing ---------------------------------------------------------
 //
