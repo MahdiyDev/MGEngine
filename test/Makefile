@@ -2,6 +2,8 @@
 #
 #   make            build and run every suite
 #   make model      build and run test_model (needs `make vendor` for Assimp)
+#   make render     headless screenshot smoke test (needs the root `make` +
+#                   `make vendor`, a GPU and a desktop session)
 #   make clean
 
 ifeq ($(origin CC),default)
@@ -26,15 +28,17 @@ ifeq ($(OS),Windows_NT)
     # link the runtime in: some Windows app-control (Device Guard / WDAC)
     # policies block freshly built, dynamically linked exes
     LDFLAGS ?= -static
+    RENDER_SYSLIBS := -lopengl32 -lgdi32 -lwinmm -lkernel32
 else
     EXE    :=
     RM     := rm -f
     native  = $1
     runexe  = ./$1
     LDFLAGS ?=
+    RENDER_SYSLIBS := -lGL -lm -lpthread -ldl -lX11
 endif
 
-.PHONY: all test model clean $(TESTS)
+.PHONY: all test model render clean $(TESTS)
 
 all: test
 test: $(TESTS)
@@ -45,6 +49,17 @@ $(TESTS): %: %$(EXE)
 # not part of `make test`: needs the vendored Assimp lib (run `make vendor`)
 model: test_model$(EXE)
 	$(call runexe,test_model$(EXE))
+
+# not part of `make test`: opens a real (hidden) GL window and renders a few
+# scenes, checking for GL errors + blank frames. Needs the root `make` + Assimp.
+RENDER_OBJS = $(filter-out ../build/obj/mge_gui.o,$(wildcard ../build/obj/*.o))
+render: render_smoke$(EXE)
+	$(call runexe,render_smoke$(EXE))
+
+render_smoke$(EXE): render_smoke.c $(RENDER_OBJS)
+	$(CC) $(CPPFLAGS) -I../vendor/glad/include -I../vendor/stb -I../vendor/glfw/include -I$(ASSIMP)/include $(CFLAGS) -c render_smoke.c -o render_smoke.o
+	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) render_smoke.o $(RENDER_OBJS) -L../vendor/glfw/lib -L$(ASSIMP)/lib -lglfw3 -lassimp -lzlibstatic $(RENDER_SYSLIBS)
+	-$(RM) $(call native,render_smoke.o)
 
 test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_math.c ../source/mge_math.c -lm
@@ -114,4 +129,4 @@ test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB
 	-$(RM) $(call native,test_model_t.o test_model_m.o test_model_mesh.o)
 
 clean:
-	-$(RM) $(call native,$(addsuffix $(EXE),$(TESTS)) test_model$(EXE) _mge_utils.tmp _model_test.obj)
+	-$(RM) $(call native,$(addsuffix $(EXE),$(TESTS)) test_model$(EXE) render_smoke$(EXE) _mge_utils.tmp _model_test.obj)

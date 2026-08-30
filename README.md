@@ -17,7 +17,8 @@ vendor/    glad, stb, mlib, GLFW, Assimp, Dear ImGui
 make vendor      # once: builds GLFW + Assimp from vendored source (needs cmake + ninja)
 make             # debug build -> build/libmgengine.(dll|so) + build/mgengine (the builder)
 make release     # production build: -O2 -DNDEBUG, stripped (use this for real runs)
-make test        # unit tests
+make test        # unit tests (stubbed GL, no window)
+make -C test render   # headless render smoke test: screenshots + GL-error check (needs a GPU)
 ```
 
 On Windows use `mingw32-make`.

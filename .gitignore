@@ -29,3 +29,6 @@ examples/objects/gizmo_3d
 examples/lighting/ambient
 examples/lighting/diffuse
 examples/lighting/specular
+
+test/render_out/
+test/render_smoke

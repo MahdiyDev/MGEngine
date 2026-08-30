@@ -156,6 +156,15 @@ All suites use a stubbed GL backend — none open a window.
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
+`make render` is the one test that touches a real GPU: it opens a **hidden**
+GLFW window, renders ~6 engine features (2D shapes, a lit cube, a shadow map,
+a post-fx pass, the skybox, a normal-mapped wall) one frame each, reads the
+framebuffer back, and fails on a GL error or a blank frame. Every frame is also
+written to `test/render_out/*.tga` so you can eyeball what actually rendered —
+this is how you catch *valid-but-wrong* output that the stub tests can't see.
+Needs the root `make` + `make vendor`, a GPU and a desktop session (not part of
+`make test`).
+
 On Windows the test Makefile links the C runtime statically (`LDFLAGS = -static`)
 so that app-control policies (Device Guard / WDAC) don't block the freshly built
 test binaries; override `LDFLAGS=` to get dynamic linking back.
