@@ -115,6 +115,9 @@ void MgeGL_Uniform3fv(const char* name, Vector3 value);
 void MgeGL_Uniform4fv(const char* name, Vector4 value);
 void MgeGL_UniformMatrix4fv(const char* name, Matrix value);
 
+Matrix MgeGL_GetMatrixModelview(void);   // current view matrix (set by Mge_BeginMode3D)
+Matrix MgeGL_GetMatrixProjection(void);
+
 void MgeGL_Frustum(double left, double right, double bottom, double top, double znear, double zfar);
 void MgeGL_Ortho(double left, double right, double bottom, double top, double znear, double zfar);
 void MgeGL_Translatef(float x, float y, float z);

@@ -189,6 +189,16 @@ unsigned int MgeGL_GetDefaultShaderId(void)
     return MGEGL.State.defaultShaderID;
 }
 
+Matrix MgeGL_GetMatrixModelview(void)
+{
+    return MGEGL.State.modelview;
+}
+
+Matrix MgeGL_GetMatrixProjection(void)
+{
+    return MGEGL.State.projection;
+}
+
 unsigned int MgeGL_GetCurrentShaderId(void)
 {
     return MGEGL.State.currentShaderID;

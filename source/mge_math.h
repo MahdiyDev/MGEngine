@@ -68,6 +68,7 @@ Vector4 Vector4_Transform(Vector4 v, Matrix mat); // column-major mat * v
 Matrix Matrix_Identity(void);
 Matrix Matrix_Multiply(Matrix left, Matrix right);
 Matrix Matrix_Translate(float x, float y, float z);
+Matrix Matrix_Scale(float x, float y, float z);
 Matrix Matrix_Rotate(Vector3 axis, float angle);
 Matrix MatrixOrtho(double left, double right, double bottom, double top, double nearPlane, double farPlane);
 Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double farPlane);

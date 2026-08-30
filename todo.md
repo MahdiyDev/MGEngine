@@ -18,5 +18,6 @@
 - [x] cubemaps: skybox, environment mapping (reflect/refract), dynamic env probes
 - [x] batching vertex attributes: Mge_MakeMeshFromArrays -> one VBO, block per attribute
 - [x] geometry shaders: Mge_BeginExplode3D, Mge_BeginNormals3D (+ MgeGL_CreateShaderProgramGeo)
+- [x] instancing: ModelBatch -> Mge_LoadModelBatch / DrawModelBatch / UpdateModelBatch (one instanced draw per mesh)
 - [ ] batch rendering
 - [ ] multiple vertex rendering

@@ -139,6 +139,18 @@ Matrix Matrix_Translate(float x, float y, float z)
     return result;
 }
 
+Matrix Matrix_Scale(float x, float y, float z)
+{
+    Matrix result = {
+        x,    0.0f, 0.0f, 0.0f,
+        0.0f, y,    0.0f, 0.0f,
+        0.0f, 0.0f, z,    0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+
+    return result;
+}
+
 Matrix Matrix_Rotate(Vector3 axis, float angle)
 {
     Matrix result = { 0 };

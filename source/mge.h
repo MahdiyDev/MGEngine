@@ -491,6 +491,16 @@ typedef struct Model {
 	Vector3 bboxMin, bboxMax;  // axis-aligned bounds over every vertex
 } Model;
 
+// A `ModelBatch` draws many copies of one `Model` in a single instanced draw
+// call per mesh -- the per-instance model matrices live in one GPU buffer that
+// is attached to the model's mesh VAOs (attribute locations 4..7). Cheap enough
+// to redraw a field of hundreds of copies every frame. See Mge_LoadModelBatch.
+typedef struct ModelBatch {
+	Model model;              // source model -- NOT owned; unload it yourself
+	unsigned int instanceVBO; // per-instance mat4 buffer (0 until loaded)
+	int count;                // number of instances
+} ModelBatch;
+
 typedef struct Object {
 	ObjectKind kind;
 	Vector3 position;   // centre; z is unused for OBJECT_2D
@@ -783,6 +793,21 @@ void Mge_UnloadMesh(Mesh* mesh);   // free GPU + CPU data and zero the struct
 Model Mge_LoadModel(const char* path);
 void  Mge_DrawModel(Model model);   // draws every mesh; inside Mge_BeginMode3D
 void  Mge_UnloadModel(Model* model);
+
+// Instanced model drawing -- one draw call per mesh renders every instance.
+//
+//   Matrix xf[200]; for (...) xf[i] = Matrix_Multiply(Matrix_Scale(s,s,s),
+//                                        Matrix_Translate(x, y, z));
+//   ModelBatch field = Mge_LoadModelBatch(model, xf, 200);
+//   ... inside Mge_BeginMode3D:  Mge_DrawModelBatch(field, sun, camera);
+//   Mge_UnloadModelBatch(&field);            // does not touch `model`
+//
+// One batch per model at a time -- the instance buffer is bound onto the shared
+// mesh VAOs. Lit by a single light (directional or point).
+ModelBatch Mge_LoadModelBatch(Model model, const Matrix* transforms, int count);
+void Mge_UpdateModelBatch(ModelBatch* batch, const Matrix* transforms, int count); // re-upload (count clamped to the original)
+void Mge_DrawModelBatch(ModelBatch batch, Light light, Camera3D camera);           // inside Mge_BeginMode3D
+void Mge_UnloadModelBatch(ModelBatch* batch);
 
 // Mouse-driven manipulation. Call once per frame while the cursor is enabled.
 // Left-click an object to select it, then drag a gizmo arrow to move along that

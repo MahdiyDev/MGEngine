@@ -31,6 +31,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_framebuffer.c    RenderTexture + full-screen post-processing effects
   mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
   mge_geometry.c       geometry-shader effects: explode, normal visualization
+  mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -60,6 +61,7 @@ examples/culling/      backface_cull
 examples/framebuffer/  post_process
 examples/cubemap/      skybox_reflect, dynamic_envmap
 examples/geometry/     geometry_shader
+examples/instancing/   melon_field
 ```
 
 ## Using mlib
@@ -120,8 +122,9 @@ handling; `test_depth` covers the clip planes, depth-state forwarding and
 depth-preview wiring; `test_stencil` covers the stencil forwarding and the
 outline state sequence; `test_cull` covers face-culling forwarding;
 `test_framebuffer` / `test_cubemap` cover their enums; `test_geometry` covers
-the explode / normals wrappers. All use a stubbed GL backend -- none open a
-window.
+the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
+contract and the `Matrix_Scale` / composition math behind the transforms. All
+use a stubbed GL backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -728,6 +731,43 @@ and the geometry shader `projection` from the batcher.
 Demo: `examples/geometry/geometry_shader.c` — a cube showing its normals beside
 one that pulses apart and back.
 
+### Instancing
+
+`ModelBatch` draws hundreds of copies of one `Model` with a single
+`glDrawElementsInstanced` per mesh — the CPU submits nothing per copy. The
+per-instance model matrices are packed into one GPU buffer that is bound onto
+the model's mesh VAOs as a `mat4` vertex attribute (locations 4–7).
+
+```c
+Model melon = Mge_LoadModel("assets/sliced_musk_melon/scene.gltf");
+
+Matrix xf[200];
+for (int i = 0; i < 200; i++)
+    xf[i] = Matrix_Multiply(                       // Matrix_Multiply(A, B) = A then B
+        Matrix_Multiply(Matrix_Scale(s, s, s),
+                        Matrix_Rotate((Vector3){ 0, 1, 0 }, angle)),
+        Matrix_Translate(x, y, z));                // -> scale, then rotate, then translate
+
+ModelBatch field = Mge_LoadModelBatch(melon, xf, 200);
+
+// each frame, inside Mge_BeginMode3D:
+Mge_DrawModelBatch(field, sun, camera);           // lit by one light (directional or point)
+
+// optional: recompute xf[] and re-upload (count clamped to the original)
+Mge_UpdateModelBatch(&field, xf, 200);
+
+Mge_UnloadModelBatch(&field);                      // frees the instance buffer only
+Mge_UnloadModel(&melon);                           // the model is not owned by the batch
+```
+
+`Mge_DrawModelBatch` uses its own shader (not the `Mge_BeginLighting3D` one), so
+call it on its own — not between `Mge_BeginLighting3D` / `Mge_EndLighting3D`. One
+live batch per `Model` at a time: the instance attributes are bound onto the
+shared mesh VAOs, so a second batch over the same model overwrites the first.
+
+Demo: `examples/instancing/melon_field.c` — 64 spinning melons on a jittered
+grid, one draw call per mesh, camera orbiting.
+
 ### GUI (`mge_gui.h`)
 
 An immediate-mode UI abstracted over Dear ImGui — the backend is baked into
@@ -773,7 +813,7 @@ viewport. The backend boots lazily on the first `Mge_GuiBeginFrame` after
 | --- | --- |
 | `Vector3_Add/Subtract/Scale/Multiply(a, b)` | `Vector3_DotProduct`, `Vector3_Length` |
 | `Vector3Cross`, `Vector3Normalize` | `Vector2_Rotate(v, radians)`, `Clamp` |
-| `Matrix_Identity/Multiply/Translate/Rotate` | `MatrixOrtho/Perspective/LookAt`, `MatrixToFloatV` |
+| `Matrix_Identity/Multiply/Translate/Scale/Rotate` | `MatrixOrtho/Perspective/LookAt`, `MatrixToFloatV` |
 
 Matrices are stored column-major so `MatrixToFloat(m)` feeds `glUniformMatrix4fv`
 directly.
