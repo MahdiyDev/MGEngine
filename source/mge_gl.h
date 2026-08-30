@@ -34,6 +34,13 @@ extern "C" {
 	#define MAX_BUFFER_ELEMENTS		256*5
 #endif
 
+// The immediate-mode batch keeps this many copies of its dynamic vertex buffers
+// and cycles to the next one on every flush, so a glBufferSubData never lands on
+// a buffer the GPU is still reading from the previous draw (no pipeline stall).
+#ifndef MGEGL_BATCH_BUFFERS
+	#define MGEGL_BATCH_BUFFERS		3
+#endif
+
 #ifndef MGEGL_DEFAULT_DRAWCALLS
 	#define MGEGL_DEFAULT_DRAWCALLS 256
 #endif

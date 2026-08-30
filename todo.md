@@ -22,4 +22,4 @@
 - [x] anti-aliasing: MSAA on by default (Mge_SetMSAA / Mge_GetMSAA); GLFW_SAMPLES hint + glEnable(GL_MULTISAMPLE)
 - [x] production build: `make release` -> -O2 -DNDEBUG, stripped, --gc-sections
 - [x] batch rendering: rlgl-style vertex batcher in mge_gl (Begin/Vertex/End -> one buffer, merged draw calls); Mge_GetDrawCalls + auto-flush on texture change
-- [ ] multiple vertex rendering
+- [x] multiple vertex rendering: triple-buffered batch VBOs (MGEGL_BATCH_BUFFERS), cycled per flush -> no upload stalls

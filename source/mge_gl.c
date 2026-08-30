@@ -23,8 +23,15 @@ DEFINE_VEC(Matrix, MgeGL_MatrixStack);
 typedef struct GlData {
     struct {
         int vertexCounter;
-        unsigned int VBO[5];
-        unsigned int VAO;
+        // one set of dynamic buffers per MGEGL_BATCH_BUFFERS; `currentBuffer`
+        // advances on every flush so uploads don't stall on an in-flight buffer
+        unsigned int vao[MGEGL_BATCH_BUFFERS];
+        unsigned int vboPos[MGEGL_BATCH_BUFFERS];
+        unsigned int vboColor[MGEGL_BATCH_BUFFERS];
+        unsigned int vboTexcoord[MGEGL_BATCH_BUFFERS];
+        unsigned int vboNormal[MGEGL_BATCH_BUFFERS];
+        unsigned int ebo;            // shared: the index pattern is the same for every buffer
+        int currentBuffer;
         unsigned int defaultTexture; // currently bound texture (white 1x1 by default)
         unsigned int whiteTexture;   // the 1x1 white texture, kept for restoring
         unsigned int defaultShaderID;
@@ -148,40 +155,49 @@ void MgeGL_Init(int width, int height)
     MGEGL.State.defaultShaderID = MgeGL_CreateShaderProgram(vertex, fragment);
     MGEGL.State.currentShaderID = MGEGL.State.defaultShaderID;
 
-    // NOTE: attribute locations are FIXED (see AttribLocations) so this one shared
+    // NOTE: attribute locations are FIXED (see AttribLocations) so each buffer's
     // VAO stays valid for every shader -- the default one and any custom/lighting
     // shader, all of which must declare `layout(location = N)` to match.
-    glGenVertexArrays(1, &MGEGL.State.VAO);
-    glBindVertexArray(MGEGL.State.VAO);
 
-    // positions
-    glGenBuffers(1, &MGEGL.State.VBO[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);
-    glBufferData(GL_ARRAY_BUFFER, vertCount * 3 * sizeof(float), MGEGL.State.vertexBuffer.vertices, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(VERTICE_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(VERTICE_LOCATION);
-    // colors
-    glGenBuffers(1, &MGEGL.State.VBO[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[1]);
-    glBufferData(GL_ARRAY_BUFFER, vertCount * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(COLOR_LOCATION, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
-    glEnableVertexAttribArray(COLOR_LOCATION);
-    // texcoords
-    glGenBuffers(1, &MGEGL.State.VBO[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
-    glBufferData(GL_ARRAY_BUFFER, vertCount * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(TEXTURE_LOCATION, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(TEXTURE_LOCATION);
-    // normals (consumed by the lighting shader)
-    glGenBuffers(1, &MGEGL.State.VBO[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[4]);
-    glBufferData(GL_ARRAY_BUFFER, vertCount * 3 * sizeof(float), MGEGL.State.vertexBuffer.normals, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(NORMAL_LOCATION);
-
-    glGenBuffers(1, &MGEGL.State.VBO[3]);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
+    // the index pattern (4 verts -> 6 indices per quad) never changes: one static
+    // EBO shared across every buffer's VAO
+    glGenBuffers(1, &MGEGL.State.ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, quadCount * 6 * sizeof(unsigned int), MGEGL.State.vertexBuffer.indices, GL_STATIC_DRAW);
+
+    MGEGL.State.currentBuffer = 0;
+    for (int b = 0; b < MGEGL_BATCH_BUFFERS; b++) {
+        glGenVertexArrays(1, &MGEGL.State.vao[b]);
+        glBindVertexArray(MGEGL.State.vao[b]);
+
+        // positions
+        glGenBuffers(1, &MGEGL.State.vboPos[b]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboPos[b]);
+        glBufferData(GL_ARRAY_BUFFER, vertCount * 3 * sizeof(float), MGEGL.State.vertexBuffer.vertices, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(VERTICE_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, 0);
+        glEnableVertexAttribArray(VERTICE_LOCATION);
+        // colors
+        glGenBuffers(1, &MGEGL.State.vboColor[b]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboColor[b]);
+        glBufferData(GL_ARRAY_BUFFER, vertCount * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(COLOR_LOCATION, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
+        glEnableVertexAttribArray(COLOR_LOCATION);
+        // texcoords
+        glGenBuffers(1, &MGEGL.State.vboTexcoord[b]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboTexcoord[b]);
+        glBufferData(GL_ARRAY_BUFFER, vertCount * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(TEXTURE_LOCATION, 2, GL_FLOAT, GL_FALSE, 0, 0);
+        glEnableVertexAttribArray(TEXTURE_LOCATION);
+        // normals (consumed by the lighting shader)
+        glGenBuffers(1, &MGEGL.State.vboNormal[b]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboNormal[b]);
+        glBufferData(GL_ARRAY_BUFFER, vertCount * 3 * sizeof(float), MGEGL.State.vertexBuffer.normals, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, 0);
+        glEnableVertexAttribArray(NORMAL_LOCATION);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.ebo); // recorded into this VAO
+    }
+    glBindVertexArray(0);
 
     glUseProgram(MGEGL.State.currentShaderID);
 
@@ -272,12 +288,14 @@ void MgeGL_Close(void)
     glDisableVertexAttribArray(COLOR_LOCATION);
     glDisableVertexAttribArray(TEXTURE_LOCATION);
     glDisableVertexAttribArray(NORMAL_LOCATION);
-    glDeleteBuffers(1, &MGEGL.State.VBO[0]);
-    glDeleteBuffers(1, &MGEGL.State.VBO[1]);
-    glDeleteBuffers(1, &MGEGL.State.VBO[2]);
-    glDeleteBuffers(1, &MGEGL.State.VBO[3]);
-    glDeleteBuffers(1, &MGEGL.State.VBO[4]);
-    glDeleteVertexArrays(1, &MGEGL.State.VAO);
+    for (int b = 0; b < MGEGL_BATCH_BUFFERS; b++) {
+        glDeleteBuffers(1, &MGEGL.State.vboPos[b]);
+        glDeleteBuffers(1, &MGEGL.State.vboColor[b]);
+        glDeleteBuffers(1, &MGEGL.State.vboTexcoord[b]);
+        glDeleteBuffers(1, &MGEGL.State.vboNormal[b]);
+        glDeleteVertexArrays(1, &MGEGL.State.vao[b]);
+    }
+    glDeleteBuffers(1, &MGEGL.State.ebo);
     glDeleteProgram(MGEGL.State.currentShaderID);
 
     free(MGEGL.State.vertexBuffer.vertices);
@@ -354,18 +372,19 @@ void MgeGL_Draw(void)
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, MGEGL.State.defaultTexture);
 
-        glBindVertexArray(MGEGL.State.VAO);
+        // this flush writes to (and draws from) the next buffer in the ring, so
+        // the upload doesn't wait on a buffer the GPU still has in flight
+        const int b = MGEGL.State.currentBuffer;
+        glBindVertexArray(MGEGL.State.vao[b]);
 
-        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[0]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboPos[b]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 3 * sizeof(float), MGEGL.State.vertexBuffer.vertices);
-        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[1]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboColor[b]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 4 * sizeof(unsigned char), MGEGL.State.vertexBuffer.colors);
-        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[2]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboTexcoord[b]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 2 * sizeof(float), MGEGL.State.vertexBuffer.texcoords);
-        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.VBO[4]);
+        glBindBuffer(GL_ARRAY_BUFFER, MGEGL.State.vboNormal[b]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, MGEGL.State.vertexCounter * 3 * sizeof(float), MGEGL.State.vertexBuffer.normals);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MGEGL.State.VBO[3]);
 
         int vertexOffset = 0;
         for (size_t i = 0; i < MGEGL.State.draws.count; i++) {
@@ -384,6 +403,8 @@ void MgeGL_Draw(void)
 
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindVertexArray(0);
+
+        MGEGL.State.currentBuffer = (MGEGL.State.currentBuffer + 1) % MGEGL_BATCH_BUFFERS;
     }
 
     MGEGL.State.vertexCounter = 0;

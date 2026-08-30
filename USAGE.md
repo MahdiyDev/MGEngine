@@ -207,6 +207,12 @@ usually **1 upload + 1–2 draw calls** regardless of shape count.
 int n = Mge_GetDrawCalls();   // GL draw calls in the previous frame; lower = better batching
 ```
 
+The dynamic vertex buffers are **triple-buffered** (`MGEGL_BATCH_BUFFERS`, default
+3): each flush uploads to and draws from the next set in the ring, so a
+`glBufferSubData` never blocks on a buffer the GPU is still reading from an
+earlier draw. Raise it if you flush many times per frame; drop it to 1 to save
+VRAM.
+
 What is *not* merged: each retained `Mesh` has its own VAO and its own
 `glDrawElements`; different models are separate calls (use a `ModelBatch` for
 many copies of one). `Draw_*` shapes across a shader/texture/state change land in
