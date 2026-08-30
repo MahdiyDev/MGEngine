@@ -20,6 +20,7 @@ source/
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
   mge_depth.c          depth test / clip planes / polygon offset / depth preview
+  mge_stencil.c        stencil test + Mge_DrawObjectOutline
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
@@ -39,6 +40,7 @@ examples/materials/    textured_cube
 examples/meshes/       textured_quad
 examples/models/       load_melon
 examples/depth/        depth_buffer
+examples/stencil/      object_outline
 ```
 
 ## Using mlib
@@ -87,7 +89,8 @@ picking/drag math; `test_material` covers `Material` / `MaterialMap`
 construction; `test_light` covers the light constructors and the uniform
 wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
-depth-preview wiring. All use a stubbed GL backend -- none open a window.
+depth-preview wiring; `test_stencil` covers the stencil forwarding and the
+outline state sequence. All use a stubbed GL backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -176,7 +179,7 @@ with a `position` (centre), `size`, `color`, `id` and `selected` flag.
 ```c
 Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
 Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
-void   Mge_DrawObject(Object obj);                        // filled shape (+ outline when selected)
+void   Mge_DrawObject(Object obj);                        // filled shape (+ stencil outline when selected)
 void   Mge_DrawObjectGizmo(Object obj, float axisLength); // X/Y (2D) or X/Y/Z (3D) arrows at the position
 ```
 
@@ -510,6 +513,39 @@ flicker between each other. In order of effectiveness:
 
 Demo: `examples/depth/depth_buffer.c` — auto-flips between lit and depth-preview
 views; shows a z-fighting cube pair beside a polygon-offset-fixed one.
+
+### Stencil testing & object outlining
+
+The framebuffer has an 8-bit stencil buffer (cleared with colour/depth by
+`Mge_ClearBackground`). Raw controls mirror the depth ones:
+
+```c
+void Mge_EnableStencilTest(void);  void Mge_DisableStencilTest(void);
+void Mge_SetStencilFunc(int func, int ref, unsigned mask);  // a StencilFunc
+void Mge_SetStencilOp(int onStencilFail, int onDepthFail, int onPass); // StencilOp x3
+void Mge_SetStencilMask(unsigned mask);   // stencil bits writes may change
+void Mge_ClearStencil(void);
+```
+
+**Object outlining** is the built-in use. `Mge_DrawObject` already draws a
+stencil outline (instead of a wireframe) around any `Object` whose `.selected`
+flag is set. For anything else, three calls wrap the technique:
+
+```c
+Mge_BeginStencilMask();                        // stamp the silhouette:
+    Draw_Cube(pos, size, col);                  //   colour + depth writes are off
+Mge_BeginStencilOutside();                      // now draw only outside the stamp:
+    Draw_Cube(pos, biggerSize, WHITE);          //   just the border survives
+Mge_EndStencil();                              // restore normal drawing
+```
+
+`Mge_DrawObjectOutline(obj, thickness, color)` does exactly that for one
+`Object` you have already drawn this frame (`thickness` is added to its
+extents). The mask pass turns the depth test off, so a selected object's
+outline shows even when it is partly behind something.
+
+Demo: `examples/stencil/object_outline.c` — a walking selection outlines each
+cube in turn, plus one hand-outlined pillar in a custom colour.
 
 ### Math
 

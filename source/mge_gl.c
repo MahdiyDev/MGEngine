@@ -706,7 +706,7 @@ void MgeGL_ClearColor(Color color)
 
 void MgeGL_ClearScreenBuffers(void)
 {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
 void MgeGL_Viewport(int x, int y, int width, int height)
@@ -765,6 +765,83 @@ void MgeGL_SetPolygonOffset(bool enabled, float factor, float units)
     } else {
         glDisable(GL_POLYGON_OFFSET_FILL);
     }
+}
+
+bool MgeGL_IsDepthTestEnabled(void)
+{
+    return glIsEnabled(GL_DEPTH_TEST) == GL_TRUE;
+}
+
+// map the shared StencilFunc / DepthFunc ordering to GL comparison enums
+static GLenum ToGlCompare(int func)
+{
+    switch (func) {
+    case 0:  return GL_NEVER;
+    case 1:  return GL_LESS;
+    case 2:  return GL_EQUAL;
+    case 3:  return GL_LEQUAL;
+    case 4:  return GL_GREATER;
+    case 5:  return GL_NOTEQUAL;
+    case 6:  return GL_GEQUAL;
+    default: return GL_ALWAYS;
+    }
+}
+
+static GLenum ToGlStencilOp(int op)
+{
+    switch (op) {
+    case STENCIL_ZERO:      return GL_ZERO;
+    case STENCIL_REPLACE:   return GL_REPLACE;
+    case STENCIL_INCR:      return GL_INCR;
+    case STENCIL_INCR_WRAP: return GL_INCR_WRAP;
+    case STENCIL_DECR:      return GL_DECR;
+    case STENCIL_DECR_WRAP: return GL_DECR_WRAP;
+    case STENCIL_INVERT:    return GL_INVERT;
+    default:                return GL_KEEP;
+    }
+}
+
+void MgeGL_EnableStencilTest(void)
+{
+    MgeGL_Draw();
+    glEnable(GL_STENCIL_TEST);
+}
+
+void MgeGL_DisableStencilTest(void)
+{
+    MgeGL_Draw();
+    glDisable(GL_STENCIL_TEST);
+}
+
+void MgeGL_SetStencilFunc(int func, int ref, unsigned int mask)
+{
+    MgeGL_Draw();
+    glStencilFunc(ToGlCompare(func), ref, mask);
+}
+
+void MgeGL_SetStencilOp(int onStencilFail, int onDepthFail, int onPass)
+{
+    MgeGL_Draw();
+    glStencilOp(ToGlStencilOp(onStencilFail), ToGlStencilOp(onDepthFail), ToGlStencilOp(onPass));
+}
+
+void MgeGL_SetStencilMask(unsigned int mask)
+{
+    MgeGL_Draw();
+    glStencilMask(mask);
+}
+
+void MgeGL_SetColorMask(bool enabled)
+{
+    MgeGL_Draw();
+    GLboolean v = enabled ? GL_TRUE : GL_FALSE;
+    glColorMask(v, v, v, v);
+}
+
+void MgeGL_ClearStencil(void)
+{
+    MgeGL_Draw();
+    glClear(GL_STENCIL_BUFFER_BIT);
 }
 
 // ----- retained indexed meshes -----

@@ -553,6 +553,57 @@ void Mge_DisablePolygonOffset(void);
 void Mge_BeginDepthPreview(void);
 void Mge_EndDepthPreview(void);
 
+// --- Stencil testing -------------------------------------------------------
+//
+// The framebuffer carries an 8-bit stencil buffer, cleared with the colour and
+// depth buffers by Mge_ClearBackground.
+typedef enum {
+	STENCIL_NEVER = 0,
+	STENCIL_LESS,
+	STENCIL_EQUAL,
+	STENCIL_LEQUAL,
+	STENCIL_GREATER,
+	STENCIL_NOTEQUAL,
+	STENCIL_GEQUAL,
+	STENCIL_ALWAYS
+} StencilFunc;
+
+typedef enum {
+	STENCIL_KEEP = 0,   // leave the stored value
+	STENCIL_ZERO,
+	STENCIL_REPLACE,    // write `ref` from Mge_SetStencilFunc
+	STENCIL_INCR,
+	STENCIL_INCR_WRAP,
+	STENCIL_DECR,
+	STENCIL_DECR_WRAP,
+	STENCIL_INVERT
+} StencilOp;
+
+void Mge_EnableStencilTest(void);
+void Mge_DisableStencilTest(void);
+void Mge_SetStencilFunc(int func, int ref, unsigned int mask);   // StencilFunc
+void Mge_SetStencilOp(int onStencilFail, int onDepthFail, int onPass); // StencilOp x3
+void Mge_SetStencilMask(unsigned int mask);   // which stencil bits writes may touch
+void Mge_ClearStencil(void);                  // zero the stencil buffer now
+
+// --- Object outlining (stencil technique) --------------------------------
+//
+// Draw your scene, then per object: stamp its silhouette into the stencil with
+// colour writes off, then draw a larger shell only where the stamp is absent.
+//
+//   Mge_BeginStencilMask();                 // stamp; colour + depth writes off
+//       Draw_Cube(pos, size, col);          // (re)draw the object's shape
+//   Mge_BeginStencilOutside();              // draw only outside the stamp
+//       Draw_Cube(pos, biggerSize, WHITE);  // the visible border
+//   Mge_EndStencil();                       // restore normal drawing
+void Mge_BeginStencilMask(void);
+void Mge_BeginStencilOutside(void);
+void Mge_EndStencil(void);
+
+// One call for an Object already drawn this frame -- `thickness` is added to the
+// object's extents. Mge_DrawObject() uses this for selected objects.
+void Mge_DrawObjectOutline(Object obj, float thickness, Color color);
+
 // Shapes
 void Draw_Line(int startPosX, int startPosY, int endPosX, int endPosY, Color color);
 void Draw_LineV(Vector2 startPos, Vector2 endPos, Color color);

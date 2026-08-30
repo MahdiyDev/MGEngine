@@ -66,9 +66,18 @@ void MgeGL_MatrixMode(int mode);
 void MgeGL_LoadIdentity(void);
 void MgeGL_EnableDepthTest(void);
 void MgeGL_DisableDepthTest(void);
+bool MgeGL_IsDepthTestEnabled(void);
 void MgeGL_SetDepthFunc(int depthFunc);   // DepthFunc enum
 void MgeGL_SetDepthMask(bool writeEnabled);
 void MgeGL_SetPolygonOffset(bool enabled, float factor, float units);
+
+void MgeGL_EnableStencilTest(void);
+void MgeGL_DisableStencilTest(void);
+void MgeGL_SetStencilFunc(int func, int ref, unsigned int mask);       // StencilFunc
+void MgeGL_SetStencilOp(int onStencilFail, int onDepthFail, int onPass); // StencilOp
+void MgeGL_SetStencilMask(unsigned int mask);
+void MgeGL_SetColorMask(bool enabled);   // all channels
+void MgeGL_ClearStencil(void);
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 unsigned int MgeGL_GetDefaultShaderId(void);
