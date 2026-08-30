@@ -394,6 +394,42 @@ typedef struct Light {
 	float outerCutoff; // zero brightness beyond this angle; gap = soft edge
 } Light;
 
+// --- Mesh ----------------------------------------------------------------
+//
+// A retained triangle mesh: an interleaved vertex array, a 32-bit index array,
+// and a list of textures. It owns its GPU buffers (its own VAO/VBO/EBO) and is
+// drawn with whatever shader is active -- so call `Mge_DrawMesh` inside
+// `Mge_BeginMode3D` (and, for lighting, inside `Mge_BeginLighting3D[Ex]`).
+//
+// Vertex positions are world-space (there is no per-mesh model matrix); bake the
+// placement into the vertices, or rebuild the mesh to move it.
+typedef struct Vertex {
+	Vector3 position;
+	Vector3 normal;   // for lighting; zero is fine for unlit draws
+	Vector2 texcoord;
+} Vertex;
+
+typedef enum {
+	MESH_TEXTURE_DIFFUSE = 0, // sampled as the surface colour
+	MESH_TEXTURE_SPECULAR     // kept on the mesh; not sampled by the built-in shader yet
+} MeshTextureType;
+
+typedef struct MeshTexture {
+	Texture2D texture;
+	MeshTextureType type;
+} MeshTexture;
+
+typedef struct Mesh {
+	Vertex* vertices;
+	int vertexCount;
+	unsigned int* indices; // 3 per triangle
+	int indexCount;
+	MeshTexture* textures;
+	int textureCount;
+
+	unsigned int vao, vbo, ebo; // 0 until Mge_UploadMesh
+} Mesh;
+
 typedef struct Object {
 	ObjectKind kind;
 	Vector3 position;   // centre; z is unused for OBJECT_2D
@@ -492,6 +528,14 @@ Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
 Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
 void   Mge_DrawObject(Object obj);
 void   Mge_DrawObjectGizmo(Object obj, float axisLength);   // X/Y (2D) or X/Y/Z (3D) arrows at obj.position
+
+// Mesh -- copies the arrays you pass, then owns them. Upload once, draw many.
+Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
+    const unsigned int* indices, int indexCount,
+    const MeshTexture* textures, int textureCount);
+void Mge_UploadMesh(Mesh* mesh);   // create the GPU buffers (no-op if already uploaded)
+void Mge_DrawMesh(Mesh mesh);      // inside Mge_BeginMode3D (+ Mge_BeginLighting3D for lighting)
+void Mge_UnloadMesh(Mesh* mesh);   // free GPU + CPU data and zero the struct
 
 // Mouse-driven manipulation. Call once per frame while the cursor is enabled.
 // Left-click an object to select it, then drag a gizmo arrow to move along that

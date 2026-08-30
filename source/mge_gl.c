@@ -713,3 +713,73 @@ void MgeGL_Load_Extensions(void* loader)
 
 void MgeGL_EnableDepthTest(void) { glEnable(GL_DEPTH_TEST); }
 void MgeGL_DisableDepthTest(void) { glDisable(GL_DEPTH_TEST); }
+
+// ----- retained indexed meshes -----
+//
+// Each mesh keeps its own VAO/VBO/EBO. Vertices are interleaved floats:
+//   [0..2] position   [3..5] normal   [6..7] texcoord   (stride 8 floats)
+// matching `Vertex` in mge.h and the fixed AttribLocations.
+
+void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
+    const void* vertices, int vertexCount, const unsigned int* indices, int indexCount)
+{
+    const int stride = 8 * (int)sizeof(float);
+
+    glGenVertexArrays(1, vao);
+    glGenBuffers(1, vbo);
+    glGenBuffers(1, ebo);
+
+    glBindVertexArray(*vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertexCount * stride, vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+        (GLsizeiptr)indexCount * (int)sizeof(unsigned int), indices, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(VERTICE_LOCATION);
+    glVertexAttribPointer(VERTICE_LOCATION, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(NORMAL_LOCATION);
+    glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(TEXTURE_LOCATION);
+    glVertexAttribPointer(TEXTURE_LOCATION, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
+{
+    if (vao == 0 || indexCount <= 0)
+        return;
+
+    MgeGL_Draw(); // flush whatever the immediate-mode API had queued
+
+    glUseProgram(MGEGL.State.currentShaderID);
+    MgeGL_UniformMatrix4fv("modelview", MGEGL.State.modelview);
+    MgeGL_UniformMatrix4fv("projection", MGEGL.State.projection);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, (textureId != 0) ? textureId : MGEGL.State.whiteTexture);
+
+    // the mesh VAO carries no colour attribute: feed a constant white so the
+    // shader's `texture(sampleTex, uv) * vColor` leaves the texture untinted
+    glVertexAttrib4f(COLOR_LOCATION, 1.0f, 1.0f, 1.0f, 1.0f);
+
+    glBindVertexArray(vao);
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)0);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo)
+{
+    if (vbo != 0)
+        glDeleteBuffers(1, &vbo);
+    if (ebo != 0)
+        glDeleteBuffers(1, &ebo);
+    if (vao != 0)
+        glDeleteVertexArrays(1, &vao);
+}

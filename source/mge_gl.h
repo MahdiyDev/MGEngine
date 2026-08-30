@@ -75,6 +75,13 @@ unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragmen
 void MgeGL_UnloadShaderProgram(unsigned int id);
 void MgeGL_SetTexture(unsigned int id);
 unsigned int MgeGL_GetWhiteTexture(void); // the 1x1 white texture created at init
+
+// Retained indexed meshes (own VAO/VBO/EBO). Interleaved vertex layout:
+//   location 0 vec3 position, location 3 vec3 normal, location 2 vec2 texcoord.
+void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
+	const void* vertices, int vertexCount, const unsigned int* indices, int indexCount);
+void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId); // uses the current shader
+void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo);
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(const char* name, const int value);
 void MgeGL_Uniform1f(const char* name, float value);

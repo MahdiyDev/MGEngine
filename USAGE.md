@@ -17,6 +17,7 @@ source/
   mge_object.c          Object struct + mouse-driven translation gizmo
   mge_light.c          Phong lighting; directional / point / spot lights
   mge_material.c        Material / MaterialMap construction helpers
+  mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
@@ -28,11 +29,12 @@ vendor/
   glfw/                GLFW -- vendored source; `make vendor-glfw` builds lib/ + include/
   assimp/              Assimp OBJ/glTF2/FBX importers -- pruned source under
                        source/; `make vendor-assimp` builds lib/ + include/
-test/                  unit tests for math / file utils / objects / materials / lights (no window/GL needed)
+test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular, directional, point, spotlight
 examples/materials/    textured_cube
+examples/meshes/       textured_quad
 ```
 
 ## Using mlib
@@ -350,6 +352,61 @@ back to the flat colour.
 
 Demo: `examples/materials/textured_cube.c` — textured/tinted/matte/plain cubes
 side by side under a moving light.
+
+### Mesh
+
+`Draw_Cube` & co. push vertices through the immediate-mode batch every frame. A
+`Mesh` is the retained alternative: your own vertex + index arrays uploaded to a
+GPU buffer once, then drawn with a single call.
+
+```c
+typedef struct Vertex {
+    Vector3 position;   // world space -- there is no per-mesh transform
+    Vector3 normal;     // for lighting; zero is fine unlit
+    Vector2 texcoord;
+} Vertex;
+
+typedef struct MeshTexture { Texture2D texture; MeshTextureType type; } MeshTexture;
+// MESH_TEXTURE_DIFFUSE -> sampled as the surface colour
+// MESH_TEXTURE_SPECULAR -> stored on the mesh, not sampled by the built-in shader yet
+
+Mesh Mge_MakeMesh(const Vertex* v, int vc, const unsigned int* idx, int ic,
+                  const MeshTexture* tex, int tc);   // copies all three arrays
+void Mge_UploadMesh(Mesh* m);   // create the GPU buffers (once)
+void Mge_DrawMesh(Mesh m);      // inside Mge_BeginMode3D (+ Mge_BeginLighting3D for lighting)
+void Mge_UnloadMesh(Mesh* m);   // free GPU + CPU, zero the struct
+```
+
+```c
+Vertex verts[4] = {
+    { { -1, 0, 0 }, { 0, 0, 1 }, { 0, 0 } }, { { 1, 0, 0 }, { 0, 0, 1 }, { 1, 0 } },
+    { {  1, 2, 0 }, { 0, 0, 1 }, { 1, 1 } }, { { -1, 2, 0 }, { 0, 0, 1 }, { 0, 1 } },
+};
+unsigned int idx[6] = { 0, 1, 2, 0, 2, 3 };
+MeshTexture tex[1] = { { Mge_LoadTexture("assets/wall.jpg"), MESH_TEXTURE_DIFFUSE } };
+
+Mesh quad = Mge_MakeMesh(verts, 4, idx, 6, tex, 1);
+Mge_UploadMesh(&quad);
+
+while (!Mge_WindowShouldClose()) {
+    Mge_BeginDrawing();
+    Mge_BeginMode3D(camera);
+        Mge_BeginLighting3D(light, camera);
+            Mge_DrawMesh(quad);
+        Mge_EndLighting3D();
+    Mge_EndMode3D();
+    Mge_EndDrawing();
+}
+Mge_UnloadMesh(&quad);
+```
+
+Indices are `unsigned int` (32-bit), 3 per triangle. `Mge_DrawMesh` binds the
+first `MESH_TEXTURE_DIFFUSE` texture (or a white 1×1 if there is none) and draws
+with whatever shader is active — the unlit default or the lighting shader. It has
+no colour attribute, so the diffuse texture is shown untinted.
+
+Demo: `examples/meshes/textured_quad.c` — a textured wall + an untextured floor,
+both hand-built meshes, under a moving point light.
 
 ### Math
 

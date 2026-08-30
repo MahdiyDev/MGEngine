@@ -7,5 +7,6 @@
 - [x] lighting: ambient + diffuse + specular (Phong), Material on Object, Light as a scene entity
 - [x] material maps: MaterialMap (texture + color + value) slots on Material (diffuse / specular)
 - [x] light types: directional / point / spot (+ flashlight, soft cone edges), multi-light pass
+- [x] Mesh: vertices + indices + textures, own VAO/VBO/EBO (Mge_MakeMesh/Upload/Draw/Unload)
 - [ ] batch rendering
 - [ ] multiple vertex rendering
