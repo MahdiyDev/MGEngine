@@ -90,6 +90,10 @@ void MgeGL_SetFrontFace(int winding);  // FrontFace
 int MgeGL_GetSampleCount(void);        // GL_SAMPLES of the current framebuffer (0 = not multisampled)
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
+void MgeGL_RegisterDrawCall(void);     // feature modules issuing their own gl draw* call this
+int  MgeGL_GetDrawCalls(void);         // GL draws since the last reset
+void MgeGL_ResetDrawCalls(void);       // called by Mge_BeginDrawing
+
 unsigned int MgeGL_GetDefaultShaderId(void);
 unsigned int MgeGL_GetCurrentShaderId(void);
 void MgeGL_SetShader(unsigned int id);

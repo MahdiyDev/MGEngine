@@ -183,6 +183,7 @@ void Mge_DrawRenderTextureFX(RenderTexture target, int effect)
     glDisable(GL_DEPTH_TEST);
     glBindVertexArray(s_quadVao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+    MgeGL_RegisterDrawCall();
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
 

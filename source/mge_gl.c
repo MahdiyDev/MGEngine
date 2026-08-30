@@ -41,6 +41,8 @@ typedef struct GlData {
 
         VertexData vertexBuffer;
         float currentDepth;
+        int drawCalls;          // GL draw calls so far this frame
+        int drawCallsLastFrame; // ...snapshotted at the start of each frame
 
         int framebufferWidth;
         int framebufferHeight;
@@ -368,11 +370,14 @@ void MgeGL_Draw(void)
         int vertexOffset = 0;
         for (size_t i = 0; i < MGEGL.State.draws.count; i++) {
             MgeGL_DrawCall* d = &MGEGL.State.draws.items[i];
-            if (d->mode == MGEGL_LINES || d->mode == MGEGL_TRIANGLES) {
-                glDrawArrays(d->mode, vertexOffset, d->vertexCount);
-            } else {
-                glDrawElements(GL_TRIANGLES, d->vertexCount / 4 * 6, GL_UNSIGNED_INT,
-                    (GLvoid*)(intptr_t)(vertexOffset / 4 * 6 * sizeof(GLuint)));
+            if (d->vertexCount > 0) {
+                if (d->mode == MGEGL_LINES || d->mode == MGEGL_TRIANGLES) {
+                    glDrawArrays(d->mode, vertexOffset, d->vertexCount);
+                } else {
+                    glDrawElements(GL_TRIANGLES, d->vertexCount / 4 * 6, GL_UNSIGNED_INT,
+                        (GLvoid*)(intptr_t)(vertexOffset / 4 * 6 * sizeof(GLuint)));
+                }
+                MGEGL.State.drawCalls++;
             }
             vertexOffset += (d->vertexCount + d->vertexAlignment);
         }
@@ -391,7 +396,32 @@ void MgeGL_Draw(void)
 
 void MgeGL_SetTexture(unsigned int id)
 {
-    MGEGL.State.defaultTexture = (id != 0) ? id : MGEGL.State.whiteTexture;
+    unsigned int tex = (id != 0) ? id : MGEGL.State.whiteTexture;
+    if (tex == MGEGL.State.defaultTexture)
+        return;
+
+    // queued geometry was recorded against the old texture -- one bind is
+    // active per batch, so flush before switching
+    if (MGEGL.State.vertexCounter > 0)
+        MgeGL_Draw();
+
+    MGEGL.State.defaultTexture = tex;
+}
+
+void MgeGL_RegisterDrawCall(void)
+{
+    MGEGL.State.drawCalls++; // for GL draws issued outside MgeGL_Draw (meshes, feature modules)
+}
+
+int MgeGL_GetDrawCalls(void)
+{
+    return MGEGL.State.drawCallsLastFrame; // the last *completed* frame -- stable to read mid-frame
+}
+
+void MgeGL_ResetDrawCalls(void)
+{
+    MGEGL.State.drawCallsLastFrame = MGEGL.State.drawCalls;
+    MGEGL.State.drawCalls = 0;
 }
 
 unsigned int MgeGL_GetWhiteTexture(void)
@@ -1021,6 +1051,8 @@ void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)0);
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    MGEGL.State.drawCalls++;
 }
 
 void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo)

@@ -184,6 +184,8 @@ void Mge_ClearBackground(Color color)
 
 void Mge_BeginDrawing(void)
 {
+    MgeGL_ResetDrawCalls();
+
     CORE.Time.current = Mge_GetTime();
     CORE.Time.update = CORE.Time.current - CORE.Time.previous;
     CORE.Time.previous = CORE.Time.current;
@@ -285,6 +287,11 @@ void Mge_SetTargetFPS(int fps)
         CORE.Time.target = 1.0 / (double)fps;
     }
     TRACE_LOG(LOG_INFO, "TIMER: Target time per frame: %02.03f milliseconds", (float)CORE.Time.target * 1000.0f);
+}
+
+int Mge_GetDrawCalls(void)
+{
+    return MgeGL_GetDrawCalls(); // GL draws in the previous frame (lower = better batching)
 }
 
 int Mge_GetFps(void)

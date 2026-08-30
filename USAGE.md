@@ -64,6 +64,7 @@ examples/cubemap/      skybox_reflect, dynamic_envmap
 examples/geometry/     geometry_shader
 examples/instancing/   melon_field
 examples/antialiasing/ msaa
+examples/batching/     draw_calls
 ```
 
 ## Using mlib
@@ -185,6 +186,34 @@ int main(void)
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
 calls. `builder/main.c` shows a fly-camera plus TAB-toggled edit mode with the
 move gizmo.
+
+### How the renderer batches
+
+`mge_gl.c` is a retained-nothing, `rlgl`-style batcher. Every `Draw_*` shape and
+every `MgeGL_Begin`/`MgeGL_Vertex*`/`MgeGL_End` block appends into **one** CPU
+vertex buffer; consecutive primitives of the same kind (`LINES` / `TRIANGLES` /
+quads) merge into a single draw-call entry. Nothing reaches the GPU until a
+**flush** — `MgeGL_Draw()` — which uploads the whole buffer once and issues one
+`glDraw*` per merged entry.
+
+A flush happens on `Mge_EndDrawing`, a shader change (`Mge_BeginLighting3D`,
+geometry/post-fx passes), a render-state change (`Mge_BeginMode3D`, depth /
+stencil / cull toggles, matrix mode), a retained `Mge_DrawMesh` / `Mge_DrawModel`
+/ `Mge_DrawModelBatch`, a texture change (`Mge_SetMaterial`), or the buffer
+filling (~5 k vertices). So a frame of same-shader 2D UI + wireframe shapes is
+usually **1 upload + 1–2 draw calls** regardless of shape count.
+
+```c
+int n = Mge_GetDrawCalls();   // GL draw calls in the previous frame; lower = better batching
+```
+
+What is *not* merged: each retained `Mesh` has its own VAO and its own
+`glDrawElements`; different models are separate calls (use a `ModelBatch` for
+many copies of one). `Draw_*` shapes across a shader/texture/state change land in
+different batches. The builder shows the live count next to the FPS.
+
+Demo: `examples/batching/draw_calls.c` — an 800-shape grid that stays at ~2 draw
+calls a frame.
 
 ### Anti-aliasing (MSAA)
 

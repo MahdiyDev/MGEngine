@@ -189,6 +189,7 @@ void Mge_DrawSkybox(Cubemap cubemap, Camera3D camera)
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap.id);
     glBindVertexArray(s_cubeVao);
     glDrawArrays(GL_TRIANGLES, 0, 36);
+    MgeGL_RegisterDrawCall();
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     MgeGL_SetDepthFunc(DEPTH_LESS);

@@ -136,6 +136,7 @@ int main(void)
     };
 
     int fpsShown = 0;
+    int drawsShown = 0;
     double fpsUpdatedAt = 0.0;
 
     while (!Mge_WindowShouldClose()) {
@@ -144,6 +145,7 @@ int main(void)
 
         if (Mge_GetTime() - fpsUpdatedAt >= 1.0) {
             fpsShown = Mge_GetFps();
+            drawsShown = Mge_GetDrawCalls();
             fpsUpdatedAt = Mge_GetTime();
         }
 
@@ -210,8 +212,8 @@ int main(void)
         // --- sidebar ---
         Mge_GuiBeginFrame();
         if (Mge_GuiBeginSidebar("Scene", 300.0f, false)) {
-            char fpsRow[24];
-            snprintf(fpsRow, sizeof(fpsRow), "FPS: %d", fpsShown);
+            char fpsRow[40];
+            snprintf(fpsRow, sizeof(fpsRow), "FPS: %d   draws: %d", fpsShown, drawsShown);
             Mge_GuiLabel(fpsRow);
             Mge_GuiSeparator();
 

@@ -186,6 +186,7 @@ void Mge_DrawModelBatch(ModelBatch batch, Light light, Camera3D camera)
         glBindTexture(GL_TEXTURE_2D, (tex != 0) ? tex : MgeGL_GetWhiteTexture());
         glBindVertexArray(m->vao);
         glDrawElementsInstanced(GL_TRIANGLES, m->indexCount, GL_UNSIGNED_INT, 0, batch.count);
+        MgeGL_RegisterDrawCall(); // one call, batch.count melons
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);

@@ -521,6 +521,7 @@ void Mge_CloseWindow(void);
 double Mge_GetTime(void);
 double Mge_GetDeltaTime(void);
 int Mge_GetFps(void);
+int Mge_GetDrawCalls(void);          // GL draw calls in the previous frame (the batcher keeps this low)
 void Mge_SetTargetFPS(int fps);
 void Mge_BeginShaderMode(Shader shader);
 void Mge_EndShaderMode(void);
