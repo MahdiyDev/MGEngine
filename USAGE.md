@@ -22,6 +22,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
   mge_light.c          Blinn-Phong lighting; directional / point / spot lights
+  mge_shadow.c         shadow mapping: depth pass + PCF-filtered compare
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
@@ -53,7 +54,7 @@ vendor/
 test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping
 examples/materials/    textured_cube
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -138,8 +139,8 @@ outline state sequence; `test_cull` covers face-culling forwarding;
 the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
 contract and the `Matrix_Scale` / composition math behind the transforms;
 `test_msaa` covers the `Mge_SetMSAA` request clamping; `test_gamma` covers the
-`Mge_SetGammaCorrection` state + forwarding. All use a stubbed GL backend -- none
-open a window.
+`Mge_SetGammaCorrection` state + forwarding; `test_shadow` covers the `ShadowMap`
+struct contract. All use a stubbed GL backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -449,8 +450,41 @@ so draw them outside the `Begin/EndLighting3D` pair.
 Demos: `examples/lighting/` — `ambient` / `diffuse` / `specular` isolate the
 three terms; `directional` / `point` / `spotlight` isolate the three light types
 (spotlight shows a hard vs. a soft cone side by side); `blinn_phong` toggles the
-two specular models over a low-shininess floor; `builder/main.c` combines a
+two specular models over a low-shininess floor; `gamma_correction` toggles sRGB
+output; `shadow_mapping` casts a directional shadow; `builder/main.c` combines a
 directional fill with an orbiting point light.
+
+### Shadow mapping
+
+A directional or spot light casts shadows in two passes over the same geometry:
+
+```c
+ShadowMap sm = Mge_LoadShadowMap(2048);          // once; Mge_UnloadShadowMap(&sm) at the end
+...
+Mge_BeginShadowPass(&sm, sun, sceneCenter, sceneRadius); // pass 1: depth from the light
+    DrawOccluders();                                     // world-space geometry only
+Mge_EndShadowPass();
+
+Mge_ClearBackground(bg);
+Mge_BeginMode3D(camera);
+    Mge_BeginLighting3DShadowed(&sun, 1, camera, sm);    // pass 2: lit, shadowed by lights[0]
+        Mge_SetMaterial(mat);
+        DrawScene();
+    Mge_EndLighting3D();
+Mge_EndMode3D();
+
+Mge_DrawShadowMap(sm, 12, 12, 220);              // optional: blit the depth texture to debug
+```
+
+`center` / `radius` frame the light's view volume — pass the scene's bounding
+sphere (too large softens the shadow, too small clips it). Only `lights[0]`
+casts. The compare uses a 3×3 PCF filter and a slope-scaled bias; the depth
+texture lands on texture unit 1, so material textures (unit 0) are unaffected.
+`Mge_BeginShadowPass` must run before `Mge_ClearBackground` — it redirects
+rendering to its own framebuffer and restores the window on `Mge_EndShadowPass`.
+
+Demo: `examples/lighting/shadow_mapping.c` — a moving sun over a few blocks, with
+the shadow map shown in the corner.
 
 ### Materials & material maps
 

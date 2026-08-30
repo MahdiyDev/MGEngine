@@ -25,3 +25,4 @@
 - [x] multiple vertex rendering: triple-buffered batch VBOs (MGEGL_BATCH_BUFFERS), cycled per flush -> no upload stalls
 - [x] advanced lighting: Blinn-Phong specular (default) + Mge_SetLightingModel toggle to classic Phong
 - [x] gamma correction: Mge_SetGammaCorrection (GL_FRAMEBUFFER_SRGB, opt-in) + sRGB texture loading (Mge_LoadTextureEx)
+- [x] shadow mapping: ShadowMap + Mge_BeginShadowPass / Mge_BeginLighting3DShadowed (depth pass + 3x3 PCF, directional/spot)

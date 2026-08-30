@@ -259,6 +259,15 @@ typedef struct RenderTexture {
     int width, height;
 } RenderTexture;
 
+// Shadow map: a depth-only framebuffer rendered from a light's point of view.
+// Fragments farther from the light than the stored depth are in shadow.
+typedef struct ShadowMap {
+    unsigned int fbo;
+    unsigned int depthTexture; // GL_DEPTH_COMPONENT; unit 1 in the lighting shader
+    int size;                  // resolution (square), e.g. 2048
+    Matrix lightSpaceMatrix;   // light projection * light view -- set by Mge_BeginShadowPass
+} ShadowMap;
+
 // Built-in post-processing effects for Mge_DrawRenderTextureFX.
 typedef enum {
     POSTFX_NONE = 0,   // straight copy
@@ -878,6 +887,31 @@ void Mge_BeginLighting3D(Light light, Camera3D camera);                       //
 void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera);  // up to MGE_MAX_LIGHTS
 void Mge_SetMaterial(Material material);                 // no-op unless lighting is active
 void Mge_EndLighting3D(void);
+
+// --- Shadow mapping (directional / spot) ------------------------------------
+//
+// Two passes over the same geometry:
+//
+//   ShadowMap sm = Mge_LoadShadowMap(2048);                 // once
+//   ...
+//   Mge_BeginShadowPass(&sm, sun, sceneCenter, sceneRadius); // pass 1: depth from the light
+//       DrawOccluders();
+//   Mge_EndShadowPass();
+//
+//   Mge_BeginMode3D(camera);
+//   Mge_BeginLighting3DShadowed(&sun, 1, camera, sm);        // pass 2: lit + shadowed
+//       DrawScene();                                         // same geometry
+//   Mge_EndLighting3D();
+//   Mge_EndMode3D();
+//
+// Only lights[0] casts shadows. `center` / `radius` frame the light's view
+// volume -- use the scene's bounding sphere.
+ShadowMap Mge_LoadShadowMap(int size);
+void Mge_UnloadShadowMap(ShadowMap* sm);
+void Mge_BeginShadowPass(ShadowMap* sm, Light light, Vector3 center, float radius);
+void Mge_EndShadowPass(void);
+void Mge_BeginLighting3DShadowed(const Light* lights, int count, Camera3D camera, ShadowMap sm);
+void Mge_DrawShadowMap(ShadowMap sm, int x, int y, int size); // debug: blit the depth texture
 
 #ifdef __cplusplus
 }

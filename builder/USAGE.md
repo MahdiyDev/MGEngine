@@ -36,6 +36,9 @@ ImGui in the app's code).
 
 - **FPS** and **draws** — frames per second and the previous frame's GL draw-call
   count (the batcher keeps it small) at the top, refreshed once a second.
+- **shadows** — a checkbox; on by default. The first light (Sun) casts a
+  2048² shadow map over the scene each frame (`Mge_BeginShadowPass` +
+  `Mge_BeginLighting3DShadowed`). Editing the Sun's direction moves the shadows.
 - **OBJECTS / LIGHTS** — every scene entity as a selectable row. Selecting a
   cube here is exactly like clicking it in the viewport (via
   `Mge_SetSelectedObject`): it gets the outline **and** its move gizmo, so you

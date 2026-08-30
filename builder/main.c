@@ -5,8 +5,10 @@
 //   edit mode
 //     hold RIGHT mouse      look around; WASD flies while held
 //     left-click a cube     select it, drag its gizmo arrow to move it
-//     sidebar               FPS (updated each second), plus pick any
+//     sidebar               FPS + draw count, a shadows toggle, plus pick any
 //                           object/light and edit its fields
+//
+// The sun (first light) casts a shadow map by default.
 #include <mge.h>
 #include <mge_gui.h>
 #include <mge_math.h>
@@ -65,6 +67,13 @@ enum { SEL_NONE, SEL_OBJECT, SEL_LIGHT };
 static int selKind = SEL_NONE;
 static int selIndex = 0;
 
+// raw cube geometry for the shadow depth pass (no materials / no outline shader)
+static void DrawOccluders(const Object objects[], int n)
+{
+    for (int i = 0; i < n; i++)
+        Draw_Cube(objects[i].position, objects[i].size, objects[i].color);
+}
+
 // --- inspectors: only "draw box / draw input" abstract calls, no ImGui here ---
 
 static void InspectObject(Object* o)
@@ -120,7 +129,14 @@ int main(void)
     };
 
     Light sun = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
+    sun.ambient = 0.22f; // fill so shadowed faces aren't pitch black
     Light lamp = Mge_MakePointLight((Vector3){ 3.0f, 5.0f, 2.0f }, (Vector3){ 1.0f, 0.85f, 0.6f });
+
+    // the sun (lights[0]) casts shadows; framed on a box around the scene
+    ShadowMap shadow = Mge_LoadShadowMap(2048);
+    bool shadowsOn = true;
+    const Vector3 sceneCenter = { 0.0f, 0.0f, 0.0f };
+    const float sceneRadius = 14.0f;
 
     Cubemap sky = Mge_LoadCubemapDir("assets/skybox");
     if (sky.id == 0)
@@ -194,10 +210,21 @@ int main(void)
         Light lights[2] = { sun, lamp };
 
         Mge_BeginDrawing();
+
+        // pass 1: depth from the sun's point of view (before ClearBackground)
+        if (shadowsOn) {
+            Mge_BeginShadowPass(&shadow, sun, sceneCenter, sceneRadius);
+            DrawOccluders(objects, N);
+            Mge_EndShadowPass();
+        }
+
         Mge_ClearBackground((Color){ 20, 21, 26, 255 });
 
         Mge_BeginMode3D(camera);
-        Mge_BeginLighting3DEx(lights, 2, camera);
+        if (shadowsOn)
+            Mge_BeginLighting3DShadowed(lights, 2, camera, shadow);
+        else
+            Mge_BeginLighting3DEx(lights, 2, camera);
         for (int i = 0; i < N; i++)
             Mge_DrawObject(objects[i]);
         Mge_EndLighting3D();
@@ -215,6 +242,7 @@ int main(void)
             char fpsRow[40];
             snprintf(fpsRow, sizeof(fpsRow), "FPS: %d   draws: %d", fpsShown, drawsShown);
             Mge_GuiLabel(fpsRow);
+            Mge_GuiCheckbox("shadows", &shadowsOn);
             Mge_GuiSeparator();
 
             Mge_GuiLabel("OBJECTS");
@@ -254,6 +282,7 @@ int main(void)
         Mge_EndDrawing();
     }
 
+    Mge_UnloadShadowMap(&shadow);
     Mge_UnloadCubemap(sky);
     Mge_GuiShutdown();
     Mge_CloseWindow();

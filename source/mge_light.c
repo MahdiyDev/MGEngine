@@ -71,6 +71,25 @@ static const char* lightFragCode =
     "uniform float matSpecular;\n"   // MATERIAL_MAP_SPECULAR.value
     "uniform float shininess;\n"
     "uniform int blinn;\n"           // 1 = Blinn-Phong halfway vector, 0 = classic Phong reflect
+    "uniform int shadowsEnabled;\n"
+    "uniform mat4 lightSpaceMatrix;\n"
+    "uniform sampler2D shadowMap;\n"
+    "float ShadowFactor(vec3 N, vec3 L)\n"
+    "{\n"
+    "    if (shadowsEnabled == 0) return 0.0;\n"
+    "    vec4 lp = lightSpaceMatrix * vec4(vFragPos, 1.0);\n"
+    "    vec3 p = lp.xyz / lp.w;\n"
+    "    p = p * 0.5 + 0.5;\n"                                // clip -> [0,1] texture space
+    "    if (p.z > 1.0) return 0.0;\n"                        // past the light's far plane
+    "    float bias = max(0.0025 * (1.0 - dot(N, L)), 0.0007);\n"
+    "    float cur = p.z - bias;\n"
+    "    float sh = 0.0;\n"
+    "    vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));\n"
+    "    for (int x = -1; x <= 1; x++)\n"
+    "        for (int y = -1; y <= 1; y++)\n"
+    "            sh += cur > texture(shadowMap, p.xy + vec2(x, y) * texel).r ? 1.0 : 0.0;\n"
+    "    return sh / 9.0;\n"                                  // 3x3 PCF
+    "}\n"
     "void main()\n"
     "{\n"
     "    vec3 N = normalize(vNormal);\n"
@@ -108,7 +127,8 @@ static const char* lightFragCode =
     "        vec3 amb = lights[i].ambient  * lights[i].color;\n"
     "        vec3 dif = lights[i].diffuse  * diff * lights[i].color;\n"
     "        vec3 spc = lights[i].specular * matSpecular * spec * lights[i].color;\n"
-    "        lit += amb + (dif + spc) * atten * intensity;\n"
+    "        float sh = (i == 0) ? ShadowFactor(N, L) : 0.0;\n"   // only lights[0] casts
+    "        lit += amb + (dif + spc) * atten * intensity * (1.0 - sh);\n"
     "    }\n"
     "    FragColor = vec4(lit * base.rgb, base.a);\n"
     "}\n";
@@ -226,9 +246,12 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
         count = MGE_MAX_LIGHTS;
 
     MgeGL_Uniform3fv("viewPos", camera.position);
+    MgeGL_Uniform1i("sampleTex", 0); // diffuse on unit 0, shadow map on unit 1
+    MgeGL_Uniform1i("shadowMap", 1); // keep the two samplers on distinct units
     MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform1f("shininess", 32.0f);
     MgeGL_Uniform1i("blinn", (s_model == LIGHTING_PHONG) ? 0 : 1);
+    MgeGL_Uniform1i("shadowsEnabled", 0); // Mge_BeginLighting3DShadowed turns this back on
     MgeGL_Uniform1i("lightCount", count);
 
     for (int i = 0; i < count; i++)

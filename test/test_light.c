@@ -149,6 +149,8 @@ TEST(begin_lighting_ex_uploads_every_light)
     CHECK(rec_i("lightCount") == 3);
     CHECK(feq(rec_f("matSpecular"), 1.0f));
     CHECK(feq(rec_f("shininess"), 32.0f));
+    CHECK(rec_i("shadowsEnabled") == 0); // plain lighting -> shadows off
+    CHECK(rec_i("sampleTex") == 0);      // diffuse on unit 0
 
     Vector3 vp = rec_v("viewPos");
     CHECK(feq(vp.z, 9.0f));
