@@ -122,6 +122,16 @@ int main(void)
             Mge_DrawObject(objects[i]);
         Mge_EndLighting3D();
 
+        // unlit markers so you can see where the lights are
+        Draw_Cube(lamp.position, (Vector3){ 0.3f, 0.3f, 0.3f },
+            (Color){ 255, 235, 180, 255 }); // the point light
+
+        // the sun has no position -- park a marker up-light and point an arrow along its rays
+        Vector3 sunDir = Vector3Normalize(sun.direction);
+        Vector3 sunAt = Vector3_Subtract((Vector3){ 0.0f, 0.0f, 0.0f }, Vector3_Scale(sunDir, 10.0f));
+        Draw_Cube(sunAt, (Vector3){ 0.5f, 0.5f, 0.5f }, (Color){ 180, 190, 255, 255 });
+        Draw_Arrow3D(sunAt, Vector3_Add(sunAt, Vector3_Scale(sunDir, 3.0f)), (Color){ 180, 190, 255, 255 });
+
         // gizmo / selection wires are unlit overlay lines
         if (selected >= 0)
             Mge_DrawObjectGizmo(objects[selected], AXIS);
