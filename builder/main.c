@@ -120,6 +120,10 @@ int main(void)
     Light sun = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
     Light lamp = Mge_MakePointLight((Vector3){ 3.0f, 5.0f, 2.0f }, (Vector3){ 1.0f, 0.85f, 0.6f });
 
+    Cubemap sky = Mge_LoadCubemapDir("assets/skybox");
+    if (sky.id == 0)
+        sky = Mge_LoadCubemapDir("../assets/skybox");
+
     const int N = 4;
     const float AXIS = 1.6f; // object move-gizmo arrow length
     Object objects[4] = {
@@ -189,6 +193,8 @@ int main(void)
         Draw_Cube(lamp.position, (Vector3){ 0.3f, 0.3f, 0.3f }, (Color){ 255, 235, 180, 255 });
         if (selKind == SEL_OBJECT)
             Mge_DrawObjectGizmo(objects[selIndex], AXIS);
+        if (sky.id != 0)
+            Mge_DrawSkybox(sky, camera); // fills whatever the scene didn't
         Mge_EndMode3D();
 
         // --- sidebar ---
@@ -231,6 +237,7 @@ int main(void)
         Mge_EndDrawing();
     }
 
+    Mge_UnloadCubemap(sky);
     Mge_GuiShutdown();
     Mge_CloseWindow();
     return 0;

@@ -29,6 +29,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_stencil.c        stencil test + Mge_DrawObjectOutline
   mge_cull.c           face culling on/off + cull face / winding
   mge_framebuffer.c    RenderTexture + full-screen post-processing effects
+  mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -56,6 +57,7 @@ examples/depth/        depth_buffer
 examples/stencil/      object_outline
 examples/culling/      backface_cull
 examples/framebuffer/  post_process
+examples/cubemap/      skybox_reflect, dynamic_envmap
 ```
 
 ## Using mlib
@@ -115,8 +117,8 @@ wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
 depth-preview wiring; `test_stencil` covers the stencil forwarding and the
 outline state sequence; `test_cull` covers face-culling forwarding;
-`test_framebuffer` covers the `PostFX` enum. All use a stubbed GL backend --
-none open a window.
+`test_framebuffer` / `test_cubemap` cover their enums. All use a stubbed GL
+backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -629,6 +631,58 @@ switched by the `effect` uniform. Keep the render texture the same size as the
 window so 2D coordinates and 3D aspect line up.
 
 Demo: `examples/framebuffer/post_process.c` cycles through every effect.
+
+### Cube maps, skybox & environment mapping
+
+A `Cubemap` is six square textures sampled by a 3D direction.
+
+```c
+Cubemap Mge_LoadCubemap(const char* facePaths[6]);  // GL order: +X -X +Y -Y +Z -Z
+Cubemap Mge_LoadCubemapDir(const char* dir);         // dir/{right,left,top,bottom,front,back}.jpg
+void    Mge_UnloadCubemap(Cubemap);
+```
+
+**Skybox** — `Mge_DrawSkybox(cubemap, camera)` draws a camera-locked cube of the
+map. Call it **last** inside `Mge_BeginMode3D` (its depth is forced to 1.0, so it
+only fills pixels the scene didn't cover).
+
+**Environment mapping** — geometry drawn between these samples the cube map by
+the reflected or refracted view direction (needs per-vertex normals, so `Draw_Cube`
+and meshes work, 2D shapes don't):
+
+```c
+Mge_BeginEnvironmentMap(cubemap, camera, ENVMAP_REFLECT, 0.0f);   // chrome
+    Draw_Cube(pos, size, WHITE);
+Mge_EndEnvironmentMap();
+
+Mge_BeginEnvironmentMap(cubemap, camera, ENVMAP_REFRACT, 1.0f / 1.52f); // glass
+    Draw_Cube(pos, size, WHITE);
+Mge_EndEnvironmentMap();
+```
+
+**Dynamic environment maps** — render the live scene into a probe's cube map,
+then reflect it:
+
+```c
+EnvProbe probe = Mge_LoadEnvProbe(256);
+...
+for (int f = 0; f < 6; f++) {
+    Mge_BeginEnvProbeFace(probe, mirrorPos, f);
+        Mge_ClearBackground(BLACK);
+        Camera3D fc = Mge_GetEnvProbeCamera(mirrorPos, f);
+        /* draw the scene (skybox + everything except the mirror) with `fc` */
+    Mge_EndEnvProbeFace();
+}
+Mge_BeginMode3D(camera);
+    Mge_BeginEnvironmentMap(probe.cubemap, camera, ENVMAP_REFLECT, 0.0f);
+        Draw_Cube(mirrorPos, size, WHITE);   // reflects the real-time surroundings
+    Mge_EndEnvironmentMap();
+Mge_EndMode3D();
+```
+
+Demos: `examples/cubemap/skybox_reflect.c` (static sky, reflect + refract) and
+`dynamic_envmap.c` (a mirror cube reflecting orbiting cubes each frame). Both
+use `assets/skybox/`.
 
 ### GUI (`mge_gui.h`)
 

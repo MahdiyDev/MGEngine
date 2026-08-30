@@ -15,5 +15,6 @@
 - [x] Mge_Gui* UI abstraction (Dear ImGui backend); builder sidebar + type-aware inspector (Object / Light)
 - [x] face culling: enable/disable, cull face + winding order (opt-in)
 - [x] framebuffers + post-processing: RenderTexture, Mge_BeginTextureMode, invert/grayscale/sharpen/blur/edge
+- [x] cubemaps: skybox, environment mapping (reflect/refract), dynamic env probes
 - [ ] batch rendering
 - [ ] multiple vertex rendering

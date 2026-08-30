@@ -231,6 +231,26 @@ typedef struct Image {
     int format;             // Data format (PixelFormat type)
 } Image;
 
+// A cube map -- six square textures addressed by a 3D direction.
+typedef struct Cubemap {
+    unsigned int id;   // GL_TEXTURE_CUBE_MAP
+    int size;          // face edge length, pixels
+} Cubemap;
+
+// A dynamic environment probe: render the scene into `cubemap` from a point,
+// then feed it to Mge_BeginEnvironmentMap for real-time reflections.
+typedef struct EnvProbe {
+    unsigned int fbo;
+    Cubemap cubemap;
+    unsigned int depth; // renderbuffer
+    int size;
+} EnvProbe;
+
+typedef enum {
+    ENVMAP_REFLECT = 0, // mirror -- reflect the view ray off the surface
+    ENVMAP_REFRACT      // glass  -- bend the view ray through it
+} EnvMapMode;
+
 // Offscreen framebuffer: a colour texture + a depth/stencil renderbuffer.
 typedef struct RenderTexture {
     unsigned int fbo;
@@ -551,6 +571,34 @@ void Mge_UnloadRenderTexture(RenderTexture target);
 void Mge_BeginTextureMode(RenderTexture target); // redirect drawing into `target`
 void Mge_EndTextureMode(void);                   // back to the window framebuffer
 void Mge_DrawRenderTextureFX(RenderTexture target, int effect); // a PostFX; POSTFX_NONE just blits
+
+// Cube maps / skybox / environment mapping.
+//
+//   Cubemap sky = Mge_LoadCubemapDir("assets/skybox");
+//   Mge_BeginMode3D(cam);
+//       ... draw the scene ...
+//       Mge_DrawSkybox(sky, cam);                        // draw last
+//       Mge_BeginEnvironmentMap(sky, cam, ENVMAP_REFLECT, 0.0f);
+//           Draw_Cube(pos, size, WHITE);                 // a mirror cube
+//       Mge_EndEnvironmentMap();
+//   Mge_EndMode3D();
+//
+// face order is GL's: +X -X +Y -Y +Z -Z  (right, left, top, bottom, front, back)
+Cubemap Mge_LoadCubemap(const char* facePaths[6]);
+Cubemap Mge_LoadCubemapDir(const char* dir);  // dir/{right,left,top,bottom,front,back}.jpg
+void    Mge_UnloadCubemap(Cubemap cubemap);
+
+void Mge_DrawSkybox(Cubemap cubemap, Camera3D camera);          // inside Mge_BeginMode3D
+void Mge_BeginEnvironmentMap(Cubemap cubemap, Camera3D camera, int mode, float refractRatio);
+void Mge_EndEnvironmentMap(void);
+
+// Dynamic environment maps: render the scene into a probe's cubemap face by face
+// (from `position`), then use `probe.cubemap` with Mge_BeginEnvironmentMap.
+EnvProbe Mge_LoadEnvProbe(int size);
+void     Mge_UnloadEnvProbe(EnvProbe probe);
+void     Mge_BeginEnvProbeFace(EnvProbe probe, Vector3 position, int face); // face 0..5
+void     Mge_EndEnvProbeFace(void);
+Camera3D Mge_GetEnvProbeCamera(Vector3 position, int face); // the camera a probe face renders with
 
 // --- Depth testing ---------------------------------------------------------
 //
