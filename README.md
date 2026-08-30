@@ -15,7 +15,8 @@ vendor/    glad, stb, mlib, GLFW, Assimp, Dear ImGui
 
 ```sh
 make vendor      # once: builds GLFW + Assimp from vendored source (needs cmake + ninja)
-make             # -> build/libmgengine.(dll|so) + build/mgengine (the builder)
+make             # debug build -> build/libmgengine.(dll|so) + build/mgengine (the builder)
+make release     # production build: -O2 -DNDEBUG, stripped (use this for real runs)
 make test        # unit tests
 ```
 

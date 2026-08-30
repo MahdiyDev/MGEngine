@@ -4,11 +4,15 @@
 # that links against it through the public headers in `source/`.
 #
 #   make              -> build/libmgengine.(dll|so) + build/mgengine (the app)
+#                        DEBUG build: -O0 -g, assertions on
+#   make release      -> same targets, PRODUCTION build: -O2 -DNDEBUG, stripped,
+#                        dead code removed. Use this one for actual runs.
 #   make lib          -> just the engine library
 #   make vendor       build GLFW + Assimp from source (needs cmake + ninja)
 #   make vendor-glfw / make vendor-assimp   build just one
 #   make vendor-clean remove built vendor artifacts (keeps the source trees)
 #   make test         build+run the unit tests (no window/GL needed)
+#   make clean-obj    drop the object cache only (used to switch debug <-> release)
 #   make clean        remove build/ (leaves vendor/ -- use vendor-clean for that)
 #
 # On Windows use `mingw32-make`.
@@ -22,6 +26,12 @@ MLIB   = $(VENDOR)/mlib
 CFLAGS   ?= -std=c11 -Wall -Wextra -g
 CXXFLAGS ?= -std=c++17 -Wall -Wextra -g
 CPPFLAGS  = -DPLATFORM_DESKTOP
+
+# production build flags (see the `release` target). -O2 is the big FPS win over
+# the default -O0; NDEBUG drops assertions; the section flags + -s let the linker
+# garbage-collect unused code and strip symbols.
+RELEASE_CFLAGS   = -std=c11   -Wall -Wextra -O2 -DNDEBUG -ffunction-sections -fdata-sections
+RELEASE_CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -DNDEBUG -ffunction-sections -fdata-sections
 INCLUDES  = -I./source \
             -I$(VENDOR)/glad/include \
             -I$(VENDOR)/stb \
@@ -65,6 +75,14 @@ else
     RMDIR = rm -rf $1
 endif
 
+# set by the `release` target (via a recursive $(MAKE) ... RELEASE=1)
+ifdef RELEASE
+    SHAREDFLAGS += -s -Wl,--gc-sections
+    APP_EXTRA   := -s -Wl,--gc-sections
+else
+    APP_EXTRA   :=
+endif
+
 # every source/*.{c,cpp} is engine code (the builder app lives in builder/); the
 # desktop platform file is #included by mge_core.c, not compiled on its own.
 # mge_gui.cpp is the one C++ unit (Dear ImGui backend).
@@ -81,10 +99,17 @@ COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) \
 ENGINE_LIB = $(BUILD_DIR)/$(LIB_NAME)
 APP        = $(BUILD_DIR)/mgengine$(EXE)
 
-.PHONY: all lib clean vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
+.PHONY: all lib release clean clean-obj vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
 
 all: make_build_dir $(APP)
 lib: make_build_dir $(ENGINE_LIB)
+
+# production build: rebuild every object with -O2 -DNDEBUG and strip the result.
+# The object cache is flag-agnostic, so wipe it first (a plain `make` afterwards
+# rebuilds it back as debug).
+release:
+	$(MAKE) clean-obj
+	$(MAKE) all CFLAGS="$(RELEASE_CFLAGS)" CXXFLAGS="$(RELEASE_CXXFLAGS)" RELEASE=1
 
 # create build/obj and stage runtime data so the app can run from build/
 make_build_dir:
@@ -113,11 +138,11 @@ $(BUILD_OBJ_DIR)/imgui:
 	$(call MKDIR,$(BUILD_OBJ_DIR)/imgui)
 
 $(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
-	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w $(PICFLAG) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 # --- builder app: a plain-C consumer of the library + its headers ---
 $(APP): builder/main.c $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $< -o $@ $(APP_LIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $< -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp
 
@@ -151,6 +176,9 @@ vendor-clean:
 
 test:
 	$(MAKE) -C test
+
+clean-obj:
+	$(call RMDIR,$(BUILD_OBJ_DIR))
 
 clean:
 	$(MAKE) -C test clean

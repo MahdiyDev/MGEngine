@@ -14,7 +14,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -86,6 +86,9 @@ test_geometry$(EXE): test_geometry.c ../source/mge_geometry.c $(MLIB)/test.h
 # ModelBatch struct + CPU matrix packing; the instanced draw path is raw GL (untested here)
 test_instancing$(EXE): test_instancing.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_instancing.c ../source/mge_math.c -lm
+
+test_msaa$(EXE): test_msaa.c ../source/mge_msaa.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_msaa.c ../source/mge_msaa.c
 
 # compiled as C11 with gcc, linked with g++ (Assimp is C++)
 test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB)/test.h

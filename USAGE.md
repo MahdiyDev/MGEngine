@@ -32,6 +32,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
   mge_geometry.c       geometry-shader effects: explode, normal visualization
   mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
+  mge_msaa.c           MSAA request (Mge_SetMSAA / Mge_GetMSAA)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -62,6 +63,7 @@ examples/framebuffer/  post_process
 examples/cubemap/      skybox_reflect, dynamic_envmap
 examples/geometry/     geometry_shader
 examples/instancing/   melon_field
+examples/antialiasing/ msaa
 ```
 
 ## Using mlib
@@ -81,8 +83,17 @@ once (needs `cmake` + `ninja`):
 ```sh
 make vendor        # builds GLFW + Assimp -> vendor/*/lib + vendor/*/include
 make               # -> build/libmgengine.(dll|so)  and  build/mgengine  (the app)
+make release       # same, but a PRODUCTION build (see below)
 make lib           # -> just the library
 ```
+
+`make` is a **debug** build: `-O0 -g`, assertions on — handy while developing,
+but noticeably slow. `make release` rebuilds every object with `-O2 -DNDEBUG`,
+strips symbols and lets the linker drop unused code — this is the one to run for
+real (typically several times the frame rate of the debug build, ~40 % smaller
+binaries). The object cache doesn't track flags, so `make release` wipes
+`build/obj` first; a plain `make` afterwards puts the debug objects back.
+Override per-invocation instead with e.g. `make CFLAGS="-O3 -march=native"`.
 
 `make vendor-glfw` / `make vendor-assimp` build just one; `make vendor-clean`
 deletes everything they produced (the committed source trees stay). The Assimp build
@@ -123,8 +134,9 @@ depth-preview wiring; `test_stencil` covers the stencil forwarding and the
 outline state sequence; `test_cull` covers face-culling forwarding;
 `test_framebuffer` / `test_cubemap` cover their enums; `test_geometry` covers
 the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
-contract and the `Matrix_Scale` / composition math behind the transforms. All
-use a stubbed GL backend -- none open a window.
+contract and the `Matrix_Scale` / composition math behind the transforms;
+`test_msaa` covers the `Mge_SetMSAA` request clamping. All use a stubbed GL
+backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -173,6 +185,28 @@ int main(void)
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
 calls. `builder/main.c` shows a fly-camera plus TAB-toggled edit mode with the
 move gizmo.
+
+### Anti-aliasing (MSAA)
+
+The window is created with a **4x multisampled** default framebuffer, so every
+edge the renderer rasterizes — shapes, objects, meshes, models — comes out
+smoothed with nothing extra per draw. Change it *before* `Mge_InitWindow`:
+
+```c
+Mge_SetMSAA(8);           // 2 / 4 / 8 ... ; 0 (or 1) turns MSAA off
+Mge_InitWindow(800, 600, "hello");
+
+int got = Mge_GetMSAA();  // sample count the driver actually granted (0 = none)
+```
+
+`Mge_SetMSAA` only records the request; it must be called first because the
+sample count is fixed at window creation (`glfwWindowHint(GLFW_SAMPLES, …)`).
+`builder/main.c` calls `Mge_SetMSAA(4)` explicitly. This covers the window's
+framebuffer only — a `RenderTexture` from `Mge_LoadRenderTexture` is still
+single-sampled, so post-processed passes don't get MSAA.
+
+Demo: `examples/antialiasing/msaa.c` — orbiting cube + a thin rotating triangle
+outline; set `Mge_SetMSAA(0)` to bring the jaggies back.
 
 ### Cursor
 

@@ -103,6 +103,7 @@ static void InspectLight(Light* l)
 
 int main(void)
 {
+    Mge_SetMSAA(4); // 4x anti-aliasing: smooth edges on every shape/object/model
     Mge_InitWindow(width, height, "MGEngine builder");
     Mge_SetTargetFPS(60);
 

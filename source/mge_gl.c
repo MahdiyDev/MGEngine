@@ -182,6 +182,10 @@ void MgeGL_Init(int width, int height)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, quadCount * 6 * sizeof(unsigned int), MGEGL.State.vertexBuffer.indices, GL_STATIC_DRAW);
 
     glUseProgram(MGEGL.State.currentShaderID);
+
+    // MSAA: harmless when the framebuffer isn't multisampled; on when the window
+    // was created with GLFW_SAMPLES >= 2 (see Mge_SetMSAA / Mge_GetRequestedMSAA)
+    glEnable(GL_MULTISAMPLE);
 }
 
 unsigned int MgeGL_GetDefaultShaderId(void)
@@ -905,6 +909,13 @@ void MgeGL_SetFrontFace(int winding)
 {
     MgeGL_Draw();
     glFrontFace((winding == WINDING_CW) ? GL_CW : GL_CCW);
+}
+
+int MgeGL_GetSampleCount(void)
+{
+    GLint samples = 0;
+    glGetIntegerv(GL_SAMPLES, &samples);
+    return (int)samples;
 }
 
 // ----- retained indexed meshes -----

@@ -56,6 +56,7 @@ void InitPlatform(void)
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
     glfwWindowHint(GLFW_STENCIL_BITS, 8);
+    glfwWindowHint(GLFW_SAMPLES, Mge_GetRequestedMSAA()); // MSAA; 0 = off (see Mge_SetMSAA)
 
     platform.window = glfwCreateWindow(
         (int)CORE.Window.screen.width,

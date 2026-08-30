@@ -86,6 +86,8 @@ void MgeGL_ClearStencil(void);
 void MgeGL_SetFaceCulling(bool enabled);
 void MgeGL_SetCullFace(int face);      // CullFace
 void MgeGL_SetFrontFace(int winding);  // FrontFace
+
+int MgeGL_GetSampleCount(void);        // GL_SAMPLES of the current framebuffer (0 = not multisampled)
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 unsigned int MgeGL_GetDefaultShaderId(void);

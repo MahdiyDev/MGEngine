@@ -512,6 +512,9 @@ typedef struct Object {
 } Object;
 
 // Core
+void Mge_SetMSAA(int samples);       // MSAA sample count for the window; call BEFORE Mge_InitWindow (default 4, < 2 disables)
+int  Mge_GetMSAA(void);              // sample count the driver granted (0 = none); valid after Mge_InitWindow
+int  Mge_GetRequestedMSAA(void);     // internal: what the platform layer should request
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
 void Mge_CloseWindow(void);

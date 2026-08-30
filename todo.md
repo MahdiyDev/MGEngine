@@ -19,5 +19,7 @@
 - [x] batching vertex attributes: Mge_MakeMeshFromArrays -> one VBO, block per attribute
 - [x] geometry shaders: Mge_BeginExplode3D, Mge_BeginNormals3D (+ MgeGL_CreateShaderProgramGeo)
 - [x] instancing: ModelBatch -> Mge_LoadModelBatch / DrawModelBatch / UpdateModelBatch (one instanced draw per mesh)
+- [x] anti-aliasing: MSAA on by default (Mge_SetMSAA / Mge_GetMSAA); GLFW_SAMPLES hint + glEnable(GL_MULTISAMPLE)
+- [x] production build: `make release` -> -O2 -DNDEBUG, stripped, --gc-sections
 - [ ] batch rendering
 - [ ] multiple vertex rendering

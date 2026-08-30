@@ -10,6 +10,10 @@ make            # from the repo root -> build/mgengine(.exe)
 
 `build/libmgengine.dll` sits next to the executable, so run it from `build/`.
 
+The builder calls `Mge_SetMSAA(4)` before `Mge_InitWindow`, so the viewport is
+4x anti-aliased — every shape, object and model edge is smoothed. See the
+Anti-aliasing section in [../USAGE.md](../USAGE.md).
+
 ## Controls
 
 | | |
