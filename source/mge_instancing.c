@@ -58,9 +58,9 @@ static const char* instFrag =
     "    vec3 N = normalize(vNormal);\n"
     "    vec3 L = (lightType == 0) ? normalize(-lightDir) : normalize(lightPos - vFragPos);\n"
     "    vec3 V = normalize(viewPos - vFragPos);\n"
-    "    vec3 R = reflect(-L, N);\n"
+    "    vec3 H = normalize(L + V);\n"   // Blinn-Phong halfway vector
     "    float diff = max(dot(N, L), 0.0);\n"
-    "    float spec = (diff > 0.0) ? pow(max(dot(V, R), 0.0), max(shininess, 1.0)) : 0.0;\n"
+    "    float spec = (diff > 0.0) ? pow(max(dot(N, H), 0.0), max(shininess, 1.0)) : 0.0;\n"
     "    vec4 base = texture(sampleTex, vTexCoord);\n"
     "    vec3 lit = (ambient + diffuseS * diff) * lightColor + specularS * spec * lightColor;\n"
     "    FragColor = vec4(lit * base.rgb, base.a);\n"

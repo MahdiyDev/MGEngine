@@ -201,6 +201,29 @@ TEST(begin_lighting_clamps_to_max)
     Mge_EndLighting3D();
 }
 
+TEST(lighting_model_defaults_to_blinn_and_toggles)
+{
+    Camera3D cam = { .position = { 0, 0, 5 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 },
+        .fovy = 60.0f, .projection = CAMERA_PERSPECTIVE };
+    Light l = Mge_MakePointLight((Vector3){ 1, 1, 1 }, (Vector3){ 1, 1, 1 });
+
+    CHECK(Mge_GetLightingModel() == LIGHTING_BLINN_PHONG); // default
+
+    rec_reset();
+    Mge_BeginLighting3D(l, cam);
+    CHECK(rec_i("blinn") == 1); // halfway vector
+    Mge_EndLighting3D();
+
+    Mge_SetLightingModel(LIGHTING_PHONG);
+    CHECK(Mge_GetLightingModel() == LIGHTING_PHONG);
+    rec_reset();
+    Mge_BeginLighting3D(l, cam);
+    CHECK(rec_i("blinn") == 0); // classic reflect
+    Mge_EndLighting3D();
+
+    Mge_SetLightingModel(LIGHTING_BLINN_PHONG); // leave the default put back
+}
+
 int main(void)
 {
     RUN(directional_light_defaults);
@@ -211,5 +234,6 @@ int main(void)
     RUN(begin_lighting_ex_uploads_every_light);
     RUN(begin_lighting_single_form_is_one_light);
     RUN(begin_lighting_clamps_to_max);
+    RUN(lighting_model_defaults_to_blinn_and_toggles);
     return test_summary();
 }

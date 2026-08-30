@@ -1,5 +1,7 @@
-// Phong lighting for 3D surfaces: ambient + diffuse + specular, for any mix of
-// directional / point / spot lights (up to MGE_MAX_LIGHTS at once).
+// Blinn-Phong lighting for 3D surfaces: ambient + diffuse + specular, for any mix
+// of directional / point / spot lights (up to MGE_MAX_LIGHTS at once). The
+// specular model is switchable (Mge_SetLightingModel) between Blinn-Phong (the
+// default halfway-vector form) and classic Phong (reflect + view dir).
 //
 // The renderer submits geometry in world space and uses `modelview` = the view
 // matrix only (there is no per-object model matrix), so the fragment position and
@@ -68,6 +70,7 @@ static const char* lightFragCode =
     "uniform sampler2D sampleTex;\n"
     "uniform float matSpecular;\n"   // MATERIAL_MAP_SPECULAR.value
     "uniform float shininess;\n"
+    "uniform int blinn;\n"           // 1 = Blinn-Phong halfway vector, 0 = classic Phong reflect
     "void main()\n"
     "{\n"
     "    vec3 N = normalize(vNormal);\n"
@@ -93,8 +96,15 @@ static const char* lightFragCode =
     "            intensity = clamp((theta - lights[i].outerCutoff) / eps, 0.0, 1.0);\n"
     "        }\n"
     "        float diff = max(dot(N, L), 0.0);\n"
-    "        vec3 R = reflect(-L, N);\n"
-    "        float spec = (diff > 0.0) ? pow(max(dot(V, R), 0.0), max(shininess, 1.0)) : 0.0;\n"
+    "        float sa;\n"
+    "        if (blinn == 1) {\n"
+    "            vec3 H = normalize(L + V);\n"
+    "            sa = max(dot(N, H), 0.0);\n"
+    "        } else {\n"
+    "            vec3 R = reflect(-L, N);\n"
+    "            sa = max(dot(V, R), 0.0);\n"
+    "        }\n"
+    "        float spec = (diff > 0.0) ? pow(sa, max(shininess, 1.0)) : 0.0;\n"
     "        vec3 amb = lights[i].ambient  * lights[i].color;\n"
     "        vec3 dif = lights[i].diffuse  * diff * lights[i].color;\n"
     "        vec3 spc = lights[i].specular * matSpecular * spec * lights[i].color;\n"
@@ -106,6 +116,17 @@ static const char* lightFragCode =
 static Shader s_shader = { 0 };
 static bool s_loaded = false;
 static bool s_active = false;
+static LightingModel s_model = LIGHTING_BLINN_PHONG;
+
+void Mge_SetLightingModel(LightingModel model)
+{
+    s_model = model;
+}
+
+LightingModel Mge_GetLightingModel(void)
+{
+    return s_model;
+}
 
 // ----- light construction (no GL context needed) -----
 
@@ -207,6 +228,7 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
     MgeGL_Uniform3fv("viewPos", camera.position);
     MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform1f("shininess", 32.0f);
+    MgeGL_Uniform1i("blinn", (s_model == LIGHTING_PHONG) ? 0 : 1);
     MgeGL_Uniform1i("lightCount", count);
 
     for (int i = 0; i < count; i++)

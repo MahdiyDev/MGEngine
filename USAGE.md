@@ -21,7 +21,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
-  mge_light.c          Phong lighting; directional / point / spot lights
+  mge_light.c          Blinn-Phong lighting; directional / point / spot lights
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
@@ -52,7 +52,7 @@ vendor/
 test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong
 examples/materials/    textured_cube
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -128,8 +128,8 @@ make test            # or:  cd test && make
 `test_math` covers the vector/matrix layer; `test_utils` covers
 `Mge_GetFileExtension` and the file loaders; `test_object` covers the gizmo
 picking/drag math; `test_material` covers `Material` / `MaterialMap`
-construction; `test_light` covers the light constructors and the uniform
-wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
+construction; `test_light` covers the light constructors, the uniform wiring in
+`Mge_BeginLighting3D(Ex)` and the Blinn/Phong toggle; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
 depth-preview wiring; `test_stencil` covers the stencil forwarding and the
 outline state sequence; `test_cull` covers face-culling forwarding;
@@ -333,13 +333,21 @@ and `gizmo_3d.c`.
 
 ### Lighting
 
-Phong shading with the three classic terms:
+Blinn-Phong shading with the three classic terms:
 
 | term | what it is |
 | --- | --- |
 | **ambient** | a flat, constant fill added everywhere (nothing is fully black) |
 | **diffuse** | Lambert: brightness ∝ `max(dot(surfaceNormal, dirToLight), 0)` |
 | **specular** | a highlight where the surface reflects the light toward the camera; `material.shininess` sets its tightness |
+
+The specular term is **Blinn-Phong** (`dot(normal, halfway)`) by default — unlike
+classic Phong (`dot(view, reflect)`) it has no hard cutoff at grazing angles, so
+low-`shininess` highlights stay smooth. Switch models with
+`Mge_SetLightingModel(LIGHTING_PHONG)` / `LIGHTING_BLINN_PHONG` (Phong wants a
+`shininess` ~2–4x lower for a similar highlight). The toggle drives
+`Mge_BeginLighting3D[Ex]`; the instanced-model shader (`Mge_DrawModelBatch`) is
+always Blinn-Phong.
 
 **Where do the knobs live?** — the two halves of the equation split cleanly:
 
@@ -414,13 +422,14 @@ so draw them outside the `Begin/EndLighting3D` pair.
 
 Demos: `examples/lighting/` — `ambient` / `diffuse` / `specular` isolate the
 three terms; `directional` / `point` / `spotlight` isolate the three light types
-(spotlight shows a hard vs. a soft cone side by side); `builder/main.c` combines
-a directional fill with an orbiting point light.
+(spotlight shows a hard vs. a soft cone side by side); `blinn_phong` toggles the
+two specular models over a low-shininess floor; `builder/main.c` combines a
+directional fill with an orbiting point light.
 
 ### Materials & material maps
 
 A `Material` is a fixed set of `MaterialMap` slots (indexed by
-`MaterialMapIndex`) plus a Phong `shininess`. Each map carries a **texture**, a
+`MaterialMapIndex`) plus a specular `shininess`. Each map carries a **texture**, a
 **color** and a scalar **value**; what those mean depends on the slot:
 
 | slot | `.texture` | `.color` | `.value` |

@@ -839,6 +839,18 @@ void Mge_SetSelectedObject(Object* objects, int count, int index); // select as 
 //
 // Mge_DrawObject() already calls Mge_SetMaterial(obj.material) for you, so an
 // Object drawn between Begin/End is lit with its own material automatically.
+
+// Specular model. Blinn-Phong (halfway vector) is the default -- it has no hard
+// cutoff at grazing angles the way classic Phong's reflect() does, so low-
+// shininess highlights look right. Phong wants a shininess roughly 2-4x lower
+// than Blinn for a similar-size highlight.
+typedef enum LightingModel {
+	LIGHTING_BLINN_PHONG = 0,
+	LIGHTING_PHONG = 1,
+} LightingModel;
+void Mge_SetLightingModel(LightingModel model); // affects Mge_BeginLighting3D[Ex] from the next call on
+LightingModel Mge_GetLightingModel(void);
+
 Material Mge_DefaultMaterial(void);                      // white diffuse, no textures, shininess 32
 void     Mge_SetMaterialTexture(Material* material, int mapIndex, Texture2D texture); // assign one map's texture
 
