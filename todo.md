@@ -11,5 +11,6 @@
 - [x] Model: Mge_LoadModel via Assimp (glTF/OBJ/FBX) -> meshes + directory + bbox; node transforms baked in
 - [x] depth testing: depth func/mask, clip planes, polygon offset (z-fighting), depth-buffer preview shader
 - [x] stencil testing + object outlining; selected objects outline instead of wireframe
+- [x] split engine (source/ -> libmgengine shared lib) from the builder app (builder/main.c links it)
 - [ ] batch rendering
 - [ ] multiple vertex rendering

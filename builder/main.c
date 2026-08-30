@@ -3,9 +3,8 @@
 //   fly-camera    WASD to move, mouse to look
 //   edit mode     left-click a box to select it, drag a gizmo arrow to move it
 //                 along that axis; right-click to deselect
-#include "mge.h"
-#include "mge_gl.h"
-#include "mge_math.h"
+#include <mge.h>
+#include <mge_math.h>
 
 #include <math.h>
 

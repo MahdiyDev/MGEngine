@@ -33,8 +33,8 @@ else
     RM  = rm -f $1
 endif
 
-# engine objects, minus main.o (each example has its own main)
-ENGINE_OBJS = $(filter-out ../build/obj/main.o,$(wildcard ../build/obj/*.o))
+# the engine objects staged by the top-level `make` (each example has its own main)
+ENGINE_OBJS = $(wildcard ../build/obj/*.o)
 
 SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c depth/*.c stencil/*.c)
 BIN = $(SRC:.c=$(EXE))

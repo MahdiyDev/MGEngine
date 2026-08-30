@@ -1,14 +1,16 @@
 # MGEngine
 
-A small raylib-style 2D/3D rendering engine. Engine code is **C11** (no glm, no
+A small raylib-style 2D/3D rendering engine. The engine builds as a **shared
+library** (`libmgengine.dll` / `.so`); `builder/` is a separate app that links
+against it through the headers in `source/`. Engine code is **C11** (no glm, no
 Dear ImGui); OpenGL 4.4 core via GLFW + glad, image loading via stb_image, model
-loading via [Assimp](https://github.com/assimp/assimp) (C++ — so the final link
-is driven by `g++` to pull in libstdc++, but engine sources stay C).
+loading via [Assimp](https://github.com/assimp/assimp) (C++ — the library is
+linked with `g++`, and bakes in the C/C++ runtimes so consumers stay pure C).
 
 ## Layout
 
 ```
-source/
+source/                THE ENGINE -- every *.c here is compiled into the library
   mge.h            public types + core / shapes / texture / input API
   mge_gl.h  mge_gl.c     immediate-mode-ish batched GL renderer (MgeGL_*)
   mge_math.h mge_math.c  Vector2/3/4, Matrix, projections (replaces glm)
@@ -24,7 +26,9 @@ source/
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-  main.c               demo: fly-camera + TAB edit mode + combined lighting
+builder/
+  main.c               THE APP -- editor demo: fly-camera + TAB edit mode + lighting;
+                       #include <mge.h>, links -lmgengine
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h
@@ -59,7 +63,8 @@ once (needs `cmake` + `ninja`):
 
 ```sh
 make vendor        # builds GLFW + Assimp -> vendor/*/lib + vendor/*/include
-make                 # -> build/MGEngine
+make               # -> build/libmgengine.(dll|so)  and  build/mgengine  (the app)
+make lib           # -> just the library
 ```
 
 `make vendor-glfw` / `make vendor-assimp` build just one; `make vendor-clean`
@@ -69,10 +74,17 @@ small static lib; adjust the `-DASSIMP_BUILD_*` flags in the `vendor-assimp`
 recipe to add formats.
 
 `make` compiles every `source/*.c` with `gcc -std=c11` (the desktop platform
-file is `#include`d by `mge_core.c`, not compiled on its own) and links the
-result with `g++` (Assimp is C++). It first runs `make_build_dir`, which creates
-`build/obj/` and copies `assets/` (and `shaders/`, if either exists) into
-`build/` so the executable can be run from either the repo root or `build/`.
+file is `#include`d by `mge_core.c`, not compiled on its own), links them into
+`build/libmgengine.dll` with `g++` (`-static-libgcc -static-libstdc++ -static`,
+so the DLL carries the Assimp/C++ runtime and GLFW/OpenGL are already inside),
+then builds `builder/main.c` against it with plain `gcc -Isource -lmgengine`.
+`make_build_dir` stages `assets/` (and `shaders/`) plus, on Windows, the DLL
+sits next to `build/mgengine.exe`, so the app runs from `build/`.
+
+Your own app is the same one-liner: `gcc yours.c -Isource -Lbuild -lmgengine`
+plus `libmgengine.dll` on the path (or beside the exe). The `examples/` still
+link the engine object files directly (`build/obj/*.o`) so each example exe is
+self-contained.
 
 On Windows use `mingw32-make`. The Makefiles pin `SHELL := cmd.exe`, so the
 recipes work whether or not an `sh`/Git-Bash shell is on `PATH`.
@@ -137,7 +149,7 @@ int main(void)
 3D uses a `Camera3D` (passed **by value**) between `Mge_BeginMode3D` /
 `Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Arrow3D` or the
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
-calls. `source/main.c` shows a fly-camera plus TAB-toggled edit mode with the
+calls. `builder/main.c` shows a fly-camera plus TAB-toggled edit mode with the
 move gizmo.
 
 ### Cursor
@@ -150,7 +162,7 @@ move gizmo.
 | `Mge_ToggleCursor()` | flip between `EnableCursor()` and `DisableCursor()` |
 | `IsCursorHidden()` | `true` while the cursor is hidden / locked |
 
-Bind it to a key in your loop — `source/main.c` uses **TAB** to free and re-lock
+Bind it to a key in your loop — `builder/main.c` uses **TAB** to free and re-lock
 the mouse, and only runs the fly-camera while it is locked:
 
 ```c
@@ -309,7 +321,7 @@ so draw them outside the `Begin/EndLighting3D` pair.
 
 Demos: `examples/lighting/` — `ambient` / `diffuse` / `specular` isolate the
 three terms; `directional` / `point` / `spotlight` isolate the three light types
-(spotlight shows a hard vs. a soft cone side by side); `source/main.c` combines
+(spotlight shows a hard vs. a soft cone side by side); `builder/main.c` combines
 a directional fill with an orbiting point light.
 
 ### Materials & material maps
@@ -565,6 +577,6 @@ directly.
 - Pure C11: every translation unit builds under `gcc -std=c11 -Wall -Wextra`.
   The `test/` suite needs no window or GL context; the window / renderer itself
   needs a real GL context.
-- `build/MGEngine` links once `vendor/glfw/lib/libglfw3.a` exists (`make vendor`).
+- `make` needs `vendor/{glfw,assimp}/lib` populated first (`make vendor`).
 - Dear ImGui and `glm` are not used — `vendor/imgui/` is left in place but
   unlinked, `vendor/glm/` is gone.

@@ -1,8 +1,10 @@
-# MGEngine -- C11 engine (no glm, no imgui). Assimp (C++) is linked for model
-# loading, so the final link pulls in libstdc++.
+# MGEngine build.
 #
-#   make              build build/MGEngine (needs the vendor/*/lib archives)
-#   make make_build_dir  create build/ and copy shaders/ + assets/ into it
+# The engine is a shared library; `builder/` is a separate app (the editor demo)
+# that links against it through the public headers in `source/`.
+#
+#   make              -> build/libmgengine.(dll|so) + build/mgengine (the app)
+#   make lib          -> just the engine library
 #   make vendor       build GLFW + Assimp from source (needs cmake + ninja)
 #   make vendor-glfw / make vendor-assimp   build just one
 #   make vendor-clean remove built vendor artifacts (keeps the source trees)
@@ -26,60 +28,79 @@ INCLUDES = -I./source \
            -I$(MLIB) -I$(MLIB)/vec
 
 LIB_DIR   = -L$(VENDOR)/glfw/lib -L$(VENDOR)/assimp/lib
-# assimp before its own deps (zlibstatic, stdc++); LINK with the C++ toolchain
+# assimp before its own deps (zlibstatic, stdc++); the library is linked with g++
 LIB_LINKS = -lglfw3 -lassimp -lzlibstatic
 LINK      = g++
+
+SOURCE_DIR    = source
+BUILD_DIR     = build
+BUILD_OBJ_DIR = $(BUILD_DIR)/obj
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
     .SHELLFLAGS := /c
     LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
     EXE  := .exe
+    PICFLAG :=
+    LIB_NAME := libmgengine.dll
+    IMPLIB   := $(BUILD_DIR)/libmgengine.dll.a
+    # bake the C/C++/pthread runtimes into the DLL so the app needs only
+    # libmgengine.dll + system DLLs at run time
+    SHAREDFLAGS := -shared -static -static-libgcc -static-libstdc++ -Wl,--out-implib,$(IMPLIB)
+    APP_LIBS := -L$(BUILD_DIR) -lmgengine
     MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
     CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
     RMDIR = if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
 else
     LIB_LINKS += -lGL -lm -lpthread -ldl -lX11
     EXE  :=
+    PICFLAG := -fPIC
+    LIB_NAME := libmgengine.so
+    IMPLIB   :=
+    SHAREDFLAGS := -shared
+    APP_LIBS := -L$(BUILD_DIR) -lmgengine -Wl,-rpath,'$$ORIGIN'
     MKDIR = mkdir -p $1
     CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
     RMDIR = rm -rf $1
 endif
 
-SOURCE_DIR    = source
-BUILD_DIR     = build
-BUILD_OBJ_DIR = $(BUILD_DIR)/obj
-
-# platforms/*.c is #included by mge_core.c, so it is not compiled on its own
+# every source/*.c is engine code (the builder app lives in builder/); the
+# desktop platform file is #included by mge_core.c, not compiled on its own
 CSOURCES = $(wildcard $(SOURCE_DIR)/*.c)
 # glad lives with the other vendored deps but is compiled into the engine
 GLAD_SRC = $(VENDOR)/glad/glad.c
 COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) $(BUILD_OBJ_DIR)/glad.o
 
-EXECUTABLE = MGEngine
+ENGINE_LIB = $(BUILD_DIR)/$(LIB_NAME)
+APP        = $(BUILD_DIR)/mgengine$(EXE)
 
-.PHONY: all clean vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
+.PHONY: all lib clean vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
 
-all: make_build_dir $(BUILD_DIR)/$(EXECUTABLE)$(EXE)
+all: make_build_dir $(APP)
+lib: make_build_dir $(ENGINE_LIB)
 
-# create build/obj and stage runtime data so build/MGEngine can run from build/
+# create build/obj and stage runtime data so the app can run from build/
 make_build_dir:
 	$(call MKDIR,$(BUILD_OBJ_DIR))
 	$(call CPDIR,shaders,$(BUILD_DIR)/shaders)
 	$(call CPDIR,assets,$(BUILD_DIR)/assets)
 
-# link with g++ so libstdc++ / the C++ runtime come in for Assimp
-$(BUILD_DIR)/$(EXECUTABLE)$(EXE): $(COBJECTS)
-	$(LINK) $(CFLAGS) $(COBJECTS) -o $@ $(LIB_DIR) $(LIB_LINKS)
+# --- engine library ---
+$(ENGINE_LIB): $(COBJECTS)
+	$(LINK) $(CFLAGS) $(SHAREDFLAGS) -o $@ $(COBJECTS) $(LIB_DIR) $(LIB_LINKS)
 
 $(BUILD_OBJ_DIR):
 	$(call MKDIR,$(BUILD_OBJ_DIR))
 
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_OBJ_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 $(BUILD_OBJ_DIR)/glad.o: $(GLAD_SRC) | $(BUILD_OBJ_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+
+# --- builder app: a plain-C consumer of the library + its headers ---
+$(APP): builder/main.c $(ENGINE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $< -o $@ $(APP_LIBS)
 
 vendor: vendor-glfw vendor-assimp
 
