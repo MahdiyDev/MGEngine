@@ -7,6 +7,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define MGE_VERSION "v0.0.1"
 
 #define CLITERAL(type) (type)
@@ -499,6 +503,7 @@ bool IsMouseButtonReleased(int button);
 // Window
 int Mge_GetScreenWidth(void);
 int Mge_GetScreenHeight(void);
+void* Mge_GetWindowHandle(void); // native handle (GLFWwindow*) -- for GUI / interop
 
 // Texture
 Image Mge_LoadImageFromMemory(const char *fileType, const unsigned char *fileData, int dataSize);
@@ -653,6 +658,7 @@ int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength);
 int Mge_ManipulateObjects3D(Object* objects, int count, Camera3D camera, float axisLength);
 void Mge_ClearSelection(Object* objects, int count); // deselect all, cancel any drag
 int Mge_GetSelectedObject(void);                     // index of the selected object, or -1
+void Mge_SetSelectedObject(Object* objects, int count, int index); // select as if clicked; -1 clears
 
 #ifndef MGE_MAX_LIGHTS
 	#define MGE_MAX_LIGHTS 8   // shader hard limit; extra lights are ignored
@@ -685,3 +691,7 @@ void Mge_BeginLighting3D(Light light, Camera3D camera);                       //
 void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera);  // up to MGE_MAX_LIGHTS
 void Mge_SetMaterial(Material material);                 // no-op unless lighting is active
 void Mge_EndLighting3D(void);
+
+#ifdef __cplusplus
+}
+#endif

@@ -2,6 +2,10 @@
 
 // Small linear-algebra layer (replaces glm). Plain C11, no operator overloads.
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef PI
     #define PI 3.14159265358979323846f
 #endif
@@ -69,3 +73,7 @@ Matrix MatrixOrtho(double left, double right, double bottom, double top, double 
 Matrix MatrixPerspective(double fovY, double aspect, double nearPlane, double farPlane);
 Matrix MatrixLookAt(Vector3 eye, Vector3 target, Vector3 up);
 float16 MatrixToFloatV(Matrix mat);
+
+#ifdef __cplusplus
+}
+#endif

@@ -2,10 +2,14 @@
 
 A small raylib-style 2D/3D rendering engine. The engine builds as a **shared
 library** (`libmgengine.dll` / `.so`); `builder/` is a separate app that links
-against it through the headers in `source/`. Engine code is **C11** (no glm, no
-Dear ImGui); OpenGL 4.4 core via GLFW + glad, image loading via stb_image, model
-loading via [Assimp](https://github.com/assimp/assimp) (C++ — the library is
-linked with `g++`, and bakes in the C/C++ runtimes so consumers stay pure C).
+against it through the headers in `source/` (see
+[builder/USAGE.md](builder/USAGE.md), and [README.md](README.md) for the map of
+the whole repo). Engine code is **C11**; OpenGL 4.4 core via GLFW + glad, image
+loading via stb_image, model loading via
+[Assimp](https://github.com/assimp/assimp), UI via
+[Dear ImGui](https://github.com/ocornut/imgui) behind a C abstraction. The two
+C++ dependencies mean the library is linked with `g++` — it bakes in the C/C++
+runtimes, so consumers stay pure C.
 
 ## Layout
 
@@ -23,16 +27,19 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
   mge_depth.c          depth test / clip planes / polygon offset / depth preview
   mge_stencil.c        stencil test + Mge_DrawObjectOutline
+  mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 builder/
-  main.c               THE APP -- editor demo: fly-camera + TAB edit mode + lighting;
-                       #include <mge.h>, links -lmgengine
+  main.c               THE APP -- scene editor: fly-camera + TAB edit mode + a
+                       sidebar/inspector; #include <mge.h> / <mge_gui.h>, links -lmgengine
+  USAGE.md             builder docs
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h
   mlib/                MahdiyDev/mlib (containers, test harness)
+  imgui/               Dear ImGui 1.90.5 source (compiled straight into the engine)
   glfw/                GLFW -- vendored source; `make vendor-glfw` builds lib/ + include/
   assimp/              Assimp OBJ/glTF2/FBX importers -- pruned source under
                        source/; `make vendor-assimp` builds lib/ + include/
@@ -73,11 +80,12 @@ enables only the OBJ / glTF2 / FBX importers (no exporters, tools or tests) for 
 small static lib; adjust the `-DASSIMP_BUILD_*` flags in the `vendor-assimp`
 recipe to add formats.
 
-`make` compiles every `source/*.c` with `gcc -std=c11` (the desktop platform
-file is `#include`d by `mge_core.c`, not compiled on its own), links them into
-`build/libmgengine.dll` with `g++` (`-static-libgcc -static-libstdc++ -static`,
-so the DLL carries the Assimp/C++ runtime and GLFW/OpenGL are already inside),
-then builds `builder/main.c` against it with plain `gcc -Isource -lmgengine`.
+`make` compiles `source/*.c` with `gcc -std=c11` and `source/mge_gui.cpp` with
+`g++ -std=c++17` (the desktop platform file is `#include`d by `mge_core.c`, not
+compiled on its own), links them into `build/libmgengine.dll` with `g++`
+(`-static-libgcc -static-libstdc++ -static`, so the DLL carries the C/C++ runtime
+and GLFW / Assimp / Dear ImGui are already inside), then builds `builder/main.c`
+against it with plain `gcc -Isource -lmgengine`.
 `make_build_dir` stages `assets/` (and `shaders/`) plus, on Windows, the DLL
 sits next to `build/mgengine.exe`, so the app runs from `build/`.
 
@@ -196,7 +204,9 @@ void   Mge_DrawObjectGizmo(Object obj, float axisLength); // X/Y (2D) or X/Y/Z (
 ```
 
 `Mge_ManipulateObjects2D/3D()` does mouse picking and dragging — call it **once
-per frame while the cursor is enabled** (i.e. not in FPS mode). Left-click an
+per frame while the cursor is enabled** (i.e. not in FPS mode).
+`Mge_SetSelectedObject(objects, count, i)` selects one from code with the same
+effect as a click (its gizmo becomes draggable), and `-1` clears. Left-click an
 object to select it, then:
 
 - drag a **gizmo arrow** → the object moves **along that axis only** (the drag is
@@ -559,6 +569,43 @@ outline shows even when it is partly behind something.
 Demo: `examples/stencil/object_outline.c` — a walking selection outlines each
 cube in turn, plus one hand-outlined pillar in a custom colour.
 
+### GUI (`mge_gui.h`)
+
+An immediate-mode UI abstracted over Dear ImGui — the backend is baked into
+`libmgengine`, so consumers include `<mge_gui.h>` and call plain C. No ImGui
+types leak out.
+
+```c
+#include <mge_gui.h>
+
+Mge_GuiBeginFrame();                         // after the 3D/2D scene
+    if (Mge_GuiBeginSidebar("Scene", 300, false)) {   // full-height dock on the left
+        if (Mge_GuiSelectable("Cube 0", sel == 0)) sel = 0;
+        Mge_GuiSeparator();
+        Mge_GuiInputVec3("position", &obj.position);   // "draw input" for a Vector3
+        Mge_GuiInputColor("color", &obj.color);        // 8-bit RGBA swatch
+        Mge_GuiSliderFloat("shininess", &mat.shininess, 1, 128);
+    }
+    Mge_GuiEndSidebar();
+Mge_GuiEndFrame();                           // renders on top of the framebuffer
+```
+
+| kind | calls |
+| --- | --- |
+| frame | `Mge_GuiBeginFrame` / `Mge_GuiEndFrame`, `Mge_GuiShutdown` |
+| boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (edge dock) + matching `End*` |
+| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiButton`, `Mge_GuiSelectable` |
+| inputs | `Mge_GuiCheckbox`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
+
+Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
+`Mge_GuiButton` return `true` on click. Gate your own picking and camera on
+`Mge_GuiWantsMouse()` / `Mge_GuiWantsKeyboard()` so widgets don't fight the
+viewport. The backend boots lazily on the first `Mge_GuiBeginFrame` after
+`Mge_InitWindow`; apps that never call it pay nothing.
+
+`builder/` is the worked example — a scene sidebar with a type-aware inspector
+(Object vs Light). See [builder/USAGE.md](builder/USAGE.md).
+
 ### Math
 
 `glm` is gone. `mge_math.h` provides plain-C functions — no operator overloads:
@@ -574,9 +621,10 @@ directly.
 
 ## Notes / limitations
 
-- Pure C11: every translation unit builds under `gcc -std=c11 -Wall -Wextra`.
-  The `test/` suite needs no window or GL context; the window / renderer itself
-  needs a real GL context.
+- Engine sources are C11 (`mge_gui.cpp` is the lone C++ unit); everything builds
+  under `-Wall -Wextra`. The `test/` suite needs no window or GL context; the
+  window / renderer itself does.
 - `make` needs `vendor/{glfw,assimp}/lib` populated first (`make vendor`).
-- Dear ImGui and `glm` are not used — `vendor/imgui/` is left in place but
-  unlinked, `vendor/glm/` is gone.
+  Dear ImGui (`vendor/imgui/`, v1.90.5) is vendored as source and compiled into
+  the DLL — no separate build step, and header/binary versions can't drift.
+- `glm` is gone; `vendor/glm/` was deleted.

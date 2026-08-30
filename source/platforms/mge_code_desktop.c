@@ -105,6 +105,11 @@ double Platform_GetTime(void)
     return glfwGetTime();
 }
 
+void* Mge_GetWindowHandle(void)
+{
+    return platform.window;
+}
+
 void Poll_Input_Events(void)
 {
     CORE.Input.Keyboard.keyPressedQueueCount = 0;

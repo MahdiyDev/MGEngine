@@ -3,6 +3,10 @@
 #include "mge.h"
 #include "mge_math.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Matrix modes (equivalent to OpenGL)
 #define MGEGL_MODELVIEW		0x1700 // GL_MODELVIEW
 #define MGEGL_PROJECTION	0x1701 // GL_PROJECTION
@@ -116,3 +120,7 @@ void MgeGL_Vertex3f(float x, float y, float z);
 void MgeGL_TexCoord2f(float x, float y);
 void MgeGL_Normal3f(float x, float y, float z);
 int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount);
+
+#ifdef __cplusplus
+}
+#endif

@@ -13,23 +13,24 @@
 #
 # On Windows use `mingw32-make`.
 
-CC = gcc
+CC  = gcc
+CXX = g++
 
 VENDOR = ./vendor
 MLIB   = $(VENDOR)/mlib
 
-CFLAGS  ?= -std=c11 -Wall -Wextra -g
-CPPFLAGS = -DPLATFORM_DESKTOP
-INCLUDES = -I./source \
-           -I$(VENDOR)/glad/include \
-           -I$(VENDOR)/stb \
-           -I$(VENDOR)/glfw/include \
-           -I$(VENDOR)/assimp/include \
-           -I$(MLIB) -I$(MLIB)/vec
+CFLAGS   ?= -std=c11 -Wall -Wextra -g
+CXXFLAGS ?= -std=c++17 -Wall -Wextra -g
+CPPFLAGS  = -DPLATFORM_DESKTOP
+INCLUDES  = -I./source \
+            -I$(VENDOR)/glad/include \
+            -I$(VENDOR)/stb \
+            -I$(VENDOR)/glfw/include \
+            -I$(VENDOR)/assimp/include \
+            -I$(VENDOR)/imgui \
+            -I$(MLIB) -I$(MLIB)/vec
 
 LIB_DIR   = -L$(VENDOR)/glfw/lib -L$(VENDOR)/assimp/lib
-# assimp before its own deps (zlibstatic, stdc++); the library is linked with g++
-LIB_LINKS = -lglfw3 -lassimp -lzlibstatic
 LINK      = g++
 
 SOURCE_DIR    = source
@@ -39,7 +40,7 @@ BUILD_OBJ_DIR = $(BUILD_DIR)/obj
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
     .SHELLFLAGS := /c
-    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
+    LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lopengl32 -lgdi32 -lwinmm -lkernel32
     EXE  := .exe
     PICFLAG :=
     LIB_NAME := libmgengine.dll
@@ -52,7 +53,7 @@ ifeq ($(OS),Windows_NT)
     CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
     RMDIR = if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
 else
-    LIB_LINKS += -lGL -lm -lpthread -ldl -lX11
+    LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lGL -lm -lpthread -ldl -lX11
     EXE  :=
     PICFLAG := -fPIC
     LIB_NAME := libmgengine.so
@@ -64,12 +65,18 @@ else
     RMDIR = rm -rf $1
 endif
 
-# every source/*.c is engine code (the builder app lives in builder/); the
-# desktop platform file is #included by mge_core.c, not compiled on its own
-CSOURCES = $(wildcard $(SOURCE_DIR)/*.c)
-# glad lives with the other vendored deps but is compiled into the engine
-GLAD_SRC = $(VENDOR)/glad/glad.c
-COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) $(BUILD_OBJ_DIR)/glad.o
+# every source/*.{c,cpp} is engine code (the builder app lives in builder/); the
+# desktop platform file is #included by mge_core.c, not compiled on its own.
+# mge_gui.cpp is the one C++ unit (Dear ImGui backend).
+CSOURCES   = $(wildcard $(SOURCE_DIR)/*.c)
+CXXSOURCES = $(wildcard $(SOURCE_DIR)/*.cpp)
+# glad + Dear ImGui: vendored source compiled straight into the engine
+GLAD_SRC  = $(VENDOR)/glad/glad.c
+IMGUI_SRC = $(wildcard $(VENDOR)/imgui/*.cpp)
+IMGUI_OBJ = $(patsubst $(VENDOR)/imgui/%.cpp,$(BUILD_OBJ_DIR)/imgui/%.o,$(IMGUI_SRC))
+COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) \
+           $(patsubst $(SOURCE_DIR)/%.cpp,$(BUILD_OBJ_DIR)/%.o,$(CXXSOURCES)) \
+           $(IMGUI_OBJ) $(BUILD_OBJ_DIR)/glad.o
 
 ENGINE_LIB = $(BUILD_DIR)/$(LIB_NAME)
 APP        = $(BUILD_DIR)/mgengine$(EXE)
@@ -95,8 +102,18 @@ $(BUILD_OBJ_DIR):
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
+$(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp | $(BUILD_OBJ_DIR)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+
 $(BUILD_OBJ_DIR)/glad.o: $(GLAD_SRC) | $(BUILD_OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+
+# vendored Dear ImGui -- warnings silenced, own object subdir
+$(BUILD_OBJ_DIR)/imgui:
+	$(call MKDIR,$(BUILD_OBJ_DIR)/imgui)
+
+$(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
+	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 # --- builder app: a plain-C consumer of the library + its headers ---
 $(APP): builder/main.c $(ENGINE_LIB)

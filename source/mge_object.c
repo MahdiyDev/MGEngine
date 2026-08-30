@@ -169,6 +169,21 @@ int Mge_GetSelectedObject(void)
     return g_active;
 }
 
+// Select an object programmatically -- same effect as clicking it, so the next
+// Mge_ManipulateObjects3D() call will drag its gizmo. `index` out of range (or
+// -1) clears the selection.
+void Mge_SetSelectedObject(Object* objects, int count, int index)
+{
+    if (objects == NULL || count <= 0)
+        return;
+
+    g_drag = DRAG_NONE;
+    if (index < 0 || index >= count)
+        Mge_ClearSelection(objects, count);
+    else
+        SelectOnly(objects, count, index);
+}
+
 int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength)
 {
     if (objects == NULL || count <= 0)
