@@ -609,6 +609,29 @@ void Mge_EndStencil(void);
 // object's extents. Mge_DrawObject() uses this for selected objects.
 void Mge_DrawObjectOutline(Object obj, float thickness, Color color);
 
+// --- Face culling --------------------------------------------------------
+//
+// Off by default. When on, triangles facing away from the viewer are skipped --
+// cheaper, and it hides the inside of closed meshes. A triangle is front-facing
+// when its on-screen winding matches `frontFace` (default WINDING_CCW, which is
+// what `Draw_Cube` and imported meshes use). 2D shapes and lines have mixed
+// winding, so keep culling off around them (or only enable it in a 3D block).
+typedef enum {
+	CULL_BACK = 0,        // skip back faces -- the usual choice
+	CULL_FRONT,
+	CULL_FRONT_AND_BACK
+} CullFace;
+
+typedef enum {
+	WINDING_CCW = 0,      // counter-clockwise = front (OpenGL default)
+	WINDING_CW
+} FrontFace;
+
+void Mge_EnableFaceCulling(void);
+void Mge_DisableFaceCulling(void);
+void Mge_SetCullFace(int face);      // a CullFace; default CULL_BACK
+void Mge_SetFrontFace(int winding);  // a FrontFace; default WINDING_CCW
+
 // Shapes
 void Draw_Line(int startPosX, int startPosY, int endPosX, int endPosY, Color color);
 void Draw_LineV(Vector2 startPos, Vector2 endPos, Color color);

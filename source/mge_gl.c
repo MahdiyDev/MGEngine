@@ -844,6 +844,30 @@ void MgeGL_ClearStencil(void)
     glClear(GL_STENCIL_BUFFER_BIT);
 }
 
+void MgeGL_SetFaceCulling(bool enabled)
+{
+    MgeGL_Draw();
+    if (enabled)
+        glEnable(GL_CULL_FACE);
+    else
+        glDisable(GL_CULL_FACE);
+}
+
+void MgeGL_SetCullFace(int face)
+{
+    GLenum f = (face == CULL_FRONT) ? GL_FRONT
+        : (face == CULL_FRONT_AND_BACK) ? GL_FRONT_AND_BACK
+                                        : GL_BACK;
+    MgeGL_Draw();
+    glCullFace(f);
+}
+
+void MgeGL_SetFrontFace(int winding)
+{
+    MgeGL_Draw();
+    glFrontFace((winding == WINDING_CW) ? GL_CW : GL_CCW);
+}
+
 // ----- retained indexed meshes -----
 //
 // Each mesh keeps its own VAO/VBO/EBO. Vertices are interleaved floats:

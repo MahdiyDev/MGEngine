@@ -13,5 +13,6 @@
 - [x] stencil testing + object outlining; selected objects outline instead of wireframe
 - [x] split engine (source/ -> libmgengine shared lib) from the builder app (builder/main.c links it)
 - [x] Mge_Gui* UI abstraction (Dear ImGui backend); builder sidebar + type-aware inspector (Object / Light)
+- [x] face culling: enable/disable, cull face + winding order (opt-in)
 - [ ] batch rendering
 - [ ] multiple vertex rendering

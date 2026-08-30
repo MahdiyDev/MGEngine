@@ -27,6 +27,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
   mge_depth.c          depth test / clip planes / polygon offset / depth preview
   mge_stencil.c        stencil test + Mge_DrawObjectOutline
+  mge_cull.c           face culling on/off + cull face / winding
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -52,6 +53,7 @@ examples/meshes/       textured_quad
 examples/models/       load_melon
 examples/depth/        depth_buffer
 examples/stencil/      object_outline
+examples/culling/      backface_cull
 ```
 
 ## Using mlib
@@ -110,7 +112,8 @@ construction; `test_light` covers the light constructors and the uniform
 wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
 depth-preview wiring; `test_stencil` covers the stencil forwarding and the
-outline state sequence. All use a stubbed GL backend -- none open a window.
+outline state sequence; `test_cull` covers face-culling forwarding. All use a
+stubbed GL backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -568,6 +571,23 @@ outline shows even when it is partly behind something.
 
 Demo: `examples/stencil/object_outline.c` — a walking selection outlines each
 cube in turn, plus one hand-outlined pillar in a custom colour.
+
+### Face culling
+
+Off by default -- the engine never enables it, so 2D shapes and lines are
+unaffected. Turn it on around 3D geometry to skip triangles pointing away from
+the camera:
+
+```c
+void Mge_EnableFaceCulling(void);  void Mge_DisableFaceCulling(void);
+void Mge_SetCullFace(int face);      // CULL_BACK (default) / CULL_FRONT / CULL_FRONT_AND_BACK
+void Mge_SetFrontFace(int winding);  // WINDING_CCW (default) / WINDING_CW
+```
+
+`Draw_Cube` and imported meshes wind counter-clockwise, so `CULL_BACK` "just
+works". 2D shapes have mixed winding — disable culling before drawing them (or
+only enable it inside `Mge_BeginMode3D`). Demo:
+`examples/culling/backface_cull.c` cycles off / back / front.
 
 ### GUI (`mge_gui.h`)
 

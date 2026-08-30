@@ -82,6 +82,10 @@ void MgeGL_SetStencilOp(int onStencilFail, int onDepthFail, int onPass); // Sten
 void MgeGL_SetStencilMask(unsigned int mask);
 void MgeGL_SetColorMask(bool enabled);   // all channels
 void MgeGL_ClearStencil(void);
+
+void MgeGL_SetFaceCulling(bool enabled);
+void MgeGL_SetCullFace(int face);      // CullFace
+void MgeGL_SetFrontFace(int winding);  // FrontFace
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 unsigned int MgeGL_GetDefaultShaderId(void);
