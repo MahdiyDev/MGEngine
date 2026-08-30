@@ -5,7 +5,8 @@
 //   edit mode
 //     hold RIGHT mouse      look around; WASD flies while held
 //     left-click a cube     select it, drag its gizmo arrow to move it
-//     sidebar               pick any object/light and edit its fields
+//     sidebar               FPS (updated each second), plus pick any
+//                           object/light and edit its fields
 #include <mge.h>
 #include <mge_gui.h>
 #include <mge_math.h>
@@ -133,9 +134,17 @@ int main(void)
         Mge_MakeObject3D((Vector3){ 3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 130, 210, 255 }),
     };
 
+    int fpsShown = 0;
+    double fpsUpdatedAt = 0.0;
+
     while (!Mge_WindowShouldClose()) {
         bool guiKeyboard = Mge_GuiWantsKeyboard();
         bool guiMouse = Mge_GuiWantsMouse();
+
+        if (Mge_GetTime() - fpsUpdatedAt >= 1.0) {
+            fpsShown = Mge_GetFps();
+            fpsUpdatedAt = Mge_GetTime();
+        }
 
         if (IsKeyPressed(KEY_TAB) && !guiKeyboard) {
             flyMode = !flyMode;
@@ -200,6 +209,11 @@ int main(void)
         // --- sidebar ---
         Mge_GuiBeginFrame();
         if (Mge_GuiBeginSidebar("Scene", 300.0f, false)) {
+            char fpsRow[24];
+            snprintf(fpsRow, sizeof(fpsRow), "FPS: %d", fpsShown);
+            Mge_GuiLabel(fpsRow);
+            Mge_GuiSeparator();
+
             Mge_GuiLabel("OBJECTS");
             for (int i = 0; i < N; i++) {
                 char row[32];

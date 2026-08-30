@@ -93,6 +93,7 @@ unsigned int MgeGL_GetCurrentShaderId(void);
 void MgeGL_SetShader(unsigned int id);
 unsigned int MgeGL_LoadShader(const char* code, unsigned int shaderType, const char* typeName);
 unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragment);
+unsigned int MgeGL_CreateShaderProgramGeo(unsigned int vertex, unsigned int geometry, unsigned int fragment);
 void MgeGL_UnloadShaderProgram(unsigned int id);
 void MgeGL_SetTexture(unsigned int id);
 unsigned int MgeGL_GetWhiteTexture(void); // the 1x1 white texture created at init
@@ -101,6 +102,10 @@ unsigned int MgeGL_GetWhiteTexture(void); // the 1x1 white texture created at in
 //   location 0 vec3 position, location 3 vec3 normal, location 2 vec2 texcoord.
 void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
 	const void* vertices, int vertexCount, const unsigned int* indices, int indexCount);
+// same, but the attributes are batched (one VBO, block per attribute) not interleaved
+void MgeGL_UploadMeshBatched(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
+	const void* positions, const void* normals, const void* texcoords,
+	int vertexCount, const unsigned int* indices, int indexCount);
 void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId); // uses the current shader
 void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo);
 int MgeGL_GetAttribLoc(const char* name);

@@ -30,6 +30,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_cull.c           face culling on/off + cull face / winding
   mge_framebuffer.c    RenderTexture + full-screen post-processing effects
   mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
+  mge_geometry.c       geometry-shader effects: explode, normal visualization
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
@@ -51,13 +52,14 @@ examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular, directional, point, spotlight
 examples/materials/    textured_cube
-examples/meshes/       textured_quad
+examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
 examples/depth/        depth_buffer
 examples/stencil/      object_outline
 examples/culling/      backface_cull
 examples/framebuffer/  post_process
 examples/cubemap/      skybox_reflect, dynamic_envmap
+examples/geometry/     geometry_shader
 ```
 
 ## Using mlib
@@ -117,8 +119,9 @@ wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
 handling; `test_depth` covers the clip planes, depth-state forwarding and
 depth-preview wiring; `test_stencil` covers the stencil forwarding and the
 outline state sequence; `test_cull` covers face-culling forwarding;
-`test_framebuffer` / `test_cubemap` cover their enums. All use a stubbed GL
-backend -- none open a window.
+`test_framebuffer` / `test_cubemap` cover their enums; `test_geometry` covers
+the explode / normals wrappers. All use a stubbed GL backend -- none open a
+window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -447,8 +450,23 @@ first `MESH_TEXTURE_DIFFUSE` texture (or a white 1×1 if there is none) and draw
 with whatever shader is active — the unlit default or the lighting shader. It has
 no colour attribute, so the diffuse texture is shown untinted.
 
-Demo: `examples/meshes/textured_quad.c` — a textured wall + an untextured floor,
-both hand-built meshes, under a moving point light.
+**Batched vertex attributes.** If you'd rather keep positions / normals /
+texcoords in separate arrays than interleave them into `Vertex[]`, use
+
+```c
+Mesh Mge_MakeMeshFromArrays(const Vector3* positions, const Vector3* normals,
+    const Vector2* texcoords, int vertexCount,
+    const unsigned int* indices, int indexCount,
+    const MeshTexture* textures, int textureCount);   // normals / texcoords may be NULL
+```
+
+On upload these become **one VBO** filled block-by-block (all positions, then
+all normals, then all texcoords) with `glBufferSubData` — LearnOpenGL's
+"batching vertex attributes". The VAO records the offsets, so `Mge_DrawMesh` /
+`Mge_UnloadMesh` are unchanged.
+
+Demos: `examples/meshes/textured_quad.c` (interleaved) and
+`batched_attributes.c` (separate arrays).
 
 ### Model
 
@@ -686,6 +704,29 @@ Mge_EndMode3D();
 Demos: `examples/cubemap/skybox_reflect.c` (static sky, reflect + refract) and
 `dynamic_envmap.c` (a mirror cube reflecting orbiting cubes each frame). Both
 use `assets/skybox/`.
+
+### Geometry shaders
+
+Two built-in effects run a geometry stage over the batcher's triangles (works
+with `Draw_Cube`, `Mge_DrawMesh`, `Mge_DrawModel`) — call inside `Mge_BeginMode3D`:
+
+```c
+Mge_BeginExplode3D(0.5f);             // push each triangle out along its face normal
+    Draw_Cube(pos, size, RED);
+Mge_EndExplode3D();
+
+Mge_BeginNormals3D(0.2f, YELLOW);     // a short line along every vertex normal
+    Draw_Cube(pos, size, WHITE);
+Mge_EndNormals3D();
+```
+
+The explode magnitude is a plain float — animate it yourself. To roll your own
+geometry-shader pass, `MgeGL_LoadShader(src, GL_GEOMETRY_SHADER, name)` +
+`MgeGL_CreateShaderProgramGeo(vs, gs, fs)`; the vertex shader gets `modelview`
+and the geometry shader `projection` from the batcher.
+
+Demo: `examples/geometry/geometry_shader.c` — a cube showing its normals beside
+one that pulses apart and back.
 
 ### GUI (`mge_gui.h`)
 

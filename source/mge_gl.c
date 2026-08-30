@@ -697,6 +697,30 @@ unsigned int MgeGL_CreateShaderProgram(unsigned int vertex, unsigned int fragmen
     return programID;
 }
 
+unsigned int MgeGL_CreateShaderProgramGeo(unsigned int vertex, unsigned int geometry, unsigned int fragment)
+{
+    unsigned int programID = glCreateProgram();
+    glAttachShader(programID, vertex);
+    if (geometry != 0)
+        glAttachShader(programID, geometry);
+    glAttachShader(programID, fragment);
+    glLinkProgram(programID);
+
+    int success = 0;
+    glGetProgramiv(programID, GL_LINK_STATUS, &success);
+    if (!success) {
+        char infoLog[512] = { 0 };
+        glGetProgramInfoLog(programID, 512, NULL, infoLog);
+        TRACE_LOG(LOG_ERROR, "Shader: geometry program not created\n%s", infoLog);
+    }
+
+    glDeleteShader(vertex);
+    if (geometry != 0)
+        glDeleteShader(geometry);
+    glDeleteShader(fragment);
+    return programID;
+}
+
 void MgeGL_UnloadShaderProgram(unsigned int id)
 {
     glDeleteProgram(id);
@@ -903,6 +927,51 @@ void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
     glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(TEXTURE_LOCATION);
     glVertexAttribPointer(TEXTURE_LOCATION, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+// Batched vertex attributes: one VBO, but the attributes are NOT interleaved --
+// all positions, then all normals, then all texcoords. `normals` / `texcoords`
+// may be NULL. The VAO records the block offsets, so drawing is identical.
+void MgeGL_UploadMeshBatched(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
+    const void* positions, const void* normals, const void* texcoords,
+    int vertexCount, const unsigned int* indices, int indexCount)
+{
+    const GLsizeiptr posBytes = (GLsizeiptr)vertexCount * 3 * (int)sizeof(float);
+    const GLsizeiptr nrmBytes = (normals != NULL) ? (GLsizeiptr)vertexCount * 3 * (int)sizeof(float) : 0;
+    const GLsizeiptr uvBytes = (texcoords != NULL) ? (GLsizeiptr)vertexCount * 2 * (int)sizeof(float) : 0;
+
+    glGenVertexArrays(1, vao);
+    glGenBuffers(1, vbo);
+    glGenBuffers(1, ebo);
+
+    glBindVertexArray(*vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+    glBufferData(GL_ARRAY_BUFFER, posBytes + nrmBytes + uvBytes, NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, posBytes, positions);
+    if (nrmBytes > 0)
+        glBufferSubData(GL_ARRAY_BUFFER, posBytes, nrmBytes, normals);
+    if (uvBytes > 0)
+        glBufferSubData(GL_ARRAY_BUFFER, posBytes + nrmBytes, uvBytes, texcoords);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+        (GLsizeiptr)indexCount * (int)sizeof(unsigned int), indices, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(VERTICE_LOCATION);
+    glVertexAttribPointer(VERTICE_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    if (nrmBytes > 0) {
+        glEnableVertexAttribArray(NORMAL_LOCATION);
+        glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, (void*)(size_t)posBytes);
+    }
+    if (uvBytes > 0) {
+        glEnableVertexAttribArray(TEXTURE_LOCATION);
+        glVertexAttribPointer(TEXTURE_LOCATION, 2, GL_FLOAT, GL_FALSE, 0, (void*)(size_t)(posBytes + nrmBytes));
+    }
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);

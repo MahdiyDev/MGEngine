@@ -12,6 +12,7 @@
 
 static int g_uploadCalls, g_drawCalls, g_unloadCalls;
 static int g_lastUploadVerts, g_lastUploadIndices;
+static int g_batchedUploadCalls, g_batchedHadNormals, g_batchedHadUV;
 static unsigned int g_lastDrawVao, g_lastDrawTex;
 static int g_lastDrawIndexCount;
 static unsigned int g_lastUnload[3];
@@ -20,9 +21,26 @@ static void backend_reset(void)
 {
     g_uploadCalls = g_drawCalls = g_unloadCalls = 0;
     g_lastUploadVerts = g_lastUploadIndices = 0;
+    g_batchedUploadCalls = g_batchedHadNormals = g_batchedHadUV = 0;
     g_lastDrawVao = g_lastDrawTex = 0;
     g_lastDrawIndexCount = 0;
     memset(g_lastUnload, 0, sizeof(g_lastUnload));
+}
+
+void MgeGL_UploadMeshBatched(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
+    const void* positions, const void* normals, const void* texcoords,
+    int vertexCount, const unsigned int* indices, int indexCount)
+{
+    (void)positions;
+    (void)indices;
+    g_batchedUploadCalls++;
+    g_batchedHadNormals = (normals != NULL);
+    g_batchedHadUV = (texcoords != NULL);
+    g_lastUploadVerts = vertexCount;
+    g_lastUploadIndices = indexCount;
+    *vao = 20;
+    *vbo = 21;
+    *ebo = 22;
 }
 
 void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
@@ -190,10 +208,54 @@ TEST(unload_frees_and_zeros)
     CHECK(g_unloadCalls == 2); // called again, but with zero handles (backend guards)
 }
 
+TEST(make_mesh_from_arrays_uses_the_batched_upload)
+{
+    Vector3 pos[3] = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 } };
+    Vector3 nrm[3] = { { 0, 0, 1 }, { 0, 0, 1 }, { 0, 0, 1 } };
+    Vector2 uv[3] = { { 0, 0 }, { 1, 0 }, { 0, 1 } };
+    unsigned int idx[3] = { 0, 1, 2 };
+    backend_reset();
+
+    Mesh m = Mge_MakeMeshFromArrays(pos, nrm, uv, 3, idx, 3, NULL, 0);
+    CHECK(m.vertices == NULL);                 // not the interleaved form
+    CHECK(m.positions != NULL && m.positions != pos);
+    CHECK(m.normals != NULL && m.texcoords != NULL);
+    CHECK(m.vertexCount == 3 && m.indexCount == 3);
+
+    pos[0].x = 42.0f; // deep copy
+    CHECK(m.positions[0].x == 0.0f);
+
+    Mge_UploadMesh(&m);
+    CHECK(g_batchedUploadCalls == 1 && g_uploadCalls == 0); // the batched path
+    CHECK(g_batchedHadNormals && g_batchedHadUV);
+    CHECK(m.vao == 20);
+
+    Mge_UnloadMesh(&m);
+    CHECK(m.positions == NULL && m.normals == NULL && m.texcoords == NULL);
+}
+
+TEST(make_mesh_from_arrays_optional_normals_texcoords)
+{
+    Vector3 pos[3] = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 } };
+    unsigned int idx[3] = { 0, 1, 2 };
+    backend_reset();
+
+    Mesh m = Mge_MakeMeshFromArrays(pos, NULL, NULL, 3, idx, 3, NULL, 0);
+    CHECK(m.positions != NULL && m.normals == NULL && m.texcoords == NULL);
+
+    Mge_UploadMesh(&m);
+    CHECK(g_batchedUploadCalls == 1);
+    CHECK(!g_batchedHadNormals && !g_batchedHadUV);
+
+    Mge_UnloadMesh(&m);
+}
+
 int main(void)
 {
     RUN(make_mesh_deep_copies);
     RUN(make_mesh_handles_empty_parts);
+    RUN(make_mesh_from_arrays_uses_the_batched_upload);
+    RUN(make_mesh_from_arrays_optional_normals_texcoords);
     RUN(upload_sets_handles_once);
     RUN(upload_skips_incomplete_mesh);
     RUN(draw_uses_the_diffuse_texture);

@@ -21,6 +21,19 @@ static void* mem_dup(const void* src, size_t bytes)
     return copy;
 }
 
+static void copy_index_and_texture_arrays(Mesh* mesh, const unsigned int* indices, int indexCount,
+    const MeshTexture* textures, int textureCount)
+{
+    if (indexCount > 0) {
+        mesh->indices = mem_dup(indices, (size_t)indexCount * sizeof(unsigned int));
+        mesh->indexCount = (mesh->indices != NULL) ? indexCount : 0;
+    }
+    if (textureCount > 0) {
+        mesh->textures = mem_dup(textures, (size_t)textureCount * sizeof(MeshTexture));
+        mesh->textureCount = (mesh->textures != NULL) ? textureCount : 0;
+    }
+}
+
 Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
     const unsigned int* indices, int indexCount,
     const MeshTexture* textures, int textureCount)
@@ -31,15 +44,24 @@ Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
         mesh.vertices = mem_dup(vertices, (size_t)vertexCount * sizeof(Vertex));
         mesh.vertexCount = (mesh.vertices != NULL) ? vertexCount : 0;
     }
-    if (indexCount > 0) {
-        mesh.indices = mem_dup(indices, (size_t)indexCount * sizeof(unsigned int));
-        mesh.indexCount = (mesh.indices != NULL) ? indexCount : 0;
-    }
-    if (textureCount > 0) {
-        mesh.textures = mem_dup(textures, (size_t)textureCount * sizeof(MeshTexture));
-        mesh.textureCount = (mesh.textures != NULL) ? textureCount : 0;
-    }
+    copy_index_and_texture_arrays(&mesh, indices, indexCount, textures, textureCount);
+    return mesh;
+}
 
+Mesh Mge_MakeMeshFromArrays(const Vector3* positions, const Vector3* normals,
+    const Vector2* texcoords, int vertexCount,
+    const unsigned int* indices, int indexCount,
+    const MeshTexture* textures, int textureCount)
+{
+    Mesh mesh = { 0 };
+
+    if (vertexCount > 0 && positions != NULL) {
+        mesh.positions = mem_dup(positions, (size_t)vertexCount * sizeof(Vector3));
+        mesh.normals = mem_dup(normals, (size_t)vertexCount * sizeof(Vector3));
+        mesh.texcoords = mem_dup(texcoords, (size_t)vertexCount * sizeof(Vector2));
+        mesh.vertexCount = (mesh.positions != NULL) ? vertexCount : 0;
+    }
+    copy_index_and_texture_arrays(&mesh, indices, indexCount, textures, textureCount);
     return mesh;
 }
 
@@ -50,8 +72,14 @@ void Mge_UploadMesh(Mesh* mesh)
     if (mesh->vertexCount <= 0 || mesh->indexCount <= 0)
         return;
 
-    MgeGL_UploadMesh(&mesh->vao, &mesh->vbo, &mesh->ebo,
-        mesh->vertices, mesh->vertexCount, mesh->indices, mesh->indexCount);
+    if (mesh->vertices != NULL) {
+        MgeGL_UploadMesh(&mesh->vao, &mesh->vbo, &mesh->ebo,
+            mesh->vertices, mesh->vertexCount, mesh->indices, mesh->indexCount);
+    } else if (mesh->positions != NULL) {
+        MgeGL_UploadMeshBatched(&mesh->vao, &mesh->vbo, &mesh->ebo,
+            mesh->positions, mesh->normals, mesh->texcoords,
+            mesh->vertexCount, mesh->indices, mesh->indexCount);
+    }
 }
 
 static unsigned int diffuse_texture_id(Mesh mesh)
@@ -78,6 +106,9 @@ void Mge_UnloadMesh(Mesh* mesh)
 
     MgeGL_UnloadMesh(mesh->vao, mesh->vbo, mesh->ebo);
     free(mesh->vertices);
+    free(mesh->positions);
+    free(mesh->normals);
+    free(mesh->texcoords);
     free(mesh->indices);
     free(mesh->textures);
 

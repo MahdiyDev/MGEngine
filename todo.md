@@ -16,5 +16,7 @@
 - [x] face culling: enable/disable, cull face + winding order (opt-in)
 - [x] framebuffers + post-processing: RenderTexture, Mge_BeginTextureMode, invert/grayscale/sharpen/blur/edge
 - [x] cubemaps: skybox, environment mapping (reflect/refract), dynamic env probes
+- [x] batching vertex attributes: Mge_MakeMeshFromArrays -> one VBO, block per attribute
+- [x] geometry shaders: Mge_BeginExplode3D, Mge_BeginNormals3D (+ MgeGL_CreateShaderProgramGeo)
 - [ ] batch rendering
 - [ ] multiple vertex rendering

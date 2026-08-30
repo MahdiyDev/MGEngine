@@ -30,6 +30,7 @@ A full-height panel on the left, drawn every frame with the engine's UI
 abstraction (`Mge_GuiBeginSidebar`, `Mge_GuiSelectable`, `Mge_GuiInput*` — no
 ImGui in the app's code).
 
+- **FPS** — frames per second at the top, refreshed once a second.
 - **OBJECTS / LIGHTS** — every scene entity as a selectable row. Selecting a
   cube here is exactly like clicking it in the viewport (via
   `Mge_SetSelectedObject`): it gets the outline **and** its move gizmo, so you

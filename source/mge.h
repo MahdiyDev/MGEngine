@@ -462,7 +462,13 @@ typedef struct MeshTexture {
 } MeshTexture;
 
 typedef struct Mesh {
+	// interleaved form (Mge_MakeMesh) -- OR --
 	Vertex* vertices;
+	// batched form (Mge_MakeMeshFromArrays): separate attribute arrays, `vertices` NULL
+	Vector3* positions;
+	Vector3* normals;   // may be NULL
+	Vector2* texcoords; // may be NULL
+
 	int vertexCount;
 	unsigned int* indices; // 3 per triangle
 	int indexCount;
@@ -691,6 +697,18 @@ void Mge_EndStencil(void);
 // object's extents. Mge_DrawObject() uses this for selected objects.
 void Mge_DrawObjectOutline(Object obj, float thickness, Color color);
 
+// --- Geometry-shader effects -------------------------------------------------
+//
+// Geometry drawn between Begin/End (Draw_Cube, Mge_DrawMesh, Mge_DrawModel) is
+// processed per triangle by a geometry stage. Call inside Mge_BeginMode3D.
+//
+//   Mge_BeginExplode3D(mag);        Mge_DrawModel(m); Mge_EndExplode3D();
+//   Mge_BeginNormals3D(0.15f, YEL); Mge_DrawModel(m); Mge_EndNormals3D();
+void Mge_BeginExplode3D(float magnitude);            // push each triangle out along its face normal
+void Mge_EndExplode3D(void);
+void Mge_BeginNormals3D(float length, Color color);  // draw a short line along each vertex normal
+void Mge_EndNormals3D(void);
+
 // --- Face culling --------------------------------------------------------
 //
 // Off by default. When on, triangles facing away from the viewer are skipped --
@@ -747,6 +765,16 @@ void   Mge_DrawObjectGizmo(Object obj, float axisLength);   // X/Y (2D) or X/Y/Z
 Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
     const unsigned int* indices, int indexCount,
     const MeshTexture* textures, int textureCount);
+
+// Build a mesh from separate (non-interleaved) attribute arrays. `normals` /
+// `texcoords` may be NULL. On upload they are batched into ONE VBO as contiguous
+// blocks (all positions, then all normals, then all texcoords) rather than
+// interleaved -- LearnOpenGL's "batching vertex attributes".
+Mesh Mge_MakeMeshFromArrays(const Vector3* positions, const Vector3* normals,
+    const Vector2* texcoords, int vertexCount,
+    const unsigned int* indices, int indexCount,
+    const MeshTexture* textures, int textureCount);
+
 void Mge_UploadMesh(Mesh* mesh);   // create the GPU buffers (no-op if already uploaded)
 void Mge_DrawMesh(Mesh mesh);      // inside Mge_BeginMode3D (+ Mge_BeginLighting3D for lighting)
 void Mge_UnloadMesh(Mesh* mesh);   // free GPU + CPU data and zero the struct
