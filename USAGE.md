@@ -1,7 +1,9 @@
 # MGEngine
 
-A small raylib-style 2D/3D rendering engine. **Pure C11** — no C++, no glm, no
-Dear ImGui. OpenGL 4.4 core via GLFW + glad, image loading via stb_image.
+A small raylib-style 2D/3D rendering engine. Engine code is **C11** (no glm, no
+Dear ImGui); OpenGL 4.4 core via GLFW + glad, image loading via stb_image, model
+loading via [Assimp](https://github.com/assimp/assimp) (C++ — so the final link
+is driven by `g++` to pull in libstdc++, but engine sources stay C).
 
 ## Layout
 
@@ -19,6 +21,13 @@ source/
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
   main.c               demo: fly-camera + TAB edit mode + combined lighting
+vendor/
+  glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
+  stb/                 stb_image.h
+  mlib/                MahdiyDev/mlib (containers, test harness)
+  glfw/                GLFW -- vendored source; `make vendor-glfw` builds lib/ + include/
+  assimp/              Assimp OBJ/glTF2/FBX importers -- pruned source under
+                       source/; `make vendor-assimp` builds lib/ + include/
 test/                  unit tests for math / file utils / objects / materials / lights (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
@@ -28,8 +37,8 @@ examples/materials/    textured_cube
 
 ## Using mlib
 
-[mlib](https://github.com/MahdiyDev/mlib) is vendored in `3rdparty/mlib/`
-(add `-I3rdparty/mlib -I3rdparty/mlib/vec`). The engine uses two of its containers:
+[mlib](https://github.com/MahdiyDev/mlib) is vendored in `vendor/mlib/`
+(add `-Ivendor/mlib -Ivendor/mlib/vec`). The engine uses two of its containers:
 
 - `mge_utils.c` loads files into an mlib `string_builder` (`sb_read_file`).
 - `mge_gl.c` keeps the render batch's **draw-call list** and **matrix stack** as
@@ -37,16 +46,24 @@ examples/materials/    textured_cube
 
 ## Building
 
-The engine links against GLFW, which is vendored as source only. Build it once:
+The engine links against GLFW and Assimp, both vendored as source. Build them
+once (needs `cmake` + `ninja`):
 
 ```sh
-make 3rdparty        # runs cmake on 3rdparty/glfw/source  (needs cmake)
+make vendor        # builds GLFW + Assimp -> vendor/*/lib + vendor/*/include
 make                 # -> build/MGEngine
 ```
 
-`make` compiles every `source/*.c` (the desktop platform file is `#include`d by
-`mge_core.c`, not compiled on its own). It first runs `make_build_dir`, which
-creates `build/obj/` and copies `assets/` (and `shaders/`, if either exists) into
+`make vendor-glfw` / `make vendor-assimp` build just one; `make vendor-clean`
+deletes everything they produced (the committed source trees stay). The Assimp build
+enables only the OBJ / glTF2 / FBX importers (no exporters, tools or tests) for a
+small static lib; adjust the `-DASSIMP_BUILD_*` flags in the `vendor-assimp`
+recipe to add formats.
+
+`make` compiles every `source/*.c` with `gcc -std=c11` (the desktop platform
+file is `#include`d by `mge_core.c`, not compiled on its own) and links the
+result with `g++` (Assimp is C++). It first runs `make_build_dir`, which creates
+`build/obj/` and copies `assets/` (and `shaders/`, if either exists) into
 `build/` so the executable can be run from either the repo root or `build/`.
 
 On Windows use `mingw32-make`. The Makefiles pin `SHELL := cmd.exe`, so the
@@ -352,6 +369,6 @@ directly.
 - Pure C11: every translation unit builds under `gcc -std=c11 -Wall -Wextra`.
   The `test/` suite needs no window or GL context; the window / renderer itself
   needs a real GL context.
-- `build/MGEngine` links once `3rdparty/glfw/lib/libglfw3.a` exists (`make 3rdparty`).
-- Dear ImGui and `glm` are not used — `3rdparty/imgui/` is left in place but
-  unlinked, `3rdparty/glm/` is gone.
+- `build/MGEngine` links once `vendor/glfw/lib/libglfw3.a` exists (`make vendor`).
+- Dear ImGui and `glm` are not used — `vendor/imgui/` is left in place but
+  unlinked, `vendor/glm/` is gone.

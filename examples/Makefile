@@ -4,20 +4,22 @@
 #   make            build every example in shapes/, objects/ and lighting/
 #   make clean
 
-CC = gcc
+CC   = gcc
+LINK = g++   # engine links Assimp (C++), so drive the link with g++
 
-MLIB = ../3rdparty/mlib
+MLIB = ../vendor/mlib
 
 CFLAGS   ?= -std=c11 -Wall -Wextra -g
 CPPFLAGS  = -DPLATFORM_DESKTOP
 INCLUDES  = -I../source \
-            -I../3rdparty/glad/include \
-            -I../3rdparty/stb \
-            -I../3rdparty/glfw/include \
+            -I../vendor/glad/include \
+            -I../vendor/stb \
+            -I../vendor/glfw/include \
+            -I../vendor/assimp/include \
             -I$(MLIB) -I$(MLIB)/vec
 
-LIB_DIR   = -L../3rdparty/glfw/lib
-LIB_LINKS = -lglfw3
+LIB_DIR   = -L../vendor/glfw/lib -L../vendor/assimp/lib
+LIB_LINKS = -lglfw3 -lassimp -lzlibstatic
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -40,8 +42,10 @@ BIN = $(SRC:.c=$(EXE))
 .PHONY: all clean
 all: $(BIN)
 
+# compile the example as C11 with gcc, then link with g++ (Assimp is C++)
 %$(EXE): %.c $(ENGINE_OBJS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) $< $(ENGINE_OBJS) -o $@ $(LIB_DIR) $(LIB_LINKS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $(<:.c=.o)
+	$(LINK) $(CFLAGS) $(<:.c=.o) $(ENGINE_OBJS) -o $@ $(LIB_DIR) $(LIB_LINKS)
 
 clean:
-	-$(call RM,$(BIN))
+	-$(call RM,$(BIN) $(SRC:.c=.o))

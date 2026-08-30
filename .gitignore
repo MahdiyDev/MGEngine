@@ -6,8 +6,17 @@ build
 *.o
 *.exe
 *.tmp
-3rdparty/glfw/lib/*
-3rdparty/glfw/build/*
+vendor/glfw/lib/*
+vendor/glfw/build/*
+# assimp: only source/ is vendored; the rest is produced by `make vendor-assimp`
+vendor/assimp/lib/
+vendor/assimp/bin/
+vendor/assimp/build/
+vendor/assimp/include/
+vendor/assimp/share/
+vendor/assimp/lib64/
+vendor/assimp/source/build/
+examples/**/*.o
 test/test_math
 test/test_utils
 examples/shapes/draw_line

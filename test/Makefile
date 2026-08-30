@@ -7,7 +7,7 @@ ifeq ($(origin CC),default)
 CC := gcc
 endif
 
-MLIB   := ../3rdparty/mlib
+MLIB   := ../vendor/mlib
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
