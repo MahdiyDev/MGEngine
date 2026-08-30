@@ -95,6 +95,7 @@ void MgeGL_SetCullFace(int face);      // CullFace
 void MgeGL_SetFrontFace(int winding);  // FrontFace
 
 int MgeGL_GetSampleCount(void);        // GL_SAMPLES of the current framebuffer (0 = not multisampled)
+void MgeGL_SetFramebufferSRGB(bool enabled); // GL_FRAMEBUFFER_SRGB: linear->sRGB on write (gamma correction)
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 void MgeGL_RegisterDrawCall(void);     // feature modules issuing their own gl draw* call this
@@ -145,7 +146,7 @@ void MgeGL_Vertex2f(float x, float y);
 void MgeGL_Vertex3f(float x, float y, float z);
 void MgeGL_TexCoord2f(float x, float y);
 void MgeGL_Normal3f(float x, float y, float z);
-int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount);
+int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount, int sRGB);
 
 #ifdef __cplusplus
 }

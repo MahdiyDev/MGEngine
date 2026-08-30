@@ -57,6 +57,7 @@ void InitPlatform(void)
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
     glfwWindowHint(GLFW_STENCIL_BITS, 8);
     glfwWindowHint(GLFW_SAMPLES, Mge_GetRequestedMSAA()); // MSAA; 0 = off (see Mge_SetMSAA)
+    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);         // so GL_FRAMEBUFFER_SRGB works (see Mge_SetGammaCorrection)
 
     platform.window = glfwCreateWindow(
         (int)CORE.Window.screen.width,

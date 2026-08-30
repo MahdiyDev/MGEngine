@@ -33,8 +33,9 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_geometry.c       geometry-shader effects: explode, normal visualization
   mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
   mge_msaa.c           MSAA request (Mge_SetMSAA / Mge_GetMSAA)
+  mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
-  mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
+  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 builder/
@@ -52,7 +53,7 @@ vendor/
 test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction
 examples/materials/    textured_cube
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -136,8 +137,9 @@ outline state sequence; `test_cull` covers face-culling forwarding;
 `test_framebuffer` / `test_cubemap` cover their enums; `test_geometry` covers
 the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
 contract and the `Matrix_Scale` / composition math behind the transforms;
-`test_msaa` covers the `Mge_SetMSAA` request clamping. All use a stubbed GL
-backend -- none open a window.
+`test_msaa` covers the `Mge_SetMSAA` request clamping; `test_gamma` covers the
+`Mge_SetGammaCorrection` state + forwarding. All use a stubbed GL backend -- none
+open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -242,6 +244,30 @@ single-sampled, so post-processed passes don't get MSAA.
 
 Demo: `examples/antialiasing/msaa.c` — orbiting cube + a thin rotating triangle
 outline; set `Mge_SetMSAA(0)` to bring the jaggies back.
+
+### Gamma correction
+
+A display darkens whatever it's given by roughly a 2.2 power. Lighting maths are
+linear, so their result reaches the eye too dark unless it's sRGB-encoded first.
+
+```c
+Mge_SetGammaCorrection(true);   // GL_FRAMEBUFFER_SRGB on the window; call after Mge_InitWindow
+bool on = Mge_GetGammaCorrection();
+```
+
+This encodes the window's **final** pixels only. Intermediate `RenderTexture`s
+stay linear, so `Mge_DrawRenderTextureFX` kernels still run on linear data and
+the encode happens once, when the result is blitted out. The ImGui pass is drawn
+with the encode off, so the UI is unaffected.
+
+**Off by default** — the engine's shape, vertex and light colours are authored in
+sRGB-ish space, not linear, so turning it on shifts their look. Use it when you
+work in linear space: load colour maps with `Mge_LoadTextureEx(path, true)` (the
+GPU then linearizes them on sample; `Mge_LoadModel` already does this for diffuse
+maps and leaves specular linear) and treat `Light.color` as linear.
+
+Demo: `examples/lighting/gamma_correction.c` — a lit scene + a black→white ramp,
+toggling correction every 3 s (or SPACE).
 
 ### Cursor
 
@@ -454,6 +480,8 @@ Start from `Mge_DefaultMaterial()` and edit the slots you care about:
 
 ```c
 Texture2D wall = Mge_LoadTexture("assets/wall.jpg");
+// with gamma correction on, load colour maps as sRGB instead:
+// Texture2D wall = Mge_LoadTextureEx("assets/wall.jpg", true);
 
 Material m = Mge_DefaultMaterial();
 Mge_SetMaterialTexture(&m, MATERIAL_MAP_DIFFUSE, wall);       // or: m.maps[...].texture = wall;

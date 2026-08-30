@@ -65,12 +65,12 @@ void Mge_UnloadImage(Image image)
     free(image.data);
 }
 
-Texture2D Mge_LoadTextureFromImage(Image image)
+Texture2D Mge_LoadTextureFromImageEx(Image image, bool sRGB)
 {
     Texture2D texture = { 0 };
 
     if ((image.width != 0) && (image.height != 0)) {
-        texture.id = MgeGL_LoadTexture(image.data, image.width, image.height, image.format, image.mipmaps);
+        texture.id = MgeGL_LoadTexture(image.data, image.width, image.height, image.format, image.mipmaps, sRGB ? 1 : 0);
     } else {
         TRACE_LOG(LOG_WARNING, "IMAGE: Data is not valid to load texture");
     }
@@ -83,16 +83,26 @@ Texture2D Mge_LoadTextureFromImage(Image image)
     return texture;
 }
 
-Texture2D Mge_LoadTexture(const char* fileName)
+Texture2D Mge_LoadTextureFromImage(Image image)
+{
+    return Mge_LoadTextureFromImageEx(image, false); // linear: caller didn't say the source is sRGB
+}
+
+Texture2D Mge_LoadTextureEx(const char* fileName, bool sRGB)
 {
     Texture2D texture = { 0 };
 
     Image image = Mge_LoadImage(fileName);
 
     if (image.data != NULL) {
-        texture = Mge_LoadTextureFromImage(image);
+        texture = Mge_LoadTextureFromImageEx(image, sRGB);
         Mge_UnloadImage(image);
     }
 
     return texture;
+}
+
+Texture2D Mge_LoadTexture(const char* fileName)
+{
+    return Mge_LoadTextureEx(fileName, false);
 }

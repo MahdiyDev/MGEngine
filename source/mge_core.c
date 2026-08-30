@@ -49,6 +49,7 @@ void Mge_InitWindow(uint32_t width, uint32_t height, const char* title)
     InitPlatform();
 
     MgeGL_Init((int)CORE.Window.screen.width, (int)CORE.Window.screen.height);
+    Mge_ApplyGammaState(); // honour any Mge_SetGammaCorrection made before the window
 
     SetupViewport(CORE.Window.screen.width, CORE.Window.screen.height);
 

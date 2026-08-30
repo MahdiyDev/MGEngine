@@ -32,7 +32,7 @@ typedef struct {
     int count;
 } TextureCache;
 
-static Texture2D cache_get(TextureCache* cache, const char* dir, const char* rel)
+static Texture2D cache_get(TextureCache* cache, const char* dir, const char* rel, bool sRGB)
 {
     for (int i = 0; i < cache->count; i++) {
         if (strcmp(cache->items[i].path, rel) == 0)
@@ -41,7 +41,8 @@ static Texture2D cache_get(TextureCache* cache, const char* dir, const char* rel
 
     char full[sizeof(((CachedTexture*)0)->path) + 520];
     snprintf(full, sizeof(full), "%s/%s", dir, rel);
-    Texture2D tex = Mge_LoadTexture(full);
+    // colour/albedo maps are authored in sRGB; specular and other data maps aren't
+    Texture2D tex = Mge_LoadTextureEx(full, sRGB);
 
     if (cache->count < MODEL_MAX_TEXTURES) {
         snprintf(cache->items[cache->count].path, sizeof(cache->items[0].path), "%s", rel);
@@ -64,7 +65,7 @@ static int collect_textures(const struct aiMaterial* mat, enum aiTextureType aiT
         struct aiString path;
         if (aiGetMaterialTexture(mat, aiType, i, &path, NULL, NULL, NULL, NULL, NULL, NULL) != aiReturn_SUCCESS)
             continue;
-        out[n].texture = cache_get(cache, dir, path.data);
+        out[n].texture = cache_get(cache, dir, path.data, meshType == MESH_TEXTURE_DIFFUSE);
         out[n].type = meshType;
         n++;
     }

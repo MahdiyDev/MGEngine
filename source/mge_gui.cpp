@@ -52,8 +52,19 @@ void Mge_GuiEndFrame(void)
         return;
 
     MgeGL_Draw(); // flush the engine's batch before ImGui touches GL state
+
+    // ImGui's vertex colours are already display-space; don't let
+    // GL_FRAMEBUFFER_SRGB re-encode them. Drop it for the UI pass, restore after.
+    const bool srgb = Mge_GetGammaCorrection();
+    if (srgb)
+        MgeGL_SetFramebufferSRGB(false);
+
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    if (srgb)
+        MgeGL_SetFramebufferSRGB(true);
+
     s_inFrame = false;
 }
 

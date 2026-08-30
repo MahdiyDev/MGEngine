@@ -146,7 +146,7 @@ void MgeGL_Init(int width, int height)
 
     // Load default (white 1x1) texture
     unsigned char pixels[4] = { 255, 255, 255, 255 };
-    MGEGL.State.whiteTexture = MgeGL_LoadTexture(pixels, 1, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    MGEGL.State.whiteTexture = MgeGL_LoadTexture(pixels, 1, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1, 0);
     MGEGL.State.defaultTexture = MGEGL.State.whiteTexture;
 
     // Init default shader
@@ -235,7 +235,7 @@ void MgeGL_SetShader(unsigned int id)
     }
 }
 
-int MgeGL_LoadTexture(const void* data, int width, int height, int format, int mipmapCount)
+int MgeGL_LoadTexture(const void* data, int width, int height, int format, int mipmapCount, int sRGB)
 {
     (void)mipmapCount;
     unsigned int id = 0;
@@ -256,6 +256,16 @@ int MgeGL_LoadTexture(const void* data, int width, int height, int format, int m
     case PIXELFORMAT_UNCOMPRESSED_R8G8B8:     internalFmt = GL_RGB8;  channels = GL_RGB;  break;
     case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8:   internalFmt = GL_RGBA8; channels = GL_RGBA; break;
     default:                                  internalFmt = GL_RGB8;  channels = GL_RGB;  break;
+    }
+
+    // sRGB source (colour/albedo maps): let the GPU linearize on every sample so
+    // lighting maths run in linear space. Only 3/4-channel formats have an sRGB
+    // internal format; data maps (specular, normal) must stay linear.
+    if (sRGB) {
+        if (internalFmt == GL_RGB8)
+            internalFmt = GL_SRGB8;
+        else if (internalFmt == GL_RGBA8)
+            internalFmt = GL_SRGB8_ALPHA8;
     }
 
     glGenTextures(1, &id);
@@ -967,6 +977,17 @@ int MgeGL_GetSampleCount(void)
     GLint samples = 0;
     glGetIntegerv(GL_SAMPLES, &samples);
     return (int)samples;
+}
+
+void MgeGL_SetFramebufferSRGB(bool enabled)
+{
+    // GL_FRAMEBUFFER_SRGB: the GPU encodes linear -> sRGB on every write to an
+    // sRGB-capable framebuffer (the window's, requested at creation). Off for
+    // intermediate RenderTextures, so post-processing still works on linear data.
+    if (enabled)
+        glEnable(GL_FRAMEBUFFER_SRGB);
+    else
+        glDisable(GL_FRAMEBUFFER_SRGB);
 }
 
 // ----- retained indexed meshes -----

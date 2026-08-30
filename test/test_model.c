@@ -26,6 +26,14 @@ void MgeGL_UploadMesh(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
     g_uploadCalls++;
     *vao = 1; *vbo = 2; *ebo = 3;
 }
+void MgeGL_UploadMeshBatched(unsigned int* vao, unsigned int* vbo, unsigned int* ebo,
+    const void* positions, const void* normals, const void* texcoords,
+    int vertexCount, const unsigned int* indices, int indexCount)
+{
+    (void)positions; (void)normals; (void)texcoords; (void)vertexCount; (void)indices; (void)indexCount;
+    g_uploadCalls++;
+    *vao = 1; *vbo = 2; *ebo = 3;
+}
 void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId)
 {
     (void)vao; (void)indexCount; (void)textureId;
@@ -36,9 +44,10 @@ void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo)
     (void)vao; (void)vbo; (void)ebo;
     g_unloadCalls++;
 }
-Texture2D Mge_LoadTexture(const char* fileName)
+Texture2D Mge_LoadTextureEx(const char* fileName, bool sRGB)
 {
     (void)fileName;
+    (void)sRGB;
     return (Texture2D){ 0 };
 }
 void Trace_Log(int level, const char* text, ...)
@@ -162,8 +171,9 @@ TEST(load_sliced_musk_melon_gltf)
     Mge_DrawModel(m);
     CHECK(g_drawCalls == m.meshCount);
 
+    int meshCount = m.meshCount; // Mge_UnloadModel zeroes the struct
     Mge_UnloadModel(&m);
-    CHECK(g_unloadCalls == m.meshCount);
+    CHECK(g_unloadCalls == meshCount);
     CHECK(m.meshCount == 0);
 }
 

@@ -512,6 +512,15 @@ typedef struct Object {
 } Object;
 
 // Core
+
+// Gamma correction. Off by default. When on, the GPU encodes the window's final
+// pixels linear -> sRGB (GL_FRAMEBUFFER_SRGB) so lighting maths land on screen at
+// the right brightness. Call after Mge_InitWindow. For a correct result also load
+// colour textures with Mge_LoadTextureEx(path, true); the UI is left uncorrected.
+void Mge_SetGammaCorrection(bool enabled);
+bool Mge_GetGammaCorrection(void);
+void Mge_ApplyGammaState(void);      // internal: re-assert the flag (called by Mge_InitWindow)
+
 void Mge_SetMSAA(int samples);       // MSAA sample count for the window; call BEFORE Mge_InitWindow (default 4, < 2 disables)
 int  Mge_GetMSAA(void);              // sample count the driver granted (0 = none); valid after Mge_InitWindow
 int  Mge_GetRequestedMSAA(void);     // internal: what the platform layer should request
@@ -569,6 +578,10 @@ Image Mge_LoadImage(const char* fileName);
 void Mge_UnloadImage(Image image);
 Texture2D Mge_LoadTextureFromImage(Image image);
 Texture2D Mge_LoadTexture(const char *fileName);
+// ...Ex: pass sRGB=true for colour/albedo maps so they are linearized on sample
+// (see Mge_SetGammaCorrection). Specular / normal / data maps stay linear.
+Texture2D Mge_LoadTextureFromImageEx(Image image, bool sRGB);
+Texture2D Mge_LoadTextureEx(const char *fileName, bool sRGB);
 
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing(void);
