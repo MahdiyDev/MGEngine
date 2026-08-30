@@ -19,6 +19,7 @@ source/
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
+  mge_depth.c          depth test / clip planes / polygon offset / depth preview
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
@@ -37,6 +38,7 @@ examples/lighting/     ambient, diffuse, specular, directional, point, spotlight
 examples/materials/    textured_cube
 examples/meshes/       textured_quad
 examples/models/       load_melon
+examples/depth/        depth_buffer
 ```
 
 ## Using mlib
@@ -84,7 +86,8 @@ make test            # or:  cd test && make
 picking/drag math; `test_material` covers `Material` / `MaterialMap`
 construction; `test_light` covers the light constructors and the uniform
 wiring in `Mge_BeginLighting3D(Ex)`; `test_mesh` covers the `Mesh` struct
-handling. All use a stubbed GL backend -- none open a window.
+handling; `test_depth` covers the clip planes, depth-state forwarding and
+depth-preview wiring. All use a stubbed GL backend -- none open a window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -456,6 +459,57 @@ mesh is uploaded to the GPU before `Mge_LoadModel` returns.
 
 Demo: `examples/models/load_melon.c` — loads `assets/sliced_musk_melon/`, frames
 it from its bounding box, orbits a point light around it. Needs `make vendor`.
+
+### Depth testing
+
+`Mge_BeginMode3D` turns the depth test on (`DEPTH_LESS`) and `Mge_EndMode3D`
+turns it off, so 2D drawing is always painter's-order and 3D is depth-sorted.
+To tune it *within* a 3D block:
+
+```c
+void Mge_EnableDepthTest(void);  void Mge_DisableDepthTest(void);
+void Mge_SetDepthFunc(int func);   // a DepthFunc: DEPTH_LESS (default) ... DEPTH_ALWAYS
+void Mge_SetDepthMask(bool write); // false -> test against depth but leave it unchanged
+```
+
+**Visualizing the depth buffer.** Draw between `Mge_BeginDepthPreview()` /
+`Mge_EndDepthPreview()` (in place of `Mge_BeginLighting3D`) to shade every
+fragment by its linearized depth — near is black, far is white:
+
+```c
+Mge_BeginMode3D(camera);
+    Mge_BeginDepthPreview();
+        Draw_Cube(...); Mge_DrawModel(...);
+    Mge_EndDepthPreview();
+Mge_EndMode3D();
+```
+
+**Preventing z-fighting.** Two surfaces that land on almost the same depth value
+flicker between each other. In order of effectiveness:
+
+1. Don't make faces coplanar — offset the decal/marking slightly.
+2. Push the **near** plane out. A near plane of `0.01` spends nearly all of the
+   depth buffer's precision on the first few centimetres; `Mge_SetClipPlanes`
+   lets you widen it to whatever the scene allows (this also affects
+   `Mge_GetCameraProjectionMatrix`):
+
+   ```c
+   Mge_SetClipPlanes(0.2, 60.0);   // near, far -- rejected if near <= 0 or far <= near
+   double n = Mge_GetClipNear();
+   ```
+3. When geometry *must* be coplanar (decals, outlines), bias its depth with a
+   polygon offset — set it, draw, reset:
+
+   ```c
+   Mge_SetPolygonOffset(1.0f, 1.0f);   // positive = push away from the camera
+   Draw_Cube(...);                     // this surface now loses ties
+   Mge_DisablePolygonOffset();
+   ```
+
+(The framebuffer uses GLFW's default 24-bit depth buffer.)
+
+Demo: `examples/depth/depth_buffer.c` — auto-flips between lit and depth-preview
+views; shows a z-fighting cube pair beside a polygon-offset-fixed one.
 
 ### Math
 

@@ -36,7 +36,7 @@ endif
 # engine objects, minus main.o (each example has its own main)
 ENGINE_OBJS = $(filter-out ../build/obj/main.o,$(wildcard ../build/obj/*.o))
 
-SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c)
+SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c depth/*.c)
 BIN = $(SRC:.c=$(EXE))
 
 .PHONY: all clean

@@ -14,7 +14,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -63,6 +63,9 @@ test_light$(EXE): test_light.c ../source/mge_light.c $(MLIB)/test.h
 
 test_mesh$(EXE): test_mesh.c ../source/mge_mesh.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_mesh.c ../source/mge_mesh.c
+
+test_depth$(EXE): test_depth.c ../source/mge_depth.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_depth.c ../source/mge_depth.c
 
 # compiled as C11 with gcc, linked with g++ (Assimp is C++)
 test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB)/test.h

@@ -227,14 +227,17 @@ void Mge_BeginMode3D(Camera3D camera)
 
     float aspect = (float)CORE.Window.screen.width / (float)CORE.Window.screen.height;
 
+    double clipNear = Mge_GetClipNear();
+    double clipFar = Mge_GetClipFar();
+
     if (camera.projection == CAMERA_PERSPECTIVE) {
-        double top = MGE_CULL_DISTANCE_NEAR * tan(camera.fovy * 0.5 * DEG2RAD);
+        double top = clipNear * tan(camera.fovy * 0.5 * DEG2RAD);
         double right = top * aspect;
-        MgeGL_Frustum(-right, right, -top, top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
+        MgeGL_Frustum(-right, right, -top, top, clipNear, clipFar);
     } else if (camera.projection == CAMERA_ORTHOGRAPHIC) {
         double top = camera.fovy / 2.0;
         double right = top * aspect;
-        MgeGL_Ortho(-right, right, -top, top, MGE_CULL_DISTANCE_NEAR, MGE_CULL_DISTANCE_FAR);
+        MgeGL_Ortho(-right, right, -top, top, clipNear, clipFar);
     }
 
     MgeGL_MatrixMode(MGEGL_MODELVIEW);

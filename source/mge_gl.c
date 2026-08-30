@@ -732,6 +732,41 @@ void MgeGL_Load_Extensions(void* loader)
 void MgeGL_EnableDepthTest(void) { glEnable(GL_DEPTH_TEST); }
 void MgeGL_DisableDepthTest(void) { glDisable(GL_DEPTH_TEST); }
 
+void MgeGL_SetDepthFunc(int depthFunc)
+{
+    GLenum f = GL_LESS;
+    switch (depthFunc) {
+    case DEPTH_NEVER:    f = GL_NEVER;    break;
+    case DEPTH_LESS:     f = GL_LESS;     break;
+    case DEPTH_EQUAL:    f = GL_EQUAL;    break;
+    case DEPTH_LEQUAL:   f = GL_LEQUAL;   break;
+    case DEPTH_GREATER:  f = GL_GREATER;  break;
+    case DEPTH_NOTEQUAL: f = GL_NOTEQUAL; break;
+    case DEPTH_GEQUAL:   f = GL_GEQUAL;   break;
+    case DEPTH_ALWAYS:   f = GL_ALWAYS;   break;
+    default: break;
+    }
+    MgeGL_Draw(); // flush geometry queued under the old func
+    glDepthFunc(f);
+}
+
+void MgeGL_SetDepthMask(bool writeEnabled)
+{
+    MgeGL_Draw();
+    glDepthMask(writeEnabled ? GL_TRUE : GL_FALSE);
+}
+
+void MgeGL_SetPolygonOffset(bool enabled, float factor, float units)
+{
+    MgeGL_Draw();
+    if (enabled) {
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(factor, units);
+    } else {
+        glDisable(GL_POLYGON_OFFSET_FILL);
+    }
+}
+
 // ----- retained indexed meshes -----
 //
 // Each mesh keeps its own VAO/VBO/EBO. Vertices are interleaved floats:

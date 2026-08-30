@@ -66,6 +66,9 @@ void MgeGL_MatrixMode(int mode);
 void MgeGL_LoadIdentity(void);
 void MgeGL_EnableDepthTest(void);
 void MgeGL_DisableDepthTest(void);
+void MgeGL_SetDepthFunc(int depthFunc);   // DepthFunc enum
+void MgeGL_SetDepthMask(bool writeEnabled);
+void MgeGL_SetPolygonOffset(bool enabled, float factor, float units);
 bool MgeGL_CheckRenderBatchLimit(int vCount);
 
 unsigned int MgeGL_GetDefaultShaderId(void);

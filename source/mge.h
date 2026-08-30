@@ -513,6 +513,46 @@ void Mge_EndDrawing(void);
 void Mge_BeginMode3D(Camera3D camera);
 void Mge_EndMode3D(void);
 
+// --- Depth testing ---------------------------------------------------------
+//
+// 3D drawing (between Mge_BeginMode3D / Mge_EndMode3D) runs with the depth test
+// enabled and `DEPTH_LESS`. These tune it; the clip planes below govern depth
+// *precision*, which is what causes z-fighting.
+typedef enum {
+	DEPTH_NEVER = 0,
+	DEPTH_LESS,      // GL default: keep the fragment that is nearer
+	DEPTH_EQUAL,
+	DEPTH_LEQUAL,
+	DEPTH_GREATER,
+	DEPTH_NOTEQUAL,
+	DEPTH_GEQUAL,
+	DEPTH_ALWAYS
+} DepthFunc;
+
+void Mge_EnableDepthTest(void);
+void Mge_DisableDepthTest(void);
+void Mge_SetDepthFunc(int func);   // DepthFunc value
+void Mge_SetDepthMask(bool write); // false = test against depth but don't write it
+
+// Near/far clip planes. A tiny near plane throws away most of the depth buffer's
+// precision and is the usual cause of z-fighting -- push `near` out as far as
+// the scene tolerates. Defaults: MGE_CULL_DISTANCE_NEAR .. MGE_CULL_DISTANCE_FAR.
+// Takes effect at the next Mge_BeginMode3D.
+void   Mge_SetClipPlanes(double near, double far);
+double Mge_GetClipNear(void);
+double Mge_GetClipFar(void);
+
+// Polygon offset -- bias a surface's depth so geometry that is *meant* to be
+// coplanar (decals, floor markings, outlines) stops z-fighting. Set it with the
+// surface about to be drawn, then reset. Negative values pull toward the camera.
+void Mge_SetPolygonOffset(float factor, float units);
+void Mge_DisablePolygonOffset(void);
+
+// Depth-buffer visualization: everything drawn between these is shaded by its
+// linearized depth (near = black, far = white). Use instead of Mge_BeginLighting3D.
+void Mge_BeginDepthPreview(void);
+void Mge_EndDepthPreview(void);
+
 // Shapes
 void Draw_Line(int startPosX, int startPosY, int endPosX, int endPosY, Color color);
 void Draw_LineV(Vector2 startPos, Vector2 endPos, Color color);
