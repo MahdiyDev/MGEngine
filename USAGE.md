@@ -22,7 +22,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube ...
   mge_object.c          Object struct + mouse-driven translation gizmo
   mge_light.c          Blinn-Phong lighting; directional / point / spot lights
-  mge_shadow.c         shadow mapping: depth pass + PCF-filtered compare
+  mge_shadow.c         shadow mapping: directional depth map + point-light depth cube
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
   mge_model.c          Mge_LoadModel -- Assimp file -> list of meshes
@@ -54,7 +54,7 @@ vendor/
 test/                  unit tests for math / file utils / objects / materials / lights / mesh (no window/GL needed)
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows
 examples/materials/    textured_cube
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -139,8 +139,9 @@ outline state sequence; `test_cull` covers face-culling forwarding;
 the explode / normals wrappers; `test_instancing` covers the `ModelBatch`
 contract and the `Matrix_Scale` / composition math behind the transforms;
 `test_msaa` covers the `Mge_SetMSAA` request clamping; `test_gamma` covers the
-`Mge_SetGammaCorrection` state + forwarding; `test_shadow` covers the `ShadowMap`
-struct contract. All use a stubbed GL backend -- none open a window.
+`Mge_SetGammaCorrection` state + forwarding; `test_shadow` covers the `ShadowMap` /
+`PointShadowMap` struct contract. All use a stubbed GL backend -- none open a
+window.
 
 `test_model` is separate (`cd test && make model`) because it links the
 vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
@@ -485,6 +486,33 @@ rendering to its own framebuffer and restores the window on `Mge_EndShadowPass`.
 
 Demo: `examples/lighting/shadow_mapping.c` — a moving sun over a few blocks, with
 the shadow map shown in the corner.
+
+#### Point (omnidirectional) shadows
+
+A point/spot light shadows in every direction, so pass 1 renders the occluders
+into a depth **cubemap** — once per face — storing the distance from the light:
+
+```c
+PointShadowMap ps = Mge_LoadPointShadowMap(1024);
+...
+Mge_BeginPointShadowPass(&ps, lamp, 22.0f);   // farPlane = max shadow distance
+    for (int f = 0; f < 6; f++) { Mge_SetPointShadowFace(f); DrawOccluders(); }
+Mge_EndPointShadowPass();
+
+Mge_BeginMode3D(camera);
+    Mge_BeginLighting3DPointShadowed(&lamp, 1, camera, ps);  // lights[0] casts
+        Mge_SetMaterial(mat);
+        DrawScene();
+    Mge_EndLighting3D();
+Mge_EndMode3D();
+```
+
+The compare uses a 20-tap disk PCF. `Mge_BeginLighting3DShadowed` (2D map) and
+`Mge_BeginLighting3DPointShadowed` (cube) are mutually exclusive — `lights[0]`
+casts one kind or the other. The 2D map is on texture unit 1, the cube on unit 2.
+
+Demo: `examples/lighting/point_shadows.c` — a lamp bobbing inside a room, cubes
+casting onto the walls, floor and ceiling.
 
 ### Materials & material maps
 

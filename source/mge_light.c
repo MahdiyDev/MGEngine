@@ -90,6 +90,31 @@ static const char* lightFragCode =
     "            sh += cur > texture(shadowMap, p.xy + vec2(x, y) * texel).r ? 1.0 : 0.0;\n"
     "    return sh / 9.0;\n"                                  // 3x3 PCF
     "}\n"
+    "uniform int pointShadowEnabled;\n"
+    "uniform samplerCube pointShadowMap;\n"
+    "uniform vec3 pointShadowLightPos;\n"
+    "uniform float pointShadowFar;\n"
+    "const vec3 pcfDisk[20] = vec3[](\n"
+    "    vec3( 1, 1, 1), vec3( 1,-1, 1), vec3(-1,-1, 1), vec3(-1, 1, 1),\n"
+    "    vec3( 1, 1,-1), vec3( 1,-1,-1), vec3(-1,-1,-1), vec3(-1, 1,-1),\n"
+    "    vec3( 1, 1, 0), vec3( 1,-1, 0), vec3(-1,-1, 0), vec3(-1, 1, 0),\n"
+    "    vec3( 1, 0, 1), vec3(-1, 0, 1), vec3( 1, 0,-1), vec3(-1, 0,-1),\n"
+    "    vec3( 0, 1, 1), vec3( 0,-1, 1), vec3( 0,-1,-1), vec3( 0, 1,-1));\n"
+    "float PointShadowFactor(vec3 fragPos)\n"
+    "{\n"
+    "    if (pointShadowEnabled == 0) return 0.0;\n"
+    "    vec3 toLight = fragPos - pointShadowLightPos;\n"
+    "    float cur = length(toLight);\n"
+    "    if (cur > pointShadowFar) return 0.0;\n"
+    "    float bias = 0.15;\n"
+    "    float radius = (1.0 + cur / pointShadowFar) / 25.0;\n"
+    "    float sh = 0.0;\n"
+    "    for (int i = 0; i < 20; i++) {\n"
+    "        float closest = texture(pointShadowMap, toLight + pcfDisk[i] * radius).r * pointShadowFar;\n"
+    "        sh += (cur - bias > closest) ? 1.0 : 0.0;\n"
+    "    }\n"
+    "    return sh / 20.0;\n"
+    "}\n"
     "void main()\n"
     "{\n"
     "    vec3 N = normalize(vNormal);\n"
@@ -127,7 +152,8 @@ static const char* lightFragCode =
     "        vec3 amb = lights[i].ambient  * lights[i].color;\n"
     "        vec3 dif = lights[i].diffuse  * diff * lights[i].color;\n"
     "        vec3 spc = lights[i].specular * matSpecular * spec * lights[i].color;\n"
-    "        float sh = (i == 0) ? ShadowFactor(N, L) : 0.0;\n"   // only lights[0] casts
+    "        float sh = 0.0;\n"                                   // only lights[0] casts
+    "        if (i == 0) sh = (shadowsEnabled == 1) ? ShadowFactor(N, L) : PointShadowFactor(vFragPos);\n"
     "        lit += amb + (dif + spc) * atten * intensity * (1.0 - sh);\n"
     "    }\n"
     "    FragColor = vec4(lit * base.rgb, base.a);\n"
@@ -246,12 +272,14 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
         count = MGE_MAX_LIGHTS;
 
     MgeGL_Uniform3fv("viewPos", camera.position);
-    MgeGL_Uniform1i("sampleTex", 0); // diffuse on unit 0, shadow map on unit 1
-    MgeGL_Uniform1i("shadowMap", 1); // keep the two samplers on distinct units
+    MgeGL_Uniform1i("sampleTex", 0);      // diffuse
+    MgeGL_Uniform1i("shadowMap", 1);      // directional/spot depth (2D)
+    MgeGL_Uniform1i("pointShadowMap", 2); // point-light depth (cube); distinct units per sampler
     MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform1f("shininess", 32.0f);
     MgeGL_Uniform1i("blinn", (s_model == LIGHTING_PHONG) ? 0 : 1);
-    MgeGL_Uniform1i("shadowsEnabled", 0); // Mge_BeginLighting3DShadowed turns this back on
+    MgeGL_Uniform1i("shadowsEnabled", 0);      // Mge_BeginLighting3DShadowed turns this on
+    MgeGL_Uniform1i("pointShadowEnabled", 0);  // Mge_BeginLighting3DPointShadowed turns this on
     MgeGL_Uniform1i("lightCount", count);
 
     for (int i = 0; i < count; i++)

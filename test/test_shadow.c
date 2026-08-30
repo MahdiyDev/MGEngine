@@ -25,9 +25,19 @@ TEST(shadow_map_carries_a_light_space_matrix)
     CHECK(sm.lightSpaceMatrix.m1 == 0.0f);
 }
 
+TEST(point_shadow_map_zero_value_is_inert)
+{
+    PointShadowMap ps = { 0 };
+    CHECK(ps.fbo == 0);
+    CHECK(ps.depthCubemap == 0);
+    CHECK(ps.size == 0);
+    CHECK(ps.farPlane == 0.0f);
+}
+
 int main(void)
 {
     RUN(shadow_map_zero_value_is_inert);
     RUN(shadow_map_carries_a_light_space_matrix);
+    RUN(point_shadow_map_zero_value_is_inert);
     return test_summary();
 }

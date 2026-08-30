@@ -49,7 +49,24 @@ static const char* blitFrag =
     "void main() { float d = texture(depthTex, vUV).r; FragColor = vec4(vec3(d), 1.0); }\n";
 
 static unsigned int s_depthProgram = 0;
+// ---- point-light depth: store linear distance from the light (pass 1) ----
+
+static const char* ptVert =
+    "#version 330 core\n"
+    "layout(location = 0) in vec3 aPos;\n"
+    "uniform mat4 lightVP;\n" // face projection * face view
+    "out vec3 vWorld;\n"
+    "void main() { vWorld = aPos; gl_Position = lightVP * vec4(aPos, 1.0); }\n";
+
+static const char* ptFrag =
+    "#version 330 core\n"
+    "in vec3 vWorld;\n"
+    "uniform vec3 lightPos;\n"
+    "uniform float farPlane;\n"
+    "void main() { gl_FragDepth = length(vWorld - lightPos) / farPlane; }\n";
+
 static unsigned int s_blitProgram = 0;
+static unsigned int s_ptProgram = 0;
 static unsigned int s_quadVao = 0;
 static unsigned int s_quadVbo = 0;
 
@@ -64,6 +81,9 @@ static void EnsureResources(void)
     s_blitProgram = MgeGL_CreateShaderProgram(
         MgeGL_LoadShader(blitVert, GL_VERTEX_SHADER, "shadow blit vertex"),
         MgeGL_LoadShader(blitFrag, GL_FRAGMENT_SHADER, "shadow blit fragment"));
+    s_ptProgram = MgeGL_CreateShaderProgram(
+        MgeGL_LoadShader(ptVert, GL_VERTEX_SHADER, "point shadow vertex"),
+        MgeGL_LoadShader(ptFrag, GL_FRAGMENT_SHADER, "point shadow fragment"));
 
     const float quad[12] = { 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1 };
     glGenVertexArrays(1, &s_quadVao);
@@ -226,4 +246,131 @@ void Mge_DrawShadowMap(ShadowMap sm, int x, int y, int size)
 
     MgeGL_EnableDepthTest();
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
+}
+
+// ==========================================================================
+// Point (omnidirectional) shadows -- a depth cubemap, one render per face.
+// ==========================================================================
+
+static Matrix s_ptProj;       // 90deg perspective for the current pass
+static Vector3 s_ptLightPos;  // light position, remembered across the 6 faces
+static unsigned int s_ptCube; // the cubemap being written this pass
+
+PointShadowMap Mge_LoadPointShadowMap(int size)
+{
+    if (size < 64)
+        size = 64;
+
+    PointShadowMap sm = { 0 };
+    sm.size = size;
+
+    glGenTextures(1, &sm.depthCubemap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, sm.depthCubemap);
+    for (int f = 0; f < 6; f++)
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, GL_DEPTH_COMPONENT24,
+            size, size, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    glGenFramebuffers(1, &sm.fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, sm.fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_X, sm.depthCubemap, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        TRACE_LOG(LOG_WARNING, "SHADOW: point-shadow cubemap [%d] is not complete", size);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    return sm;
+}
+
+void Mge_UnloadPointShadowMap(PointShadowMap* sm)
+{
+    if (sm == NULL)
+        return;
+    if (sm->depthCubemap != 0)
+        glDeleteTextures(1, &sm->depthCubemap);
+    if (sm->fbo != 0)
+        glDeleteFramebuffers(1, &sm->fbo);
+    sm->depthCubemap = 0;
+    sm->fbo = 0;
+    sm->size = 0;
+}
+
+void Mge_BeginPointShadowPass(PointShadowMap* sm, Light light, float farPlane)
+{
+    if (sm == NULL || sm->fbo == 0)
+        return;
+    EnsureResources();
+    MgeGL_Draw();
+
+    if (farPlane < 0.1f)
+        farPlane = 25.0f;
+    sm->lightPos = light.position;
+    sm->farPlane = farPlane;
+    s_ptProj = MatrixPerspective(90.0 * DEG2RAD, 1.0, 0.05, (double)farPlane);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, sm->fbo);
+    MgeGL_Viewport(0, 0, sm->size, sm->size);
+    MgeGL_EnableDepthTest();
+    MgeGL_SetDepthFunc(DEPTH_LESS);
+    MgeGL_SetDepthMask(true);
+
+    MgeGL_SetShader(s_ptProgram);
+    MgeGL_Uniform3fv("lightPos", light.position);
+    MgeGL_Uniform1f("farPlane", farPlane);
+
+    // remembered for Mge_SetPointShadowFace
+    s_ptLightPos = light.position;
+    s_ptCube = sm->depthCubemap;
+}
+
+void Mge_SetPointShadowFace(int face)
+{
+    if (face < 0 || face > 5 || s_ptCube == 0)
+        return;
+    MgeGL_Draw(); // flush the previous face's geometry
+
+    static const Vector3 fwd[6] = {
+        { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 }
+    };
+    static const Vector3 up[6] = {
+        { 0, -1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 }, { 0, -1, 0 }, { 0, -1, 0 }
+    };
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, s_ptCube, 0);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    Matrix view = MatrixLookAt(s_ptLightPos, Vector3_Add(s_ptLightPos, fwd[face]), up[face]);
+    MgeGL_UniformMatrix4fv("lightVP", Matrix_Multiply(view, s_ptProj));
+}
+
+void Mge_EndPointShadowPass(void)
+{
+    MgeGL_Draw();
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    MgeGL_Viewport(0, 0, Mge_GetScreenWidth(), Mge_GetScreenHeight());
+    MgeGL_SetShader(MgeGL_GetDefaultShaderId());
+    s_ptCube = 0;
+}
+
+void Mge_BeginLighting3DPointShadowed(const Light* lights, int count, Camera3D camera, PointShadowMap sm)
+{
+    Mge_BeginLighting3DEx(lights, count, camera);
+
+    MgeGL_Uniform1i("pointShadowEnabled", 1);
+    MgeGL_Uniform1i("pointShadowMap", 2);
+    MgeGL_Uniform3fv("pointShadowLightPos", sm.lightPos);
+    MgeGL_Uniform1f("pointShadowFar", sm.farPlane);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, sm.depthCubemap);
+    glActiveTexture(GL_TEXTURE0);
 }

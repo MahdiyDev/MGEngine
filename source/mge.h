@@ -268,6 +268,16 @@ typedef struct ShadowMap {
     Matrix lightSpaceMatrix;   // light projection * light view -- set by Mge_BeginShadowPass
 } ShadowMap;
 
+// Omnidirectional shadow map for a point light: a depth CUBEMAP holding the
+// distance from the light to the nearest occluder in every direction.
+typedef struct PointShadowMap {
+    unsigned int fbo;
+    unsigned int depthCubemap; // GL_DEPTH_COMPONENT cube; unit 2 in the lighting shader
+    int size;
+    Vector3 lightPos;          // set by Mge_BeginPointShadowPass
+    float farPlane;
+} PointShadowMap;
+
 // Built-in post-processing effects for Mge_DrawRenderTextureFX.
 typedef enum {
     POSTFX_NONE = 0,   // straight copy
@@ -912,6 +922,29 @@ void Mge_BeginShadowPass(ShadowMap* sm, Light light, Vector3 center, float radiu
 void Mge_EndShadowPass(void);
 void Mge_BeginLighting3DShadowed(const Light* lights, int count, Camera3D camera, ShadowMap sm);
 void Mge_DrawShadowMap(ShadowMap sm, int x, int y, int size); // debug: blit the depth texture
+
+// --- Point (omnidirectional) shadows ---------------------------------------
+//
+// A point light shadows in all directions, so pass 1 renders the occluders once
+// per cubemap face:
+//
+//   PointShadowMap ps = Mge_LoadPointShadowMap(1024);
+//   ...
+//   Mge_BeginPointShadowPass(&ps, lamp, 30.0f);   // farPlane: max shadow distance
+//       for (int f = 0; f < 6; f++) { Mge_SetPointShadowFace(f); DrawOccluders(); }
+//   Mge_EndPointShadowPass();
+//
+//   Mge_BeginMode3D(camera);
+//   Mge_BeginLighting3DPointShadowed(&lamp, 1, camera, ps);  // lights[0] casts
+//       DrawScene();
+//   Mge_EndLighting3D();
+//   Mge_EndMode3D();
+PointShadowMap Mge_LoadPointShadowMap(int size);
+void Mge_UnloadPointShadowMap(PointShadowMap* sm);
+void Mge_BeginPointShadowPass(PointShadowMap* sm, Light light, float farPlane);
+void Mge_SetPointShadowFace(int face); // 0..5; binds + clears that cube face
+void Mge_EndPointShadowPass(void);
+void Mge_BeginLighting3DPointShadowed(const Light* lights, int count, Camera3D camera, PointShadowMap sm);
 
 #ifdef __cplusplus
 }
