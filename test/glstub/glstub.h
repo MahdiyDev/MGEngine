@@ -48,6 +48,8 @@ typedef struct {
     int attachCount;              // glAttachShader calls since reset
     const GLchar* lastShaderSource;
     GLuint deletedProgram;        // last glDeleteProgram
+    GLuint lastDeletedTexture;    // last id passed to glDeleteTextures
+    int deletedTextureCount;      // glDeleteTextures calls since reset
 
     // draw + buffer bursts (cleared on reset)
     StubDrawArrays drawArrays[GLSTUB_MAX_DRAWS];

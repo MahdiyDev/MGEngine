@@ -28,7 +28,7 @@ ifeq ($(OS),Windows_NT)
     # link the runtime in: some Windows app-control (Device Guard / WDAC)
     # policies block freshly built, dynamically linked exes
     LDFLAGS ?= -static
-    RENDER_SYSLIBS := -lopengl32 -lgdi32 -lwinmm -lkernel32
+    RENDER_SYSLIBS := -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32
 else
     EXE    :=
     RM     := rm -f

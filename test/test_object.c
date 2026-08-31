@@ -16,6 +16,8 @@ void Draw_RectangleLines(int a, int b, int w, int h, Color c) { (void)a; (void)b
 void Draw_Cube(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 void Draw_CubeEx(Vector3 a, Vector3 b, Vector3 r, Color c) { (void)a; (void)b; (void)r; (void)c; }
 void Draw_CubeWires(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
+void Draw_SphereEx(Vector3 a, float r, int ri, int sl, Color c) { (void)a; (void)r; (void)ri; (void)sl; (void)c; }
+void Draw_Plane(Vector3 a, float w, float l, Color c) { (void)a; (void)w; (void)l; (void)c; }
 void Draw_Arrow(Vector2 a, Vector2 b, float s, Color c) { (void)a; (void)b; (void)s; (void)c; }
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 void Mge_DrawObjectOutline(Object o, float t, Color c) { (void)o; (void)t; (void)c; }
@@ -76,6 +78,18 @@ TEST(make_objects)
     CHECK(b.material.maps[MATERIAL_MAP_DIFFUSE].color.g == 255 &&
         b.material.maps[MATERIAL_MAP_DIFFUSE].color.r == 0);
     CHECK(b.material.maps[MATERIAL_MAP_DIFFUSE].texture.id == 0); // no texture by default
+    CHECK(b.primitive == PRIM_CUBE); // Mge_MakeObject3D is a cube
+}
+
+TEST(make_shape_sets_the_primitive)
+{
+    Object s = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, BLUE);
+    CHECK(s.kind == OBJECT_3D);
+    CHECK(s.primitive == PRIM_SPHERE);
+    CHECK(s.material.maps[MATERIAL_MAP_DIFFUSE].color.b == 255);
+
+    Object p = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, 0, 0 }, (Vector3){ 4, 0.2f, 4 }, WHITE);
+    CHECK(p.primitive == PRIM_PLANE);
 }
 
 TEST(vector4_transform)
@@ -241,6 +255,7 @@ TEST(set_selected_object_matches_a_pick)
 int main(void)
 {
     RUN(make_objects);
+    RUN(make_shape_sets_the_primitive);
     RUN(vector4_transform);
     RUN(camera_projection_matrix);
     RUN(world_to_screen);

@@ -68,7 +68,9 @@ static const char* lightFragCode =
     "uniform int lightCount;\n"
     "uniform vec3 viewPos;\n"
     "uniform sampler2D sampleTex;\n"
-    "uniform float matSpecular;\n"   // MATERIAL_MAP_SPECULAR.value
+    "uniform float matSpecular;\n"       // MATERIAL_MAP_SPECULAR.value  (highlight strength)
+    "uniform vec3  matSpecularColor;\n"  // MATERIAL_MAP_SPECULAR.color  (tints the highlight, 0..1)
+    "uniform float matDiffuse;\n"        // MATERIAL_MAP_DIFFUSE.value   (base-colour gain)
     "uniform float shininess;\n"
     "uniform int blinn;\n"           // 1 = Blinn-Phong halfway vector, 0 = classic Phong reflect
     "uniform int shadowsEnabled;\n"
@@ -117,6 +119,7 @@ static const char* lightFragCode =
     "}\n"
     "uniform sampler2D normalMap;\n"
     "uniform int useNormalMap;\n"
+    "uniform float normalStrength;\n"   // MATERIAL_MAP_NORMAL.value (0 = flat, 1 = as-authored, >1 = exaggerated)
     "vec3 ApplyNormalMap(vec3 N)\n"
     "{\n"
     // TBN from screen-space derivatives (no tangent attribute needed)
@@ -131,6 +134,8 @@ static const char* lightFragCode =
     "    float invmax = inversesqrt(max(dot(T, T), dot(B, B)));\n"
     "    mat3 TBN = mat3(T * invmax, B * invmax, N);\n"
     "    vec3 m = texture(normalMap, vTexCoord).xyz * 2.0 - 1.0;\n"
+    "    m.xy *= normalStrength;\n"          // scale the tangent-space tilt
+    "    m = normalize(m);\n"
     "    return normalize(TBN * m);\n"
     "}\n"
     "void main()\n"
@@ -139,6 +144,7 @@ static const char* lightFragCode =
     "    if (useNormalMap == 1) N = ApplyNormalMap(N);\n"
     "    vec3 V = normalize(viewPos - vFragPos);\n"
     "    vec4 base = texture(sampleTex, vTexCoord) * vColor;\n"   // MATERIAL_MAP_DIFFUSE: texture * colour
+    "    base.rgb *= matDiffuse;\n"                               // ...times the diffuse-map gain
     "    vec3 lit = vec3(0.0);\n"
     "    for (int i = 0; i < lightCount && i < MAX_LIGHTS; i++) {\n"
     "        if (lights[i].enabled == 0) continue;\n"
@@ -170,7 +176,7 @@ static const char* lightFragCode =
     "        float spec = (diff > 0.0) ? pow(sa, max(shininess, 1.0)) : 0.0;\n"
     "        vec3 amb = lights[i].ambient  * lights[i].color;\n"
     "        vec3 dif = lights[i].diffuse  * diff * lights[i].color;\n"
-    "        vec3 spc = lights[i].specular * matSpecular * spec * lights[i].color;\n"
+    "        vec3 spc = lights[i].specular * matSpecular * spec * lights[i].color * matSpecularColor;\n"
     "        float sh = 0.0;\n"                                   // only lights[0] casts
     "        if (i == 0) sh = (shadowsEnabled == 1) ? ShadowFactor(N, L) : PointShadowFactor(vFragPos);\n"
     "        lit += amb + (dif + spc) * atten * intensity * (1.0 - sh);\n"
@@ -296,7 +302,10 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
     MgeGL_Uniform1i("pointShadowMap", 2); // point-light depth (cube); distinct units per sampler
     MgeGL_Uniform1i("normalMap", 3);      // tangent-space normal map
     MgeGL_Uniform1i("useNormalMap", 0);   // Mge_SetMaterial / Mge_DrawMesh turn this on
+    MgeGL_Uniform1f("normalStrength", 1.0f);
     MgeGL_Uniform1f("matSpecular", 1.0f);
+    MgeGL_Uniform3fv("matSpecularColor", (Vector3){ 1.0f, 1.0f, 1.0f });
+    MgeGL_Uniform1f("matDiffuse", 1.0f);
     MgeGL_Uniform1f("shininess", 32.0f);
     MgeGL_Uniform1i("blinn", (s_model == LIGHTING_PHONG) ? 0 : 1);
     MgeGL_Uniform1i("shadowsEnabled", 0);      // Mge_BeginLighting3DShadowed turns this on
@@ -327,8 +336,13 @@ void Mge_SetMaterial(Material material)
     unsigned int normalId = material.maps[MATERIAL_MAP_NORMAL].texture.id;
     MgeGL_SetTextureSlot(3, normalId);
     MgeGL_Uniform1i("useNormalMap", (normalId != 0) ? 1 : 0);
+    MgeGL_Uniform1f("normalStrength", material.maps[MATERIAL_MAP_NORMAL].value);
 
+    Color sc = material.maps[MATERIAL_MAP_SPECULAR].color;
     MgeGL_Uniform1f("matSpecular", material.maps[MATERIAL_MAP_SPECULAR].value);
+    MgeGL_Uniform3fv("matSpecularColor",
+        (Vector3){ sc.r / 255.0f, sc.g / 255.0f, sc.b / 255.0f });
+    MgeGL_Uniform1f("matDiffuse", material.maps[MATERIAL_MAP_DIFFUSE].value);
     MgeGL_Uniform1f("shininess", material.shininess);
 }
 

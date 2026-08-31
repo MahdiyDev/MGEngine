@@ -41,8 +41,14 @@ void Mge_GuiEndSidebar(void);
 void Mge_GuiLabel(const char* text);
 void Mge_GuiSeparator(void);
 void Mge_GuiSpacing(void);
+void Mge_GuiSameLine(void);                                // lay the next widget beside this one
 bool Mge_GuiButton(const char* label);                    // true the frame it is clicked
 bool Mge_GuiSelectable(const char* label, bool selected);  // list row; true when clicked
+
+// A square thumbnail button. `textureId` is a GL texture id (Texture2D.id); pass
+// 0 for an empty slot (draws a bordered "+" placeholder). True the frame it is
+// clicked. `strId` must be unique among sibling widgets.
+bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size);
 
 // --- inputs -- each returns true the frame its value changes ---
 bool Mge_GuiCheckbox(const char* label, bool* value);

@@ -73,17 +73,18 @@ void Mge_DrawObjectOutline(Object obj, float thickness, Color color)
 {
     Mge_BeginStencilMask();
     if (obj.kind == OBJECT_3D) {
-        Draw_CubeEx(obj.position, obj.size, obj.rotation, obj.color);
+        Mge_DrawPrimitive(obj, color); // colour is irrelevant here -- colour mask is off
     } else {
         Rectangle r = { obj.position.x - obj.size.x * 0.5f, obj.position.y - obj.size.y * 0.5f,
             obj.size.x, obj.size.y };
-        Draw_RectangleRec(r, obj.color);
+        Draw_RectangleRec(r, color);
     }
 
     Mge_BeginStencilOutside();
     if (obj.kind == OBJECT_3D) {
-        Vector3 big = { obj.size.x + thickness, obj.size.y + thickness, obj.size.z + thickness };
-        Draw_CubeEx(obj.position, big, obj.rotation, color);
+        Object shell = obj;
+        shell.size = (Vector3){ obj.size.x + thickness, obj.size.y + thickness, obj.size.z + thickness };
+        Mge_DrawPrimitive(shell, color);
     } else {
         float w = obj.size.x + thickness;
         float h = obj.size.y + thickness;

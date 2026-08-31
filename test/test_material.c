@@ -17,9 +17,14 @@ TEST(default_material)
     CHECK(m.maps[MATERIAL_MAP_DIFFUSE].texture.id == 0);
     CHECK(m.maps[MATERIAL_MAP_DIFFUSE].value == 1.0f);
 
-    // specular slot: strength multiplier defaults to 1 (light sets the real term)
+    // specular slot: strength multiplier defaults to 1, highlight untinted (white)
     CHECK(m.maps[MATERIAL_MAP_SPECULAR].value == 1.0f);
+    CHECK(m.maps[MATERIAL_MAP_SPECULAR].color.r == 255 && m.maps[MATERIAL_MAP_SPECULAR].color.b == 255);
     CHECK(m.maps[MATERIAL_MAP_SPECULAR].texture.id == 0);
+
+    // normal slot: strength defaults to 1 (0 would flatten any normal map)
+    CHECK(m.maps[MATERIAL_MAP_NORMAL].value == 1.0f);
+    CHECK(m.maps[MATERIAL_MAP_NORMAL].texture.id == 0);
 
     CHECK(m.shininess == 32.0f);
 }

@@ -2,19 +2,21 @@
 
 #include <mge_math.h>
 #include <math.h>
+#include <stdio.h>
+#include <string.h>
 
 void Scene_Init(Scene* s)
 {
     *s = (Scene){ 0 };
 
-    s->objects[0] = Mge_MakeObject3D((Vector3){ 0.0f, -1.1f, 0.0f }, (Vector3){ 24.0f, 0.2f, 24.0f }, (Color){ 90, 95, 105, 255 });
+    s->objects[0] = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0.0f, -1.1f, 0.0f }, (Vector3){ 24.0f, 0.2f, 24.0f }, (Color){ 90, 95, 105, 255 });
     s->objects[1] = Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
-    s->objects[2] = Mge_MakeObject3D((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 190, 110, 255 });
+    s->objects[2] = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 190, 110, 255 });
     s->objects[3] = Mge_MakeObject3D((Vector3){ 3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 130, 210, 255 });
-    s->objectNames[0] = "Floor";
-    s->objectNames[1] = "Cube 1";
-    s->objectNames[2] = "Cube 2";
-    s->objectNames[3] = "Cube 3";
+    strcpy(s->objectNames[0], "Floor");
+    strcpy(s->objectNames[1], "Cube 1");
+    strcpy(s->objectNames[2], "Sphere 1");
+    strcpy(s->objectNames[3], "Cube 2");
     s->objectCount = 4;
 
     s->lights[0] = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
@@ -39,8 +41,35 @@ void Scene_Init(Scene* s)
 
 void Scene_Shutdown(Scene* s)
 {
+    for (int i = 0; i < s->objectCount; i++)
+        for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
+            Mge_UnloadTexture(s->objects[i].material.maps[m].texture);
+
     Mge_UnloadShadowMap(&s->shadow);
     Mge_UnloadCubemap(s->sky);
+}
+
+void Scene_AddShape(Scene* s, PrimitiveKind primitive)
+{
+    if (s->objectCount >= SCENE_MAX_OBJECTS)
+        return;
+
+    static const char* nouns[3] = { "Cube", "Sphere", "Plane" };
+    Vector3 size = (primitive == PRIM_PLANE) ? (Vector3){ 4.0f, 0.2f, 4.0f }
+                                             : (Vector3){ 1.5f, 1.5f, 1.5f };
+
+    int i = s->objectCount++;
+    s->objects[i] = Mge_MakeShape3D(primitive, (Vector3){ 0.0f, 0.0f, 0.0f }, size, (Color){ 200, 200, 205, 255 });
+
+    // number it after the existing shapes of the same kind
+    int n = 1;
+    for (int k = 0; k < i; k++)
+        if (s->objects[k].primitive == primitive)
+            n++;
+    snprintf(s->objectNames[i], sizeof(s->objectNames[i]), "%s %d", nouns[primitive], n);
+
+    s->selKind = SEL_OBJECT;
+    s->selIndex = i;
 }
 
 void Scene_Pick(Scene* s, Camera3D camera)
@@ -103,7 +132,7 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
     if (s->shadowsOn) {
         Mge_BeginShadowPass(&s->shadow, s->lights[0], s->shadowCenter, s->shadowRadius);
         for (int i = 0; i < s->objectCount; i++)
-            Draw_CubeEx(s->objects[i].position, s->objects[i].size, s->objects[i].rotation, s->objects[i].color);
+            Mge_DrawPrimitive(s->objects[i], (Color){ 255, 255, 255, 255 });
         Mge_EndShadowPass();
     }
 

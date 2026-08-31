@@ -166,6 +166,7 @@ void glEnableVertexAttribArray(GLuint index);
 void glFrontFace(GLenum mode);
 void glGenBuffers(GLsizei n, GLuint* buffers);
 void glGenTextures(GLsizei n, GLuint* textures);
+void glDeleteTextures(GLsizei n, const GLuint* textures);
 void glGenVertexArrays(GLsizei n, GLuint* arrays);
 void glGenerateMipmap(GLenum target);
 GLint glGetAttribLocation(GLuint program, const GLchar* name);

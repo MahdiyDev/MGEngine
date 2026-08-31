@@ -308,6 +308,20 @@ TEST(set_texture_slot_targets_the_unit_then_restores)
     CHECK(glstub.activeTexture == GL_TEXTURE0); // left on unit 0 for the batcher
 }
 
+TEST(unload_texture_deletes_real_ids_only)
+{
+    glstub_reset();
+    MgeGL_UnloadTexture(0); // id 0 -> no-op
+    CHECK(glstub.deletedTextureCount == 0);
+
+    MgeGL_UnloadTexture(MgeGL_GetWhiteTexture()); // shared white texture -> kept
+    CHECK(glstub.deletedTextureCount == 0);
+
+    MgeGL_UnloadTexture(4242);
+    CHECK(glstub.deletedTextureCount == 1);
+    CHECK(glstub.lastDeletedTexture == 4242);
+}
+
 // ---- shaders ----
 
 TEST(shader_and_program_creation)
@@ -355,6 +369,7 @@ int main(void)
     RUN(srgb_and_sample_count);
     RUN(load_texture_picks_the_sRGB_internal_format);
     RUN(set_texture_slot_targets_the_unit_then_restores);
+    RUN(unload_texture_deletes_real_ids_only);
     RUN(shader_and_program_creation);
     return test_summary();
 }

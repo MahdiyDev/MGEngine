@@ -2,13 +2,14 @@
 
 A minimal scene editor built on top of the engine library — see
 [../USAGE.md](../USAGE.md) for the engine itself. `builder/` is a plain-C
-consumer (`#include <mge.h>` + link `-lmgengine`), now split into three units:
+consumer (`#include <mge.h>` + link `-lmgengine`), split into four units:
 
 | file | contents |
 | --- | --- |
-| `main.c` | the window, the frame loop, the camera (fly + edit look/move), the **TAB** toggle |
-| `scene.c` / `scene.h` | `Scene`: objects, lights, selection, picking, and the render passes (shadow + lit + gizmo + skybox) |
-| `sidebar.c` / `sidebar.h` | every `Mge_Gui*` call — the mode label, gizmo switch, entity list and inspector |
+| `main.c` | the window, the frame loop, the camera (fly + edit look/move), the **TAB** toggle, and the shared `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair the two panels draw into |
+| `scene.c` / `scene.h` | `Scene`: objects, lights, selection, picking, `Scene_AddShape` (spawn), and the render passes (shadow + lit + gizmo + skybox) |
+| `sidebar.c` / `sidebar.h` | the **left** panel's `Mge_Gui*` calls — mode label, gizmo switch, entity list, inspector (incl. the material texture slots) |
+| `explorer.c` / `explorer.h` | the **right** panel's `Mge_Gui*` calls — the shape palette (spawn cube / sphere / plane) |
 
 ```sh
 make            # from the repo root -> build/mgengine(.exe)
@@ -27,10 +28,17 @@ The builder calls `Mge_SetMSAA(4)` before `Mge_InitWindow` (4x anti-aliasing).
 | EDIT — select | **left-click** an object or the lamp; click empty space to deselect |
 | EDIT — gizmo | drag a handle to **move / rotate / scale** the selection (switch mode in the sidebar). Translate has axis arrows + a centre ball (view-plane move); rotate shows the camera-facing part of each ring (Unreal-style); scale has cube tips. The hovered handle highlights white; the gizmo is a fixed size and draws on top of everything |
 
-The sidebar is only clickable in EDIT mode. Engine input is suppressed while a
+Both panels are only clickable in EDIT mode. Engine input is suppressed while a
 widget has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
 
-## The sidebar
+## The Explorer (right panel)
+
+A palette of primitives. Clicking **Cube**, **Sphere** or **Plane** spawns that
+shape at the origin (`Scene_AddShape` → `Mge_MakeShape3D`), names it (`Cube 2`,
+`Sphere 1`, …) and selects it, so the gizmo is on it immediately. The scene holds
+up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when full.
+
+## The Sidebar (left panel)
 
 - **MODE** — `EDIT` or `VIEW`, at the very top.
 - **FPS / draws** — refreshed once a second (`Mge_GetFps` / `Mge_GetDrawCalls`).
@@ -46,11 +54,25 @@ widget has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
 
   | selection | fields |
   | --- | --- |
-  | **Object** | position, **rotation** (euler °), size, colour; material diffuse colour, specular, shininess |
+  | **Object** | primitive label, position, **rotation** (euler °), size; `shininess`; then one **group per material map** — diffuse / specular / normal |
   | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
+
+  Each **material-map group** is a square thumbnail (`Mge_GuiImageButton`) plus
+  that slot's `color` and `value`:
+
+  | group | thumbnail | color | value |
+  | --- | --- | --- | --- |
+  | diffuse | albedo texture (loaded sRGB) | tint over the texture — *this is the object's colour* | `gain` 0–2 |
+  | specular | *(unused)* | tints the highlight | `strength` 0–1 |
+  | normal | tangent-space normal map (loaded linear) | *(hidden — a tint is meaningless)* | `strength` 0–4 (0 = flat) |
+
+  Click a thumbnail to open the OS file picker (`Mge_OpenImageDialog`); an `x`
+  beside a filled slot clears it (`Mge_UnloadTexture`). There is no separate
+  object colour. If a normal map looks flat, raise its `strength`.
 
 ## Extending it
 
-Scene data + rendering: `scene.c`. UI: `sidebar.c` (add a row + an `inspect_*`
-for a new kind). A new movable kind also needs a `Scene_Sel*` accessor so
-`Mge_Gizmo3D` can reach its transform.
+Scene data + rendering: `scene.c`. Left-panel UI: `sidebar.c` (add a row + an
+`inspect_*` for a new kind); right-panel palette: `explorer.c`. A new movable
+kind also needs a `Scene_Sel*` accessor so `Mge_Gizmo3D` can reach its transform.
+Textures the scene loads are freed in `Scene_Shutdown`.

@@ -40,6 +40,12 @@ const GLubyte* glGetString(GLenum name) { (void)name; return (const GLubyte*)"st
 // ---- object creation ----
 void glGenBuffers(GLsizei n, GLuint* b) { for (GLsizei i = 0; i < n; i++) b[i] = next_id(); }
 void glGenTextures(GLsizei n, GLuint* t) { for (GLsizei i = 0; i < n; i++) t[i] = next_id(); }
+void glDeleteTextures(GLsizei n, const GLuint* t)
+{
+    glstub.deletedTextureCount++;
+    if (n > 0 && t != NULL)
+        glstub.lastDeletedTexture = t[0];
+}
 void glGenVertexArrays(GLsizei n, GLuint* a) { for (GLsizei i = 0; i < n; i++) a[i] = next_id(); }
 GLuint glCreateShader(GLenum type) { (void)type; return next_id(); }
 GLuint glCreateProgram(void) { return next_id(); }

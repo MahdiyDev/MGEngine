@@ -149,6 +149,9 @@ TEST(begin_lighting_ex_uploads_every_light)
 
     CHECK(rec_i("lightCount") == 3);
     CHECK(feq(rec_f("matSpecular"), 1.0f));
+    CHECK(feq(rec_f("matDiffuse"), 1.0f));      // base-colour gain defaults to 1
+    CHECK(feq(rec_f("normalStrength"), 1.0f));  // normal-map strength defaults to 1
+    CHECK(feq(rec_v("matSpecularColor").x, 1.0f) && feq(rec_v("matSpecularColor").z, 1.0f));
     CHECK(feq(rec_f("shininess"), 32.0f));
     CHECK(rec_i("shadowsEnabled") == 0);      // plain lighting -> shadows off
     CHECK(rec_i("pointShadowEnabled") == 0);

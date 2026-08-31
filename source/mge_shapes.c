@@ -348,11 +348,15 @@ void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color co
                 { cx0 * cr0, y0, sz0 * cr0 }, { cx1 * cr0, y0, sz1 * cr0 },
                 { cx1 * cr1, y1, sz1 * cr1 }, { cx0 * cr1, y1, sz0 * cr1 },
             };
+            // matching UVs: u around the equator, v pole-to-pole
+            float u0 = (float)j / (float)slices, u1 = (float)(j + 1) / (float)slices;
+            float v0 = (float)i / (float)rings, v1 = (float)(i + 1) / (float)rings;
+            const float uvs[4][2] = { { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } };
             const int tri[6] = { 0, 1, 2, 0, 2, 3 };
             for (int k = 0; k < 6; k++) {
                 Vector3 u = n[tri[k]];
                 MgeGL_Normal3f(u.x, u.y, u.z);
-                MgeGL_TexCoord2f(0.0f, 0.0f);
+                MgeGL_TexCoord2f(uvs[tri[k]][0], uvs[tri[k]][1]);
                 MgeGL_Vertex3f(center.x + u.x * radius, center.y + u.y * radius, center.z + u.z * radius);
             }
         }
@@ -366,4 +370,28 @@ void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color co
 void Draw_Sphere(Vector3 center, float radius, Color color)
 {
     Draw_SphereEx(center, radius, 8, 14, color);
+}
+
+void Draw_Plane(Vector3 center, float width, float length, Color color)
+{
+    float x = width * 0.5f, z = length * 0.5f;
+
+    // one quad on the XZ plane, facing +Y, UV spanning the whole surface
+    const float v[4][3] = {
+        { -x, 0.0f, z }, { x, 0.0f, z }, { x, 0.0f, -z }, { -x, 0.0f, -z },
+    };
+    const float uv[4][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+    const int tri[6] = { 0, 1, 2, 0, 2, 3 };
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    MgeGL_Normal3f(0.0f, 1.0f, 0.0f);
+    for (int i = 0; i < 6; i++) {
+        int k = tri[i];
+        MgeGL_TexCoord2f(uv[k][0], uv[k][1]);
+        MgeGL_Vertex3f(center.x + v[k][0], center.y + v[k][1], center.z + v[k][2]);
+    }
+    MgeGL_TexCoord2f(0.0f, 0.0f);
+    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
+    MgeGL_End();
 }

@@ -11,9 +11,11 @@ Material Mge_DefaultMaterial(void)
 {
     Material m = { 0 };
     m.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;  // untinted albedo
-    m.maps[MATERIAL_MAP_DIFFUSE].value = 1.0f;
-    m.maps[MATERIAL_MAP_SPECULAR].color = WHITE;
+    m.maps[MATERIAL_MAP_DIFFUSE].value = 1.0f;   // base-colour gain
+    m.maps[MATERIAL_MAP_SPECULAR].color = WHITE; // white (untinted) highlight
     m.maps[MATERIAL_MAP_SPECULAR].value = 1.0f;  // specular strength as the light sets it
+    m.maps[MATERIAL_MAP_NORMAL].color = WHITE;   // unused; kept sane for the inspector
+    m.maps[MATERIAL_MAP_NORMAL].value = 1.0f;    // normal-map strength (0 = flat)
     m.shininess = 32.0f;
     return m;
 }

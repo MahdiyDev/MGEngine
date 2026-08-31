@@ -36,6 +36,7 @@ static void draw_scene(Camera3D cam, Light light, Vector3 orbiters[4], Cubemap s
     Mge_BeginLighting3DEx(&light, 1, cam);
     for (int i = 0; i < 4; i++) {
         Mge_SetMaterial((Material){ .maps[MATERIAL_MAP_DIFFUSE].color = ORBIT_COLORS[i],
+            .maps[MATERIAL_MAP_DIFFUSE].value = 1.0f,
             .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 24.0f });
         Draw_Cube(orbiters[i], (Vector3){ 1.2f, 1.2f, 1.2f }, ORBIT_COLORS[i]);
     }

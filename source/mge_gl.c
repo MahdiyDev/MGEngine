@@ -292,6 +292,12 @@ int MgeGL_LoadTexture(const void* data, int width, int height, int format, int m
     return (int)id;
 }
 
+void MgeGL_UnloadTexture(unsigned int id)
+{
+    if (id != 0 && id != MGEGL.State.whiteTexture)
+        glDeleteTextures(1, &id);
+}
+
 void MgeGL_Close(void)
 {
     glDisableVertexAttribArray(VERTICE_LOCATION);

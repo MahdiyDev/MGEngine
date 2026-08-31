@@ -378,11 +378,19 @@ typedef enum {
 	MOUSE_BUTTON_MIDDLE = 2
 } MouseButton;
 
-// A movable scene object -- a rectangle in 2D, an axis-aligned box in 3D.
+// A movable scene object -- a rectangle in 2D, a primitive solid in 3D.
 typedef enum {
 	OBJECT_2D = 0,
 	OBJECT_3D
 } ObjectKind;
+
+// 3D object shape (ignored for OBJECT_2D). `size` is the full extents: for a
+// sphere the diameter is size.x; for a plane it is the width (x) and length (z).
+typedef enum {
+	PRIM_CUBE = 0,
+	PRIM_SPHERE,
+	PRIM_PLANE
+} PrimitiveKind;
 
 // --- Lighting (Phong: ambient + diffuse + specular) ---
 //
@@ -397,9 +405,9 @@ typedef enum {
 //   MATERIAL_MAP_DIFFUSE   .texture  albedo map (falls back to a white 1x1
 //                                    texture when .texture.id == 0)
 //                          .color    albedo tint, multiplies the texture
-//                          .value    unused
+//                          .value    base-colour gain (1 = as-is; >1 brighter)
 //   MATERIAL_MAP_SPECULAR  .texture  unused
-//                          .color    unused (reserved for a coloured highlight)
+//                          .color    tints the highlight (WHITE = untinted)
 //                          .value    specular strength multiplier (1 = as-is,
 //                                    0 = no highlight)
 //   MATERIAL_MAP_NORMAL    .texture  tangent-space normal map (RGB = XYZ). When
@@ -407,6 +415,9 @@ typedef enum {
 //                                    normal (TBN is derived in the shader from
 //                                    screen-space derivatives -- no tangent
 //                                    attribute needed). Load it LINEAR, not sRGB.
+//                          .color    unused
+//                          .value    normal-map strength (0 = flat, 1 = as
+//                                    authored, >1 = exaggerated relief)
 typedef enum {
 	MATERIAL_MAP_DIFFUSE = 0,   // base colour / albedo
 	MATERIAL_MAP_SPECULAR,      // specular highlight strength
@@ -529,11 +540,13 @@ typedef struct ModelBatch {
 
 typedef struct Object {
 	ObjectKind kind;
+	PrimitiveKind primitive; // 3D shape: cube / sphere / plane (ignored for 2D)
 	Vector3 position;   // centre; z is unused for OBJECT_2D
 	Vector3 size;       // full extents (2D: {w, h, 0})
 	Vector3 rotation;   // XYZ euler degrees (3D only); {0} = axis-aligned
-	Color color;
-	Material material;  // surface response for 3D lit rendering
+	Material material;  // surface response: diffuse/specular/normal maps + tint.
+	                    // The diffuse map colour is the object's base colour
+	                    // (2D rects draw with it too).
 	int id;
 	bool selected;
 } Object;
@@ -622,6 +635,13 @@ Texture2D Mge_LoadTexture(const char *fileName);
 // (see Mge_SetGammaCorrection). Specular / normal / data maps stay linear.
 Texture2D Mge_LoadTextureFromImageEx(Image image, bool sRGB);
 Texture2D Mge_LoadTextureEx(const char *fileName, bool sRGB);
+void Mge_UnloadTexture(Texture2D texture); // free the GPU texture (no-op when id == 0)
+
+// Native "open file" dialog (Windows: comdlg32; Linux: zenity/kdialog). Returns a
+// malloc'd absolute path the caller must free(), or NULL if cancelled / no dialog
+// backend. Mge_OpenImageDialog filters to common image extensions.
+char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* filterExts);
+char* Mge_OpenImageDialog(void);
 
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing(void);
@@ -821,6 +841,7 @@ void Draw_CubeEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color)
 void Draw_CubeWiresEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color);
 void Draw_Sphere(Vector3 center, float radius, Color color);                       // UV sphere (8x14)
 void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color color);
+void Draw_Plane(Vector3 center, float width, float length, Color color);           // flat quad on XZ, normal +Y
 
 // Camera / projection helpers (3D)
 Matrix Mge_GetCameraViewMatrix(Camera3D camera);
@@ -828,10 +849,14 @@ Matrix Mge_GetCameraProjectionMatrix(Camera3D camera, float aspect);
 Vector2 Mge_GetWorldToScreen(Vector3 position, Camera3D camera);
 Vector2 Mge_GetWorldToScreenEx(Vector3 position, Camera3D camera, int screenWidth, int screenHeight);
 
-// Objects
+// Objects. The `color` is stored as the material's diffuse-map tint (there is no
+// separate Object.color); pass WHITE for an untinted surface. Mge_MakeObject3D
+// makes a cube -- use Mge_MakeShape3D for a sphere or a plane.
 Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
 Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
-void   Mge_DrawObject(Object obj); // respects obj.rotation for 3D objects
+Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color);
+void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.rotation for 3D objects
+void   Mge_DrawPrimitive(Object obj, Color color); // just the 3D primitive geometry, one colour
 
 // Mesh -- copies the arrays you pass, then owns them. Upload once, draw many.
 Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,

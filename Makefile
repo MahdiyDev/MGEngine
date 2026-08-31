@@ -50,7 +50,7 @@ BUILD_OBJ_DIR = $(BUILD_DIR)/obj
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
     .SHELLFLAGS := /c
-    LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lopengl32 -lgdi32 -lwinmm -lkernel32
+    LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32
     EXE  := .exe
     PICFLAG :=
     LIB_NAME := libmgengine.dll

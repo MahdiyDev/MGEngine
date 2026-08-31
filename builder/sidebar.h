@@ -1,7 +1,8 @@
-// The builder's sidebar. All Mge_Gui* calls live here -- nothing else touches UI.
+// The builder's left sidebar: mode, gizmo switch, entity list, inspector.
 #pragma once
 
 #include "scene.h"
 
-// Draws the whole UI frame (BeginFrame -> sidebar -> EndFrame).
+// Draw the left panel. Call inside a Mge_GuiBeginFrame / Mge_GuiEndFrame pair
+// (main.c owns the frame so the explorer panel shares it).
 void Sidebar_Draw(Scene* s, bool editMode, int fps, int draws);

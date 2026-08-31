@@ -19,9 +19,10 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gl.h  mge_gl.c     immediate-mode-ish batched GL renderer (MgeGL_*)
   mge_math.h mge_math.c  Vector2/3/4, Matrix, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
-  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere ...
-  mge_object.c          Object struct (position/rotation/size) + 3D picking
+  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
+  mge_object.c          Object struct (primitive/position/rotation/size/material) + 3D picking
   mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
+  mge_dialog.c          native "open file" dialog (Mge_OpenFileDialog / Mge_OpenImageDialog)
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
   mge_shadow.c         shadow mapping: directional depth map + point-light depth cube
   mge_material.c        Material / MaterialMap construction helpers
@@ -38,13 +39,14 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
   mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
-  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) (stb_image)
+  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / Mge_UnloadTexture (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-builder/               THE APP -- scene editor (fly-camera + TAB edit mode + gizmo + sidebar)
-  main.c               window, loop, camera
-  scene.c/.h           entities, selection, picking, the render passes
-  sidebar.c/.h         all the Mge_Gui* widgets
+builder/               THE APP -- scene editor (fly-camera + TAB edit mode + gizmo + panels)
+  main.c               window, loop, camera, the shared Mge_Gui frame
+  scene.c/.h           entities, selection, picking, spawn (Scene_AddShape), the render passes
+  sidebar.c/.h         left panel: mode, gizmo switch, entity list, inspector (+ texture slots)
+  explorer.c/.h        right panel: the shape palette (spawn cube / sphere / plane)
   USAGE.md             builder docs
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
@@ -160,9 +162,10 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~12 engine features (2D shapes, a lit cube, a shadow map,
-a post-fx pass, the skybox, a normal-mapped wall, a rotated cube with each gizmo
-mode, the rotate gizmo head-on, a scripted rotate drag) one frame each, reads the
+GLFW window, renders ~13 engine features (2D shapes, a lit cube, a shadow map,
+a post-fx pass, the skybox, a normal-mapped wall, the cube/sphere/plane
+primitives, a rotated cube with each gizmo mode, the rotate gizmo head-on, a
+scripted rotate drag) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
@@ -209,7 +212,7 @@ int main(void)
 
 3D uses a `Camera3D` (passed **by value**) between `Mge_BeginMode3D` /
 `Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Sphere` /
-`Draw_Arrow3D` (and the `*Ex` variants) or the
+`Draw_Plane` / `Draw_Arrow3D` (and the `*Ex` variants) or the
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
 calls. `builder/` shows a fly-camera plus TAB-toggled edit mode with the
 translate / rotate / scale gizmo.
@@ -342,11 +345,17 @@ while (!Mge_WindowShouldClose()) {
 
 ### Objects & the manipulation gizmo
 
-An `Object` is a movable rectangle (`OBJECT_2D`) or box (`OBJECT_3D`) with a
-`position` (centre), `size`, `rotation` (XYZ euler degrees, 3D only), `color`,
-`id` and `selected` flag. `Mge_DrawObject` renders it rotated
-(`Draw_CubeEx` — corners + normals are rotated on the CPU; there is no per-object
-model matrix), with a stencil outline when `selected`.
+An `Object` is a movable rectangle (`OBJECT_2D`) or a 3D primitive (`OBJECT_3D`:
+`PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`) with a `position`
+(centre), `size`, `rotation` (XYZ euler degrees, 3D only), a `material`, an `id`
+and a `selected` flag. There is **no `Object.color`** — the base colour is the
+diffuse map's tint (`obj.material.maps[MATERIAL_MAP_DIFFUSE].color`); the
+`Mge_MakeObject*` constructors still take a `Color` and store it there.
+`Mge_MakeObject3D` makes a cube; `Mge_MakeShape3D(primitive, pos, size, color)`
+makes any of the three. `Mge_DrawObject` renders the primitive rotated (cube
+corners + normals are rotated on the CPU — there is no per-object model matrix),
+with a stencil outline when `selected`. `Mge_DrawPrimitive(obj, color)` draws just
+the geometry (used by the shadow pass and the outline).
 
 **Picking** (3D): `Mge_PickObject3D(objects, count, camera)` selects the object
 whose screen-projected centre is nearest the cursor on left-click (returns the
@@ -485,6 +494,7 @@ Mge_BeginMode3D(camera);
     Mge_BeginLighting3DEx(lights, 3, camera);
         Mge_DrawObject(box);                              // lit with box.material
         Mge_SetMaterial((Material){ .maps[MATERIAL_MAP_DIFFUSE].color = GRAY,
+                                   .maps[MATERIAL_MAP_DIFFUSE].value = 1.0f,   // gain -- a raw literal must set it
                                    .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8 });
         Draw_Cube((Vector3){ 0, -1, 0 }, (Vector3){ 24, 0.1f, 24 }, GRAY); // lit floor
     Mge_EndLighting3D();
@@ -595,9 +605,12 @@ A `Material` is a fixed set of `MaterialMap` slots (indexed by
 
 | slot | `.texture` | `.color` | `.value` |
 | --- | --- | --- | --- |
-| `MATERIAL_MAP_DIFFUSE` | albedo image sampled across the surface (id `0` → a white 1×1, i.e. "untextured") | tint multiplied over the texture | unused |
-| `MATERIAL_MAP_SPECULAR` | unused | unused (reserved) | highlight strength multiplier: `1` = as the light sets it, `0` = matte |
-| `MATERIAL_MAP_NORMAL` | tangent-space normal map (RGB = XYZ); load it linear. Unset → the vertex normal is used | unused | unused |
+| `MATERIAL_MAP_DIFFUSE` | albedo image sampled across the surface (id `0` → a white 1×1, i.e. "untextured") | tint multiplied over the texture | base-colour gain (`1` = as-is, `>1` brighter) |
+| `MATERIAL_MAP_SPECULAR` | unused | tints the highlight (`WHITE` = untinted) | highlight strength multiplier: `1` = as the light sets it, `0` = matte |
+| `MATERIAL_MAP_NORMAL` | tangent-space normal map (RGB = XYZ); load it linear. Unset → the vertex normal is used | unused | strength: `0` = flat, `1` = as authored, `>1` = exaggerated relief |
+
+Every `.value` defaults to `1` via `Mge_DefaultMaterial()` — a **raw `(Material){…}`
+literal** must set the ones it uses (`0` = black diffuse / flat normal).
 
 ```c
 typedef struct MaterialMap {
@@ -631,17 +644,32 @@ Mge_BeginLighting3D(light, camera);
 Mge_EndLighting3D();
 ```
 
-`Mge_SetMaterial` binds the diffuse texture and sets the specular / shininess
-uniforms; the diffuse **color** reaches the shader through the drawn geometry's
-per-vertex colour, so pass it to `Draw_Cube` (or `MgeGL_Color4ub`).
+`Mge_SetMaterial` binds the diffuse + normal textures and sets the per-slot
+uniforms (diffuse gain, specular strength + tint, normal strength, shininess);
+the diffuse **color** reaches the shader through the drawn geometry's per-vertex
+colour, so pass it to `Draw_Cube` (or `MgeGL_Color4ub`).
 `Mge_DrawObject` does this for an `Object` automatically —
 `obj.material.maps[MATERIAL_MAP_DIFFUSE].color` is seeded from the colour you
 gave `Mge_MakeObject3D`. `Draw_Cube` emits per-face UVs so a texture maps one
 full copy onto every face. A texture that fails to load has id `0` and falls
 back to the flat colour.
 
+Free a texture you loaded with `Mge_UnloadTexture(tex)` (id `0` and the shared
+white texture are ignored) — do this before overwriting a slot so you don't leak
+the old one.
+
 Demo: `examples/materials/textured_cube.c` — textured/tinted/matte/plain cubes
 side by side under a moving light.
+
+#### Picking a texture at runtime
+
+`Mge_OpenImageDialog()` pops the OS "open file" dialog (Windows: comdlg32;
+Linux: `zenity`, then `kdialog`) filtered to image extensions and returns a
+**malloc'd** path you `free()`, or `NULL` on cancel / when no backend is present.
+`Mge_OpenFileDialog(title, filterName, filterExts)` is the general form
+(`filterExts` is `;`-separated, e.g. `"*.png;*.jpg"`). The dialog never changes
+the process working directory. The builder's inspector uses it for the three
+material-map thumbnails (`Mge_GuiImageButton`).
 
 ### Mesh
 
@@ -1026,8 +1054,9 @@ Mge_GuiBeginFrame();                         // after the 3D/2D scene
         if (Mge_GuiSelectable("Cube 0", sel == 0)) sel = 0;
         Mge_GuiSeparator();
         Mge_GuiInputVec3("position", &obj.position);   // "draw input" for a Vector3
-        Mge_GuiInputColor("color", &obj.color);        // 8-bit RGBA swatch
+        Mge_GuiInputColor("diffuse", &mat.maps[MATERIAL_MAP_DIFFUSE].color); // 8-bit RGBA swatch
         Mge_GuiSliderFloat("shininess", &mat.shininess, 1, 128);
+        if (Mge_GuiImageButton("albedo", tex.id, 56.0f)) { /* open a file picker */ }
     }
     Mge_GuiEndSidebar();
 Mge_GuiEndFrame();                           // renders on top of the framebuffer
@@ -1037,7 +1066,7 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | --- | --- |
 | frame | `Mge_GuiBeginFrame` / `Mge_GuiEndFrame`, `Mge_GuiShutdown` |
 | boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (edge dock) + matching `End*` |
-| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiButton`, `Mge_GuiSelectable` |
+| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiImageButton` (square texture thumbnail; id `0` → a "+" placeholder) |
 | inputs | `Mge_GuiCheckbox`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
 
 Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
@@ -1046,8 +1075,10 @@ Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
 viewport. The backend boots lazily on the first `Mge_GuiBeginFrame` after
 `Mge_InitWindow`; apps that never call it pay nothing.
 
-`builder/` is the worked example — a scene sidebar with a type-aware inspector
-(Object vs Light). See [builder/USAGE.md](builder/USAGE.md).
+`builder/` is the worked example — a left sidebar with a type-aware inspector
+(Object vs Light) plus a right-edge shape palette, both drawn in one
+`Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair. See
+[builder/USAGE.md](builder/USAGE.md).
 
 ### Math
 

@@ -206,6 +206,32 @@ static void scene_skybox(void)
     Mge_UnloadCubemap(sky);
 }
 
+// the three 3D primitive kinds -- cube, sphere, plane -- lit in one frame
+static void scene_primitives(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 4.5f, 3.5f, 6.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.35f;
+
+    Object floor = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, -1.2f, 0 }, (Vector3){ 10, 0.2f, 10 }, (Color){ 90, 95, 105, 255 });
+    Object cube = Mge_MakeObject3D((Vector3){ -2.2f, 0, 0 }, (Vector3){ 1.6f, 1.6f, 1.6f }, (Color){ 200, 90, 90, 255 });
+    Object ball = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 1.8f, 0, 0 }, (Vector3){ 2, 2, 2 }, (Color){ 90, 170, 220, 255 });
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 22, 24, 30, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    Mge_DrawObject(floor);
+    Mge_DrawObject(cube);
+    Mge_DrawObject(ball);
+    Mge_EndLighting3D();
+    Mge_EndMode3D();
+    check("primitives");
+    Mge_EndDrawing();
+}
+
 static void scene_gizmo(GizmoMode mode, const char* name)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -308,6 +334,7 @@ static void scene_normal_map(void)
     Material wall = Mge_DefaultMaterial();
     Mge_SetMaterialTexture(&wall, MATERIAL_MAP_DIFFUSE, d);
     Mge_SetMaterialTexture(&wall, MATERIAL_MAP_NORMAL, n);
+    wall.maps[MATERIAL_MAP_NORMAL].value = 1.8f; // exaggerate the relief (strength control)
 
     Light lamp = Mge_MakePointLight((Vector3){ 1.2f, 0.8f, 2.0f }, (Vector3){ 1, 1, 1 });
     lamp.ambient = 0.1f;
@@ -346,6 +373,7 @@ int main(void)
     scene_postfx();
     scene_skybox();
     scene_normal_map();
+    scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");
     scene_gizmo(GIZMO_SCALE, "gizmo_scale");

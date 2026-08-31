@@ -24,7 +24,7 @@ LIB_LINKS = -lglfw3 -lassimp -lzlibstatic
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
     .SHELLFLAGS := /c
-    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32
+    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32
     EXE = .exe
     RM  = del /q /f $(subst /,\,$1) 2>nul
 else

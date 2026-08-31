@@ -11,7 +11,7 @@ enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT };
 
 typedef struct Scene {
     Object objects[SCENE_MAX_OBJECTS];
-    const char* objectNames[SCENE_MAX_OBJECTS];
+    char objectNames[SCENE_MAX_OBJECTS][24]; // mutable: the explorer names spawned shapes
     int objectCount;
 
     Light lights[SCENE_MAX_LIGHTS]; // [0] = sun (directional, casts shadow), [1] = lamp (point)
@@ -31,6 +31,10 @@ typedef struct Scene {
 
 void Scene_Init(Scene* s);
 void Scene_Shutdown(Scene* s);
+
+// Spawn a primitive at the origin, name it, and select it. No-op when the scene
+// is full (SCENE_MAX_OBJECTS).
+void Scene_AddShape(Scene* s, PrimitiveKind primitive);
 
 // Left-click picking: nearest object centre, or the lamp. Click on empty space
 // deselects. Call only when the gizmo is not being dragged.

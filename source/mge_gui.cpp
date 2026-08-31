@@ -137,10 +137,29 @@ void Mge_GuiSpacing(void)
     if (s_inFrame)
         ImGui::Spacing();
 }
+void Mge_GuiSameLine(void)
+{
+    if (s_inFrame)
+        ImGui::SameLine();
+}
 bool Mge_GuiButton(const char* label) { return s_inFrame && ImGui::Button(label); }
 bool Mge_GuiSelectable(const char* label, bool selected)
 {
     return s_inFrame && ImGui::Selectable(label, selected);
+}
+
+bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size)
+{
+    if (!s_inFrame)
+        return false;
+
+    const ImVec2 box(size, size);
+    ImGui::PushID(strId);
+    bool clicked = (textureId == 0)
+        ? ImGui::Button("+", box)
+        : ImGui::ImageButton("img", (ImTextureID)(intptr_t)textureId, box);
+    ImGui::PopID();
+    return clicked;
 }
 
 bool Mge_GuiCheckbox(const char* label, bool* value)

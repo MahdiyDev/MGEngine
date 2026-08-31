@@ -33,23 +33,47 @@ Object Mge_MakeObject2D(float x, float y, float w, float h, Color color)
     o.kind = OBJECT_2D;
     o.position = (Vector3){ x, y, 0.0f };
     o.size = (Vector3){ w, h, 0.0f };
-    o.color = color;
-    return o;
-}
-
-Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
-{
-    Object o = { 0 };
-    o.kind = OBJECT_3D;
-    o.position = position;
-    o.size = size;
-    o.color = color;
     o.material = Mge_DefaultMaterial();
     o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
     return o;
 }
 
+Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color)
+{
+    Object o = { 0 };
+    o.kind = OBJECT_3D;
+    o.primitive = primitive;
+    o.position = position;
+    o.size = size;
+    o.material = Mge_DefaultMaterial();
+    o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    return o;
+}
+
+Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
+{
+    return Mge_MakeShape3D(PRIM_CUBE, position, size, color);
+}
+
 // ----- drawing -----
+
+// The geometry for a 3D object's primitive, in a chosen colour. Shared by the
+// lit draw and (via Mge_DrawObjectOutline) the stencil outline.
+void Mge_DrawPrimitive(Object obj, Color color)
+{
+    switch (obj.primitive) {
+    case PRIM_SPHERE:
+        Draw_SphereEx(obj.position, obj.size.x * 0.5f, 16, 24, color);
+        break;
+    case PRIM_PLANE:
+        Draw_Plane(obj.position, obj.size.x, obj.size.z, color);
+        break;
+    case PRIM_CUBE:
+    default:
+        Draw_CubeEx(obj.position, obj.size, obj.rotation, color);
+        break;
+    }
+}
 
 void Mge_DrawObject(Object obj)
 {
@@ -58,12 +82,12 @@ void Mge_DrawObject(Object obj)
             obj.position.x - obj.size.x * 0.5f, obj.position.y - obj.size.y * 0.5f,
             obj.size.x, obj.size.y
         };
-        Draw_RectangleRec(r, obj.color);
+        Draw_RectangleRec(r, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
         if (obj.selected)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_2D, MGE_SELECT_OUTLINE_COLOR);
     } else {
         Mge_SetMaterial(obj.material); // no-op unless Mge_BeginLighting3D is active
-        Draw_CubeEx(obj.position, obj.size, obj.rotation, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
+        Mge_DrawPrimitive(obj, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
         if (obj.selected)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_3D, MGE_SELECT_OUTLINE_COLOR);
     }

@@ -6,18 +6,21 @@
 //     hold RIGHT mouse   look around; WASD flies while held
 //     left-click         select an object / the lamp
 //     drag a gizmo       move / rotate / scale it (switch mode in the sidebar)
-//     sidebar            mode, FPS, shadows, gizmo mode, entity list + inspector
+//     left sidebar       mode, FPS, shadows, gizmo mode, entity list + inspector
+//     right explorer     spawn a cube / sphere / plane into the scene
 //
-// This file: the window, the frame loop and the camera. Scene data + rendering
-// live in scene.c; every Mge_Gui* call lives in sidebar.c.
+// This file: the window, the frame loop, the camera, and the one Mge_Gui frame
+// the two panels share. Scene data + rendering live in scene.c; the panels'
+// Mge_Gui* calls live in sidebar.c / explorer.c.
 #include <mge.h>
-#include <mge_gui.h> // only the input-gate queries + lifecycle; widgets are in sidebar.c
+#include <mge_gui.h> // only the input-gate queries + frame lifecycle; widgets are in the panels
 #include <mge_math.h>
 
 #include <math.h>
 
 #include "scene.h"
 #include "sidebar.h"
+#include "explorer.h"
 
 static const int width = 1280, height = 720;
 
@@ -123,7 +126,10 @@ int main(void)
         if (interact && !gizmoBusy)
             Scene_Pick(&scene, camera);
 
+        Mge_GuiBeginFrame();
         Sidebar_Draw(&scene, editMode, fpsShown, drawsShown);
+        Explorer_Draw(&scene);
+        Mge_GuiEndFrame();
 
         Mge_EndDrawing();
     }

@@ -106,3 +106,8 @@ Texture2D Mge_LoadTexture(const char* fileName)
 {
     return Mge_LoadTextureEx(fileName, false);
 }
+
+void Mge_UnloadTexture(Texture2D texture)
+{
+    MgeGL_UnloadTexture(texture.id);
+}
