@@ -9,6 +9,34 @@
 
 static const char* const WRAP_NAMES[4] = { "Repeat", "Clamp", "Mirror", "Mirror Once" };
 
+// Rotation is a Quaternion; the inspector shows it as XYZ euler degrees. Cache
+// the shown euler per selection so it doesn't "jump" while the user types (many
+// eulers map to the same quaternion). Rebuilt when the selection or the
+// underlying quaternion changes from elsewhere (gizmo / undo).
+static bool s_eulValid;
+static int s_eulKind = -1, s_eulIndex = -1;
+static Vector3 s_eulDeg;
+
+static bool euler_edit(Quaternion* q, int selKind, int selIndex)
+{
+    bool sameSel = s_eulValid && s_eulKind == selKind && s_eulIndex == selIndex;
+    Quaternion cached = Quaternion_FromEuler((Vector3){
+        s_eulDeg.x * DEG2RAD, s_eulDeg.y * DEG2RAD, s_eulDeg.z * DEG2RAD });
+    if (!sameSel || !Quaternion_Approx(cached, *q)) {
+        Vector3 e = Quaternion_ToEuler(*q);
+        s_eulDeg = (Vector3){ e.x * RAD2DEG, e.y * RAD2DEG, e.z * RAD2DEG };
+        s_eulValid = true;
+        s_eulKind = selKind;
+        s_eulIndex = selIndex;
+    }
+    if (Mge_GuiInputVec3("rotation (euler)", &s_eulDeg)) {
+        *q = Quaternion_FromEuler((Vector3){
+            s_eulDeg.x * DEG2RAD, s_eulDeg.y * DEG2RAD, s_eulDeg.z * DEG2RAD });
+        return true;
+    }
+    return false;
+}
+
 // One material-map slot as a group: a texture thumbnail (opens a file picker,
 // plus a clear "x"), then the slot's colour, scalar value and wrap mode.
 // `showColor` is false for the normal / height maps, where a tint is meaningless.
@@ -92,7 +120,7 @@ static bool inspect_camera(Scene* s)
     Mge_GuiLabel("camera");
     ch |= Mge_GuiCheckbox("active", &o->active);
     ch |= Mge_GuiInputVec3("position", &o->transform.position);
-    ch |= Mge_GuiInputVec3("rotation (pitch, yaw, roll)", &o->transform.rotation);
+    ch |= euler_edit(&o->transform.rotation, s->selKind, s->selIndex);
     Mge_GuiSeparator();
 
     bool isMain = (s->mainCamera == s->selIndex);
@@ -165,7 +193,7 @@ static bool inspect_object(Scene* s, Project* proj)
         Mge_GuiLabel("rect (2D)");
     }
     ch |= Mge_GuiInputVec3("position", &o->transform.position);
-    ch |= Mge_GuiInputVec3("rotation", &o->transform.rotation);
+    ch |= euler_edit(&o->transform.rotation, s->selKind, s->selIndex);
     ch |= Mge_GuiInputVec3("size", &o->transform.scale);
     ch |= parent_combo(s);
     Mge_GuiSeparator();

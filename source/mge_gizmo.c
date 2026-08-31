@@ -29,7 +29,8 @@ static GizmoMode s_mode = GIZMO_TRANSLATE;
 static GizmoSpace s_space = GIZMO_WORLD;
 static Vector3 s_snap = { 0.5f, 15.0f, 0.25f }; // move units, rotate degrees, scale step
 static int s_drag = H_NONE;
-static Vector3 s_startPos, s_startRot, s_startScale;
+static Vector3 s_startPos, s_startScale;
+static Quaternion s_startRot;
 static Vector3 s_dragAxis;      // world direction of the grabbed axis, captured at drag start
 static Vector2 s_startMouse;
 static float s_startAngle;
@@ -76,14 +77,12 @@ static void perp_basis(Vector3 n, Vector3* u, Vector3* v)
 // set s_ax / s_pu / s_pv for this frame (world, or object-local when in local
 // space -- and scale is always local since world non-uniform scale is not
 // representable by `size`).
-static void set_axes(const Vector3* rotationDeg)
+static void set_axes(const Quaternion* rotation)
 {
     static const Vector3 world[3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
-    bool local = rotationDeg != NULL && (s_space == GIZMO_LOCAL || s_mode == GIZMO_SCALE)
-        && (rotationDeg->x != 0.0f || rotationDeg->y != 0.0f || rotationDeg->z != 0.0f);
-    Matrix R = local
-        ? Matrix_RotateXYZ((Vector3){ rotationDeg->x * DEG2RAD, rotationDeg->y * DEG2RAD, rotationDeg->z * DEG2RAD })
-        : Matrix_Identity();
+    bool local = rotation != NULL && (s_space == GIZMO_LOCAL || s_mode == GIZMO_SCALE)
+        && (rotation->x != 0.0f || rotation->y != 0.0f || rotation->z != 0.0f);
+    Matrix R = local ? Quaternion_ToMatrix(*rotation) : Matrix_Identity();
     for (int a = 0; a < 3; a++) {
         s_ax[a] = local ? rot_dir(world[a], R) : world[a];
         perp_basis(s_ax[a], &s_pu[a], &s_pv[a]);
@@ -242,7 +241,7 @@ static int hot_rotate(Vector3 c, float radius, Camera3D cam, int w, int h, Vecto
 
 // ---- public ----
 
-bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size)
+bool Mge_Gizmo3D(Vector3* position, Quaternion* rotation, Vector3* scale, Camera3D camera, float size)
 {
     if (position == NULL)
         return false;
@@ -276,7 +275,7 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hot != H_NONE) {
         s_drag = hot;
         s_startPos = *position;
-        s_startRot = rotation ? *rotation : (Vector3){ 0, 0, 0 };
+        s_startRot = rotation ? *rotation : Quaternion_Identity();
         s_startScale = scale ? *scale : (Vector3){ 1, 1, 1 };
         s_startMouse = m;
         s_dragAxis = (hot >= 0 && hot < 3) ? s_ax[hot] : (Vector3){ 1, 0, 0 };
@@ -300,11 +299,9 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
                 float step = s_snap.y * (float)DEG2RAD;
                 rad = roundf(rad / step) * step;
             }
-            Matrix newR = Matrix_Multiply(
-                Matrix_RotateXYZ((Vector3){ s_startRot.x * DEG2RAD, s_startRot.y * DEG2RAD, s_startRot.z * DEG2RAD }),
-                Matrix_Rotate(s_dragAxis, rad));
-            Vector3 e = Matrix_ToEulerXYZ(newR);
-            *rotation = (Vector3){ e.x * (float)RAD2DEG, e.y * (float)RAD2DEG, e.z * (float)RAD2DEG };
+            // apply the start orientation, then the world-space drag rotation
+            Quaternion delta = Quaternion_FromAxisAngle(s_dragAxis, rad);
+            *rotation = Quaternion_Normalize(Quaternion_Multiply(s_startRot, delta));
         } else if (s_drag == H_CENTER) {
             // screen-plane move: solve for the world offset that matches the drag
             Vector3 fwd = Vector3Normalize(camera.target);

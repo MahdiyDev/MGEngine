@@ -352,3 +352,160 @@ Matrix MatrixLookAt(Vector3 eye, Vector3 target, Vector3 up)
 
     return result;
 }
+
+// ---------------------------------------------------------------- Quaternions
+
+Quaternion Quaternion_Identity(void)
+{
+    return (Quaternion){ 0.0f, 0.0f, 0.0f, 1.0f };
+}
+
+Quaternion Quaternion_Normalize(Quaternion q)
+{
+    float len = sqrtf(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (len < 1e-8f)
+        return Quaternion_Identity();
+    float il = 1.0f / len;
+    return (Quaternion){ q.x * il, q.y * il, q.z * il, q.w * il };
+}
+
+Quaternion Quaternion_Conjugate(Quaternion q)
+{
+    return (Quaternion){ -q.x, -q.y, -q.z, q.w };
+}
+
+// Hamilton product p (x) q -- rotates by q first, then p.
+static Quaternion hamilton(Quaternion p, Quaternion q)
+{
+    return (Quaternion){
+        p.w * q.x + p.x * q.w + p.y * q.z - p.z * q.y,
+        p.w * q.y - p.x * q.z + p.y * q.w + p.z * q.x,
+        p.w * q.z + p.x * q.y - p.y * q.x + p.z * q.w,
+        p.w * q.w - p.x * q.x - p.y * q.y - p.z * q.z,
+    };
+}
+
+Quaternion Quaternion_Multiply(Quaternion a, Quaternion b)
+{
+    return hamilton(b, a); // "apply a, then b"
+}
+
+Quaternion Quaternion_FromAxisAngle(Vector3 axis, float angleRad)
+{
+    Vector3 a = Vector3Normalize(axis);
+    float s = sinf(angleRad * 0.5f);
+    return (Quaternion){ a.x * s, a.y * s, a.z * s, cosf(angleRad * 0.5f) };
+}
+
+Matrix Quaternion_ToMatrix(Quaternion q)
+{
+    float x = q.x, y = q.y, z = q.z, w = q.w;
+    float xx = x * x, yy = y * y, zz = z * z;
+    float xy = x * y, xz = x * z, yz = y * z;
+    float wx = w * x, wy = w * y, wz = w * z;
+
+    Matrix m = { 0 };
+    m.m0 = 1.0f - 2.0f * (yy + zz);
+    m.m4 = 2.0f * (xy - wz);
+    m.m8 = 2.0f * (xz + wy);
+    m.m1 = 2.0f * (xy + wz);
+    m.m5 = 1.0f - 2.0f * (xx + zz);
+    m.m9 = 2.0f * (yz - wx);
+    m.m2 = 2.0f * (xz - wy);
+    m.m6 = 2.0f * (yz + wx);
+    m.m10 = 1.0f - 2.0f * (xx + yy);
+    m.m15 = 1.0f;
+    return m;
+}
+
+Quaternion Quaternion_FromMatrix(Matrix m)
+{
+    // Shepperd's method. Engine layout: R[row][col] -> m0 m4 m8 / m1 m5 m9 / m2 m6 m10.
+    float trace = m.m0 + m.m5 + m.m10;
+    Quaternion q;
+    if (trace > 0.0f) {
+        float s = sqrtf(trace + 1.0f) * 2.0f;
+        q.w = 0.25f * s;
+        q.x = (m.m6 - m.m9) / s;
+        q.y = (m.m8 - m.m2) / s;
+        q.z = (m.m1 - m.m4) / s;
+    } else if (m.m0 > m.m5 && m.m0 > m.m10) {
+        float s = sqrtf(1.0f + m.m0 - m.m5 - m.m10) * 2.0f;
+        q.w = (m.m6 - m.m9) / s;
+        q.x = 0.25f * s;
+        q.y = (m.m4 + m.m1) / s;
+        q.z = (m.m8 + m.m2) / s;
+    } else if (m.m5 > m.m10) {
+        float s = sqrtf(1.0f + m.m5 - m.m0 - m.m10) * 2.0f;
+        q.w = (m.m8 - m.m2) / s;
+        q.x = (m.m4 + m.m1) / s;
+        q.y = 0.25f * s;
+        q.z = (m.m9 + m.m6) / s;
+    } else {
+        float s = sqrtf(1.0f + m.m10 - m.m0 - m.m5) * 2.0f;
+        q.w = (m.m1 - m.m4) / s;
+        q.x = (m.m8 + m.m2) / s;
+        q.y = (m.m9 + m.m6) / s;
+        q.z = 0.25f * s;
+    }
+    return Quaternion_Normalize(q);
+}
+
+Quaternion Quaternion_FromEuler(Vector3 eulerRad)
+{
+    return Quaternion_FromMatrix(Matrix_RotateXYZ(eulerRad)); // consistent with the matrix path
+}
+
+Vector3 Quaternion_ToEuler(Quaternion q)
+{
+    return Matrix_ToEulerXYZ(Quaternion_ToMatrix(q));
+}
+
+Vector3 Quaternion_RotateVector3(Quaternion q, Vector3 v)
+{
+    Vector3 u = { q.x, q.y, q.z };
+    Vector3 t = Vector3_Scale(Vector3Cross(u, v), 2.0f);
+    Vector3 r = Vector3_Add(v, Vector3_Scale(t, q.w));
+    return Vector3_Add(r, Vector3Cross(u, t));
+}
+
+Quaternion Quaternion_Slerp(Quaternion a, Quaternion b, float t)
+{
+    float d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    if (d < 0.0f) {
+        b = (Quaternion){ -b.x, -b.y, -b.z, -b.w };
+        d = -d;
+    }
+    if (d > 0.9995f) { // nearly parallel -> lerp
+        Quaternion r = { a.x + t * (b.x - a.x), a.y + t * (b.y - a.y),
+            a.z + t * (b.z - a.z), a.w + t * (b.w - a.w) };
+        return Quaternion_Normalize(r);
+    }
+    float th0 = acosf(d);
+    float th = th0 * t;
+    float s0 = cosf(th) - d * sinf(th) / sinf(th0);
+    float s1 = sinf(th) / sinf(th0);
+    return (Quaternion){ a.x * s0 + b.x * s1, a.y * s0 + b.y * s1,
+        a.z * s0 + b.z * s1, a.w * s0 + b.w * s1 };
+}
+
+Quaternion Quaternion_LookRotation(Vector3 forward, Vector3 up)
+{
+    Vector3 f = Vector3Normalize(forward);
+    Vector3 zAxis = Vector3_Scale(f, -1.0f);           // camera looks down local -Z
+    Vector3 xAxis = Vector3Normalize(Vector3Cross(up, zAxis));
+    Vector3 yAxis = Vector3Cross(zAxis, xAxis);
+
+    Matrix r = { 0 };
+    r.m0 = xAxis.x; r.m4 = yAxis.x; r.m8 = zAxis.x;
+    r.m1 = xAxis.y; r.m5 = yAxis.y; r.m9 = zAxis.y;
+    r.m2 = xAxis.z; r.m6 = yAxis.z; r.m10 = zAxis.z;
+    r.m15 = 1.0f;
+    return Quaternion_FromMatrix(r);
+}
+
+bool Quaternion_Approx(Quaternion a, Quaternion b)
+{
+    float d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    return fabsf(d) > 0.9999f;
+}

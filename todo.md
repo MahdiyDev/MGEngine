@@ -332,6 +332,25 @@ phases so the app keeps working the whole way.
 - [x] `parent` serialised in `.mgscene`; `test_scene_io` covers it. Reparent is
       grouping only -- transform composition down the chain stays in "Later".
 
+## Quaternion rotation   [DONE]
+
+- [x] `Quaternion` type + ops in `mge_math` (`_FromEuler` / `_ToEuler` /
+      `_FromAxisAngle` / `_Multiply` / `_ToMatrix` / `_FromMatrix` /
+      `_RotateVector3` / `_Slerp` / `_LookRotation` / `_Approx`). `_FromEuler` ==
+      `Matrix_RotateXYZ` and `_Multiply(a,b)` == `Matrix_Multiply(A,B)` by
+      construction; `test_math` verifies every convention against the matrix path.
+- [x] `Transform.rotation`: `Vector3` euler -> **`Quaternion`**. `Draw_CubeEx` /
+      `Draw_CubeWiresEx` and `Mge_Gizmo3D` take a `Quaternion*`;
+      `Mge_CameraObjectForward` applies it to local -Z. Constructors set identity;
+      a zero-init `{0,0,0,0}` is treated as identity when drawn.
+- [x] Gizmo rotate composes `Quaternion_Multiply(startQ, axisAngleDelta)` -- no
+      more euler round-tripping / gimbal drift. Snapping unchanged.
+- [x] Editor: inspector shows euler degrees over a per-selection cache (no jump
+      while typing); `.mgscene` writes `rotation x y z w`, still reads a legacy
+      3-value euler line. `test_scene_io` covers both. Camera objects aimed with
+      `Quaternion_LookRotation`.
+- [x] Every test + `render_smoke` + `examples/objects/gizmo_3d` updated.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view

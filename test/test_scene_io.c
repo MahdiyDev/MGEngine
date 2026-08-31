@@ -51,6 +51,7 @@ Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, 
     o.active = true;
     o.primitive = primitive;
     o.transform.position = position;
+    o.transform.rotation = Quaternion_Identity();
     o.transform.scale = size;
     o.transform.parent = -1;
     o.material = default_material();
@@ -172,6 +173,16 @@ TEST(fs_list_rename_remove)
 
 // ---- .mgscene round-trip ----
 
+// reference orientations for the round-trip check (euler degrees -> quaternion)
+static Quaternion ball_rot(void)
+{
+    return Quaternion_FromEuler((Vector3){ 10 * DEG2RAD, 20 * DEG2RAD, 30 * DEG2RAD });
+}
+static Quaternion cam_rot(void)
+{
+    return Quaternion_FromEuler((Vector3){ -5 * DEG2RAD, -90 * DEG2RAD, 15 * DEG2RAD });
+}
+
 static void build_scene(Scene* s)
 {
     memset(s, 0, sizeof(*s));
@@ -180,7 +191,7 @@ static void build_scene(Scene* s)
     strcpy(s->objectNames[0], "Floor");
 
     s->objects[1] = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 2.5f, 1.0f, -0.5f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
-    s->objects[1].transform.rotation = (Vector3){ 10, 20, 30 };
+    s->objects[1].transform.rotation = ball_rot();
     s->objects[1].active = false;
     s->objects[1].material.shininess = 64.0f;
     s->objects[1].material.triplanar = true;
@@ -191,7 +202,7 @@ static void build_scene(Scene* s)
 
     s->objects[2] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 1, 2, 3 }, (Vector3){ 1, 1, 1 }, (Color){ 255, 255, 255, 255 });
     s->objects[2].kind = OBJECT_CAMERA;
-    s->objects[2].transform.rotation = (Vector3){ -5, -90, 15 };
+    s->objects[2].transform.rotation = cam_rot();
     strcpy(s->objectNames[2], "GameCam");
     s->objects[1].transform.parent = 0; // Ball parented to Floor (grouping)
     s->objectCount = 3;
@@ -244,15 +255,15 @@ TEST(scene_mge_round_trip)
     CHECK(b.objects[0].kind == OBJECT_3D);
     CHECK(b.objects[2].kind == OBJECT_CAMERA);
     CHECK(strcmp(b.objectNames[2], "GameCam") == 0);
-    CHECK_F(b.objects[2].transform.rotation.y, -90.0f);
-    CHECK_F(b.objects[2].transform.rotation.z, 15.0f);
+    CHECK(Quaternion_Approx(b.objects[2].transform.rotation, cam_rot())); // quaternion round-trips
     CHECK(b.mainCamera == 2);
     CHECK(strcmp(b.skyDir, "res/sky_night") == 0);
     CHECK(b.objects[1].transform.parent == 0);  // parent link round-trips
     CHECK(b.objects[0].transform.parent == -1); // default when absent
     CHECK(b.objects[1].active == false);
     CHECK_F(b.objects[1].transform.position.x, 2.5f);
-    CHECK_F(b.objects[1].transform.rotation.y, 20.0f);
+    CHECK(Quaternion_Approx(b.objects[1].transform.rotation, ball_rot()));
+    CHECK(Quaternion_Approx(b.objects[0].transform.rotation, Quaternion_Identity())); // no line -> identity
     CHECK_F(b.objects[1].transform.scale.z, 1.5f);
     CHECK_F(b.objects[1].material.shininess, 64.0f);
     CHECK(b.objects[1].material.triplanar == true);
@@ -284,6 +295,32 @@ TEST(scene_mge_round_trip)
 
     remove(path);
     remove("scene_io_tmp/myscene.c"); // template scaffolded by Scene_Save
+}
+
+// a legacy `rotation <deg> <deg> <deg>` line (3 values) reads as euler degrees
+TEST(legacy_euler_rotation_line)
+{
+    Path_MakeDirs("scene_io_tmp");
+    const char* path = "scene_io_tmp/legacy.mgscene";
+    FILE* f = fopen(path, "wb");
+    CHECK(f != NULL);
+    fprintf(f,
+        "mgescene 1\n"
+        "name \"legacy\"\n"
+        "object \"Box\"\n"
+        "  primitive cube\n"
+        "  rotation 0 90 0\n"
+        "  scale 1 1 1\n");
+    fclose(f);
+
+    Scene s;
+    CHECK(Scene_Load(&s, path, NULL));
+    CHECK(s.objectCount == 1);
+    Quaternion want = Quaternion_FromEuler((Vector3){ 0.0f, 90.0f * DEG2RAD, 0.0f });
+    CHECK(Quaternion_Approx(s.objects[0].transform.rotation, want));
+
+    remove(path);
+    remove("scene_io_tmp/legacy.c");
 }
 
 TEST(load_rejects_a_non_scene_file)
@@ -328,6 +365,7 @@ int main(void)
     RUN(path_helpers);
     RUN(fs_list_rename_remove);
     RUN(scene_mge_round_trip);
+    RUN(legacy_euler_rotation_line);
     RUN(load_rejects_a_non_scene_file);
     RUN(canonical_scene_file_takes_its_name_from_the_folder);
 

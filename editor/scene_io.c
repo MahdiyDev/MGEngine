@@ -45,6 +45,14 @@ static void wv2(FILE* f, const char* k, Vector2 v)
 }
 static void wf(FILE* f, const char* k, float v) { fprintf(f, "  %s %g\n", k, (double)v); }
 static void wi(FILE* f, const char* k, int v) { fprintf(f, "  %s %d\n", k, v); }
+static void wq(FILE* f, const char* k, Quaternion q)
+{
+    fprintf(f, "  %s %g %g %g %g\n", k, (double)q.x, (double)q.y, (double)q.z, (double)q.w);
+}
+static bool quat_identity(Quaternion q)
+{
+    return q.x == 0.0f && q.y == 0.0f && q.z == 0.0f;
+}
 
 // Scene name: the folder holding it when the file is the canonical
 // `scene.mgscene` (project layout), otherwise the file's own stem.
@@ -151,7 +159,8 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
         fprintf(f, "  primitive %s\n", PRIM_NAMES[o->primitive % 3]);
         wi(f, "active", o->active ? 1 : 0);
         wv3(f, "position", o->transform.position);
-        wv3(f, "rotation", o->transform.rotation);
+        if (!quat_identity(o->transform.rotation))
+            wq(f, "rotation", o->transform.rotation); // quaternion x y z w
         wv3(f, "scale", o->transform.scale);
         if (o->transform.parent >= 0)
             wi(f, "parent", o->transform.parent); // grouping only; index into this list
@@ -358,8 +367,14 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
                 obj->active = atoi(rest) != 0;
             else if (strcmp(key, "position") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
                 obj->transform.position = (Vector3){ x, y, z };
-            else if (strcmp(key, "rotation") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
-                obj->transform.rotation = (Vector3){ x, y, z };
+            else if (strcmp(key, "rotation") == 0) {
+                float qw;
+                if (sscanf(rest, "%f %f %f %f", &x, &y, &z, &qw) == 4)
+                    obj->transform.rotation = (Quaternion){ x, y, z, qw };
+                else if (sscanf(rest, "%f %f %f", &x, &y, &z) == 3) // legacy euler degrees
+                    obj->transform.rotation = Quaternion_FromEuler(
+                        (Vector3){ x * DEG2RAD, y * DEG2RAD, z * DEG2RAD });
+            }
             else if (strcmp(key, "scale") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
                 obj->transform.scale = (Vector3){ x, y, z };
             else if (strcmp(key, "parent") == 0)

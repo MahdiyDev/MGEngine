@@ -127,10 +127,10 @@ void Scene_RestoreSnapshot(Scene* s, const Scene* snap, const char* projectRoot)
 // deselects. Call only when the gizmo is not being dragged.
 void Scene_Pick(Scene* s, Camera3D camera);
 
-// The selected entity's live transform, or NULL. rot / scale are NULL for lights
-// and for the (unmovable) directional sun.
+// The selected entity's live transform, or NULL. rotation / scale are NULL for
+// lights and for the (unmovable) directional sun.
 Vector3* Scene_SelPosition(Scene* s);
-Vector3* Scene_SelRotation(Scene* s);
+Quaternion* Scene_SelRotation(Scene* s);
 Vector3* Scene_SelScale(Scene* s);
 
 // Shadow pass + lit pass + skybox + (when `markers`) the editor-only lamp / camera

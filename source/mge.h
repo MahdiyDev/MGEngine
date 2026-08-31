@@ -622,12 +622,13 @@ typedef struct ModelBatch {
 
 // Where and how big a thing is. `scale` is the full extents of a primitive
 // (a cube of scale {2,2,2} is 2 units across; a sphere's diameter is scale.x;
-// 2D: {w, h, 0}); default {1,1,1}. `rotation` is XYZ euler degrees.
+// 2D: {w, h, 0}); default {1,1,1}.
 typedef struct Transform {
-	Vector3 position;  // centre; z unused for OBJECT_2D
-	Vector3 rotation;  // XYZ euler degrees; {0} = axis-aligned
-	Vector3 scale;     // full extents (see above)
-	int parent;        // index of the parent object, or -1 (hierarchy: reserved)
+	Vector3 position;      // centre; z unused for OBJECT_2D
+	Quaternion rotation;   // orientation; {0,0,0,1} identity. Constructors set it;
+	                       // a zero quaternion is treated as identity when drawn.
+	Vector3 scale;         // full extents (see above)
+	int parent;            // index of the parent object, or -1 (hierarchy: reserved)
 } Transform;
 
 typedef struct Object {
@@ -1087,10 +1088,11 @@ void Draw_Arrow(Vector2 start, Vector2 end, float headSize, Color color);   // 2
 void Draw_Arrow3D(Vector3 start, Vector3 end, Color color);                 // call inside Mge_BeginMode3D
 void Draw_Cube(Vector3 center, Vector3 size, Color color);
 void Draw_CubeWires(Vector3 center, Vector3 size, Color color);
-// ...Ex: rotationDeg is XYZ euler degrees, applied about `center` (X then Y then Z).
+// ...Ex: `rotation` is a Quaternion applied about `center` ({0,0,0,1} = none).
 // Corners + face normals are rotated on the CPU -- no per-object model matrix.
-void Draw_CubeEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color);
-void Draw_CubeWiresEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color);
+// Build one with Quaternion_FromEuler / _FromAxisAngle.
+void Draw_CubeEx(Vector3 center, Vector3 size, Quaternion rotation, Color color);
+void Draw_CubeWiresEx(Vector3 center, Vector3 size, Quaternion rotation, Color color);
 void Draw_Sphere(Vector3 center, float radius, Color color);                       // UV sphere (8x14)
 void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color color);
 void Draw_Plane(Vector3 center, float width, float length, Color color);           // flat quad on XZ, normal +Y
@@ -1111,9 +1113,9 @@ Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, 
 void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.transform.rotation; skips !obj.active
 void   Mge_DrawPrimitive(Object obj, Color color); // just the 3D primitive geometry, one colour
 
-// Unit forward vector for an OBJECT_CAMERA from its XYZ-euler rotation (degrees):
-// rotation.y is yaw about +Y, rotation.x is pitch. {0,0,0} looks toward +X.
-Vector3 Mge_CameraObjectForward(Vector3 rotationDeg);
+// Unit forward vector for an OBJECT_CAMERA: its orientation applied to local -Z
+// (identity looks toward -Z). Pair with Quaternion_LookRotation to aim one.
+Vector3 Mge_CameraObjectForward(Quaternion rotation);
 
 // Mesh -- copies the arrays you pass, then owns them. Upload once, draw many.
 Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,
@@ -1192,9 +1194,9 @@ GizmoSpace Mge_GetGizmoSpace(void);
 // rotate degrees, scale step. A value <= 0 disables snapping for that channel.
 void Mge_SetGizmoSnap(float move, float rotateDeg, float scale);
 void Mge_GetGizmoSnap(float* move, float* rotateDeg, float* scale);
-// `rotation` / `scale` may be NULL. If BOTH are NULL the gizmo is move-only
-// regardless of the current mode (a light, or a multi-select group pivot).
-bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
+// `rotation` (a Quaternion) / `scale` may be NULL. If BOTH are NULL the gizmo is
+// move-only regardless of the current mode (a light, or a multi-select pivot).
+bool Mge_Gizmo3D(Vector3* position, Quaternion* rotation, Vector3* scale, Camera3D camera, float size);
 
 #ifndef MGE_MAX_LIGHTS
 	#define MGE_MAX_LIGHTS 8   // forward shader hard limit; extra lights are ignored

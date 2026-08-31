@@ -119,6 +119,74 @@ TEST(matrix_look_at)
     CHECK_F(v2.m14, -5.0f);
 }
 
+static bool v3eq(Vector3 a, Vector3 b)
+{
+    return feq(a.x, b.x) && feq(a.y, b.y) && feq(a.z, b.z);
+}
+static bool mat_rot_eq(Matrix a, Matrix b)
+{
+    return feq(a.m0, b.m0) && feq(a.m4, b.m4) && feq(a.m8, b.m8) &&
+        feq(a.m1, b.m1) && feq(a.m5, b.m5) && feq(a.m9, b.m9) &&
+        feq(a.m2, b.m2) && feq(a.m6, b.m6) && feq(a.m10, b.m10);
+}
+
+TEST(quaternion_basics)
+{
+    Quaternion id = Quaternion_Identity();
+    CHECK_F(id.w, 1.0f);
+    CHECK(v3eq(Quaternion_RotateVector3(id, (Vector3){ 3, -2, 5 }), (Vector3){ 3, -2, 5 }));
+
+    // axis-angle: 90deg about +Y sends +X -> -Z
+    Quaternion qy = Quaternion_FromAxisAngle((Vector3){ 0, 1, 0 }, (float)PI / 2.0f);
+    CHECK(v3eq(Quaternion_RotateVector3(qy, (Vector3){ 1, 0, 0 }), (Vector3){ 0, 0, -1 }));
+
+    // rotating a vector by q must match rotating it by q's matrix
+    Quaternion q = Quaternion_FromEuler((Vector3){ 0.3f, -0.7f, 1.1f });
+    Matrix m = Quaternion_ToMatrix(q);
+    Vector3 v = { 1.0f, 2.0f, -3.0f };
+    Vector4 mv = Vector4_Transform((Vector4){ v.x, v.y, v.z, 0.0f }, m);
+    CHECK(v3eq(Quaternion_RotateVector3(q, v), (Vector3){ mv.x, mv.y, mv.z }));
+}
+
+TEST(quaternion_matches_matrix_path)
+{
+    Vector3 angles[4] = {
+        { 0.4f, 0.0f, 0.0f }, { 0.0f, 1.2f, 0.0f },
+        { 0.5f, -0.9f, 0.3f }, { -1.4f, 0.7f, -0.2f },
+    };
+    for (int i = 0; i < 4; i++) {
+        // Quaternion_FromEuler <-> Matrix_RotateXYZ agree
+        CHECK(mat_rot_eq(Quaternion_ToMatrix(Quaternion_FromEuler(angles[i])),
+            Matrix_RotateXYZ(angles[i])));
+        // euler round-trip
+        Quaternion q = Quaternion_FromEuler(angles[i]);
+        CHECK(Quaternion_Approx(Quaternion_FromEuler(Quaternion_ToEuler(q)), q));
+        // matrix round-trip
+        CHECK(Quaternion_Approx(Quaternion_FromMatrix(Quaternion_ToMatrix(q)), q));
+    }
+
+    // compose: "apply a then b" == Matrix_Multiply(A, B)
+    Quaternion a = Quaternion_FromEuler((Vector3){ 0.3f, 0.0f, 0.0f });
+    Quaternion b = Quaternion_FromEuler((Vector3){ 0.0f, 0.8f, 0.0f });
+    CHECK(mat_rot_eq(Quaternion_ToMatrix(Quaternion_Multiply(a, b)),
+        Matrix_Multiply(Quaternion_ToMatrix(a), Quaternion_ToMatrix(b))));
+}
+
+TEST(quaternion_look_and_slerp)
+{
+    // identity look: local -Z is the forward
+    Quaternion look = Quaternion_LookRotation((Vector3){ 0, 0, -1 }, (Vector3){ 0, 1, 0 });
+    CHECK(Quaternion_Approx(look, Quaternion_Identity()));
+
+    Quaternion l2 = Quaternion_LookRotation((Vector3){ 1, 0, 0 }, (Vector3){ 0, 1, 0 });
+    CHECK(v3eq(Quaternion_RotateVector3(l2, (Vector3){ 0, 0, -1 }), (Vector3){ 1, 0, 0 }));
+
+    Quaternion s0 = Quaternion_Slerp(Quaternion_Identity(), l2, 0.0f);
+    Quaternion s1 = Quaternion_Slerp(Quaternion_Identity(), l2, 1.0f);
+    CHECK(Quaternion_Approx(s0, Quaternion_Identity()));
+    CHECK(Quaternion_Approx(s1, l2));
+}
+
 int main(void)
 {
     RUN(clamp);
@@ -129,5 +197,8 @@ int main(void)
     RUN(matrix_ortho);
     RUN(matrix_perspective);
     RUN(matrix_look_at);
+    RUN(quaternion_basics);
+    RUN(quaternion_matches_matrix_path);
+    RUN(quaternion_look_and_slerp);
     return test_summary();
 }

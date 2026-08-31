@@ -7,18 +7,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-// A bare OBJECT_CAMERA: a transform (position + XYZ-euler look direction), no
-// geometry or material. `rotDeg` {pitch, yaw, roll}; yaw -90 looks toward -Z.
-static Object make_camera(Vector3 pos, Vector3 rotDeg)
+// A bare OBJECT_CAMERA: a transform (position + orientation), no geometry or
+// material. Identity orientation looks toward -Z.
+static Object make_camera(Vector3 pos, Quaternion rot)
 {
     Object o = { 0 };
     o.kind = OBJECT_CAMERA;
     o.active = true;
     o.transform.position = pos;
-    o.transform.rotation = rotDeg;
+    o.transform.rotation = rot;
     o.transform.scale = (Vector3){ 1.0f, 1.0f, 1.0f };
     o.transform.parent = -1;
     return o;
+}
+
+// Orientation that looks from `eye` toward `at`, keeping +Y roughly up.
+static Quaternion look_at(Vector3 eye, Vector3 at)
+{
+    Vector3 fwd = { at.x - eye.x, at.y - eye.y, at.z - eye.z };
+    return Quaternion_LookRotation(fwd, (Vector3){ 0.0f, 1.0f, 0.0f });
 }
 
 // Load the 6-face cubemap in `dir`, or {0} if it isn't there. Peeks at
@@ -68,7 +75,8 @@ static void reset_data(Scene* s)
     s->objects[1] = Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
     s->objects[2] = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 190, 110, 255 });
     s->objects[3] = Mge_MakeObject3D((Vector3){ 3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 130, 210, 255 });
-    s->objects[4] = make_camera((Vector3){ 2.5f, 3.0f, 13.5f }, (Vector3){ -8.0f, -90.0f, 0.0f });
+    s->objects[4] = make_camera((Vector3){ 2.5f, 3.0f, 13.5f },
+        look_at((Vector3){ 2.5f, 3.0f, 13.5f }, (Vector3){ 0.0f, 0.5f, 0.0f }));
     strcpy(s->objectNames[0], "Floor");
     strcpy(s->objectNames[1], "Cube 1");
     strcpy(s->objectNames[2], "Sphere 1");
@@ -239,7 +247,8 @@ void Scene_AddCamera(Scene* s)
         return;
 
     int i = s->objectCount++;
-    s->objects[i] = make_camera((Vector3){ 0.0f, 2.0f, 6.0f }, (Vector3){ -10.0f, -90.0f, 0.0f });
+    s->objects[i] = make_camera((Vector3){ 0.0f, 2.0f, 6.0f },
+        look_at((Vector3){ 0.0f, 2.0f, 6.0f }, (Vector3){ 0.0f, 0.0f, 0.0f }));
 
     int n = 1;
     for (int k = 0; k < i; k++)
@@ -660,7 +669,7 @@ Vector3* Scene_SelPosition(Scene* s)
     return NULL;
 }
 
-Vector3* Scene_SelRotation(Scene* s)
+Quaternion* Scene_SelRotation(Scene* s)
 {
     return (s->selKind == SEL_OBJECT) ? &s->objects[s->selIndex].transform.rotation : NULL;
 }

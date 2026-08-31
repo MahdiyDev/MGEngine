@@ -241,7 +241,7 @@ static void scene_gizmo(GizmoMode mode, const char* name)
     sun.ambient = 0.35f;
 
     Object o = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, (Color){ 130, 170, 210, 255 });
-    o.transform.rotation = (Vector3){ 20.0f, 35.0f, 0.0f }; // exercises Draw_CubeEx
+    o.transform.rotation = Quaternion_FromEuler((Vector3){ 20.0f * DEG2RAD, 35.0f * DEG2RAD, 0.0f }); // exercises Draw_CubeEx
 
     Mge_SetGizmoMode(mode);
 
@@ -315,9 +315,10 @@ static void scene_scripted_rotate(void)
     }
     Mge_ClearMouseOverride();
 
+    Vector3 e = Quaternion_ToEuler(o.transform.rotation);
     printf("    scripted drag -> object euler (%.0f, %.0f, %.0f)\n",
-        (double)o.transform.rotation.x, (double)o.transform.rotation.y, (double)o.transform.rotation.z);
-    if (fabsf(o.transform.rotation.x) + fabsf(o.transform.rotation.y) + fabsf(o.transform.rotation.z) < 1.0f) {
+        (double)(e.x * RAD2DEG), (double)(e.y * RAD2DEG), (double)(e.z * RAD2DEG));
+    if (Quaternion_Approx(o.transform.rotation, Quaternion_Identity())) {
         printf("    scripted_rotate  FAIL  -- the drag did not rotate the object\n");
         g_fails++;
     }

@@ -50,7 +50,7 @@ void Draw_Cube(Vector3 pos, Vector3 size, Color c)
     g_cubeDraws++;
     g_lastCubeSize = size;
 }
-void Draw_CubeEx(Vector3 pos, Vector3 size, Vector3 rot, Color c)
+void Draw_CubeEx(Vector3 pos, Vector3 size, Quaternion rot, Color c)
 {
     (void)rot;
     Draw_Cube(pos, size, c);

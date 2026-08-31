@@ -33,6 +33,7 @@ Object Mge_MakeObject2D(float x, float y, float w, float h, Color color)
     o.kind = OBJECT_2D;
     o.active = true;
     o.transform.position = (Vector3){ x, y, 0.0f };
+    o.transform.rotation = Quaternion_Identity();
     o.transform.scale = (Vector3){ w, h, 0.0f };
     o.transform.parent = -1;
     o.material = Mge_DefaultMaterial();
@@ -47,6 +48,7 @@ Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, 
     o.active = true;
     o.primitive = primitive;
     o.transform.position = position;
+    o.transform.rotation = Quaternion_Identity();
     o.transform.scale = size;
     o.transform.parent = -1;
     o.material = Mge_DefaultMaterial();
@@ -82,13 +84,11 @@ void Mge_DrawPrimitive(Object obj, Color color)
     }
 }
 
-// Unit forward vector for an OBJECT_CAMERA from its XYZ-euler rotation (degrees).
-// rotation.y is yaw about +Y, rotation.x is pitch. Matches editor_camera's
-// FrontFromYawPitch so a camera object and the fly-cam agree on "look".
-Vector3 Mge_CameraObjectForward(Vector3 rotationDeg)
+// Unit forward vector for an OBJECT_CAMERA: its orientation applied to local -Z
+// (identity looks toward -Z, the standard camera convention).
+Vector3 Mge_CameraObjectForward(Quaternion rotation)
 {
-    float yaw = rotationDeg.y * DEG2RAD, pitch = rotationDeg.x * DEG2RAD;
-    Vector3 f = { cosf(yaw) * cosf(pitch), sinf(pitch), sinf(yaw) * cosf(pitch) };
+    Vector3 f = Quaternion_RotateVector3(rotation, (Vector3){ 0.0f, 0.0f, -1.0f });
     float len = sqrtf(f.x * f.x + f.y * f.y + f.z * f.z);
     if (len > 1e-6f) { f.x /= len; f.y /= len; f.z /= len; }
     return f;

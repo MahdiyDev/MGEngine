@@ -17,7 +17,7 @@ runtimes, so consumers stay pure C.
 source/                THE ENGINE -- every *.c here is compiled into the library
   mge.h            public types + core / shapes / texture / input API
   mge_gl.h  mge_gl.c     immediate-mode-ish batched GL renderer (MgeGL_*)
-  mge_math.h mge_math.c  Vector2/3/4, Matrix, projections (replaces glm)
+  mge_math.h mge_math.c  Vector2/3/4, Matrix, Quaternion, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
   mge_object.c          Object struct (primitive + Transform + material, active flag) + 3D picking
@@ -532,12 +532,14 @@ if (IsKeyPressed(KEY_F12))
 An `Object` is a movable rectangle (`OBJECT_2D`), a 3D primitive (`OBJECT_3D`:
 `PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`), or a camera
 marker (`OBJECT_CAMERA` — a transform only, drawn as a wireframe box + forward
-arrow, never lit; `Mge_CameraObjectForward(rotationDeg)` gives its look vector).
-Its placement
-lives in `obj.transform` — a `Transform { Vector3 position, rotation (XYZ euler
-degrees), scale; int parent; }` where `scale` is the full extents (a cube of
-scale `{2,2,2}` is 2 units across; a sphere's diameter is `scale.x`); `parent`
-is reserved for hierarchy and is `-1` on a fresh object. An object also has a
+arrow, never lit; `Mge_CameraObjectForward(rotation)` applies the orientation to
+local −Z). Its placement lives in `obj.transform` — a
+`Transform { Vector3 position, Quaternion rotation, Vector3 scale; int parent; }`
+where `rotation` is `{0,0,0,1}` (identity) on a fresh object — the constructors
+set it, and a zero-initialised `{0,0,0,0}` is also treated as identity when
+drawn. `scale` is the full extents (a cube of scale `{2,2,2}` is 2 units across;
+a sphere's diameter is `scale.x`); `parent` is reserved for hierarchy and is
+`-1` on a fresh object. An object also has a
 `material`, an `id`, an `active` flag (false → not drawn / not outlined) and a
 `selected` flag. There is **no `Object.color`** — the base colour is the
 diffuse map's tint (`obj.material.maps[MATERIAL_MAP_DIFFUSE].color`); the
@@ -568,22 +570,23 @@ void Mge_SetGizmoSnap(float move, float rotateDeg, float scale); // <=0 disables
 void Mge_GetGizmoSnap(float* move, float* rotateDeg, float* scale);
 // rotation / scale may be NULL; if BOTH are NULL the gizmo is move-only whatever
 // the mode. Hold Ctrl while dragging to snap. Returns true while a handle is dragged.
-bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
+bool Mge_Gizmo3D(Vector3* position, Quaternion* rotation, Vector3* scale, Camera3D camera, float size);
 ```
 
 - **translate** — three axis arrows + a **centre ball**; drag an arrow → move
   along that axis, drag the ball → move on the view plane.
 - **rotate** — three thin rings (Unreal-style): each is a full circle but only
   the segments facing the camera are drawn, so an edge-on ring shows its near
-  arc and a face-on ring shows the whole circle. Drag → spin the matching euler
-  component (counter-clockwise on screen = positive).
+  arc and a face-on ring shows the whole circle. Drag → compose a world-space
+  rotation about that axis onto `*rotation` (a `Quaternion` — no gimbal drift;
+  counter-clockwise on screen = positive).
 - **scale** — axes with cube tips + a centre cube; drag an axis tip → scale that
   `size` component, drag the centre → uniform scale.
 
 **Space** — `GIZMO_WORLD` keeps the axes on global X/Y/Z; `GIZMO_LOCAL` aligns
-them to the object's `rotation` (translate moves along a local axis, rotate spins
-about it — composed via matrix, so it doesn't drift). Scale is always local.
-Lights (`rotation == NULL`) ignore the setting.
+them to the object's `rotation` quaternion. Scale is always local. Lights and
+multi-select pivots (`rotation == NULL && scale == NULL`) are move-only whatever
+the mode.
 
 The gizmo is a **fixed on-screen size** (`size` param) regardless of the object.
 Its translucent parts use `MgeGL_SetBlend` (straight alpha).
@@ -603,8 +606,9 @@ if (!busy) Mge_PickObject3D(objs, n, camera); // don't re-pick mid-drag
 plus `Mge_DrawObjectGizmo2D` for the X/Y arrows.
 
 Supporting pieces: mouse buttons (`IsMouseButtonPressed/Down/Released`,
-`GetMouseDelta`), `Mge_GetScreenWidth/Height`, `Draw_CubeEx` / `Draw_CubeWiresEx`,
-`Matrix_RotateXYZ` / `Matrix_ToEulerXYZ` / `Vector3_RotateAround`, and world→screen
+`GetMouseDelta`), `Mge_GetScreenWidth/Height`, `Draw_CubeEx` / `Draw_CubeWiresEx`
+(both take a `Quaternion`), `Quaternion_*` / `Matrix_RotateXYZ` /
+`Vector3_RotateAround`, and world→screen
 projection (`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
 `Mge_GetCameraProjectionMatrix`). Demos: `examples/objects/gizmo_2d.c` and
 `gizmo_3d.c` (1/2/3 switch modes); `editor/` uses it in full.
@@ -1413,10 +1417,13 @@ right inspector + bottom resources) built from `Mge_GuiBeginPanel`, all in one
 | --- | --- |
 | `Vector3_Add/Subtract/Scale/Multiply(a, b)` | `Vector3_DotProduct`, `Vector3_Length` |
 | `Vector3Cross`, `Vector3Normalize` | `Vector2_Rotate(v, radians)`, `Clamp` |
-| `Matrix_Identity/Multiply/Translate/Scale/Rotate` | `MatrixOrtho/Perspective/LookAt`, `MatrixToFloatV` |
+| `Matrix_Identity/Multiply/Translate/Scale/Rotate` | `Matrix_RotateXYZ` / `Matrix_ToEulerXYZ`, `MatrixOrtho/Perspective/LookAt`, `MatrixToFloatV` |
+| `Quaternion_Identity/Normalize/Conjugate/Multiply` | `Quaternion_FromAxisAngle` / `_FromEuler` / `_ToEuler` (XYZ, == the matrix path) |
+| `Quaternion_ToMatrix` / `_FromMatrix` | `Quaternion_RotateVector3`, `_Slerp`, `_LookRotation` (local −Z → forward), `_Approx` |
 
 Matrices are stored column-major so `MatrixToFloat(m)` feeds `glUniformMatrix4fv`
-directly.
+directly. `Quaternion_Multiply(a, b)` composes "apply `a`, then `b`" (matches
+`Matrix_Multiply`); it's the orientation type in `Transform`.
 
 ### Hot-reloadable scene modules (`mge_dylib.c`)
 

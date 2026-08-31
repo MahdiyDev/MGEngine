@@ -14,7 +14,7 @@ static bool feq(float a, float b) { return fabsf(a - b) < 1e-3f; }
 void Draw_RectangleRec(Rectangle r, Color c) { (void)r; (void)c; }
 void Draw_RectangleLines(int a, int b, int w, int h, Color c) { (void)a; (void)b; (void)w; (void)h; (void)c; }
 void Draw_Cube(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
-void Draw_CubeEx(Vector3 a, Vector3 b, Vector3 r, Color c) { (void)a; (void)b; (void)r; (void)c; }
+void Draw_CubeEx(Vector3 a, Vector3 b, Quaternion r, Color c) { (void)a; (void)b; (void)r; (void)c; }
 void Draw_CubeWires(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 void Draw_SphereEx(Vector3 a, float r, int ri, int sl, Color c) { (void)a; (void)r; (void)ri; (void)sl; (void)c; }
 void Draw_Plane(Vector3 a, float w, float l, Color c) { (void)a; (void)w; (void)l; (void)c; }
@@ -205,12 +205,14 @@ TEST(manipulate_2d_axis_constrained_drag)
     Mge_ClearSelection(objs, 1);
 }
 
-TEST(object_rotation_defaults_to_zero)
+TEST(object_rotation_defaults_to_identity)
 {
     Object o = Mge_MakeObject3D((Vector3){ 1, 2, 3 }, (Vector3){ 1, 1, 1 }, RED);
     CHECK_F(o.transform.rotation.x, 0.0f);
     CHECK_F(o.transform.rotation.y, 0.0f);
     CHECK_F(o.transform.rotation.z, 0.0f);
+    CHECK_F(o.transform.rotation.w, 1.0f);
+    CHECK(Quaternion_Approx(o.transform.rotation, Quaternion_Identity()));
 }
 
 TEST(pick_object_3d_selects_nearest_screen_centre)
@@ -264,7 +266,7 @@ int main(void)
     RUN(world_to_screen);
     RUN(manipulate_2d_select_and_body_drag);
     RUN(manipulate_2d_axis_constrained_drag);
-    RUN(object_rotation_defaults_to_zero);
+    RUN(object_rotation_defaults_to_identity);
     RUN(pick_object_3d_selects_nearest_screen_centre);
     RUN(set_selected_object_matches_a_pick);
     return test_summary();

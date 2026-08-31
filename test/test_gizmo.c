@@ -179,7 +179,8 @@ TEST(rotate_drag_spins_the_axis)
 {
     Mge_SetGizmoMode(GIZMO_ROTATE);
     Mge_SetGizmoSpace(GIZMO_WORLD);
-    Vector3 pos = { 0, 0, 0 }, rot = { 0, 0, 0 }, scl = { 1, 1, 1 };
+    Vector3 pos = { 0, 0, 0 }, scl = { 1, 1, 1 };
+    Quaternion rot = Quaternion_Identity();
     Camera3D cam = { .position = { 5, 0, 8 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 } };
     float size = 2.0f;
     float cx = SCR_W * 0.5f, cy = SCR_H * 0.5f;
@@ -192,19 +193,22 @@ TEST(rotate_drag_spins_the_axis)
     drag_to(cx - 40.0f, cy - 4.0f); // sweep ~90 deg counter-clockwise
     Mge_Gizmo3D(&pos, &rot, &scl, cam, size);
 
-    CHECK(fabsf(rot.x) > 30.0f); // rotated about X
-    CHECK(fabsf(rot.x) < 150.0f);
-    CHECK(rot.x == rot.x); // not NaN
+    CHECK(!Quaternion_Approx(rot, Quaternion_Identity())); // it rotated
+    Vector3 e = Quaternion_ToEuler(rot);
+    float degX = e.x * RAD2DEG;
+    CHECK(fabsf(degX) > 30.0f && fabsf(degX) < 150.0f); // about X, ~90 deg
+    CHECK(degX == degX);                                 // not NaN
     release();
     Mge_Gizmo3D(&pos, &rot, &scl, cam, size);
     Mge_SetGizmoMode(GIZMO_TRANSLATE);
 }
 
-TEST(local_rotate_stays_a_valid_euler)
+TEST(local_rotate_stays_a_unit_quaternion)
 {
     Mge_SetGizmoMode(GIZMO_ROTATE);
     Mge_SetGizmoSpace(GIZMO_LOCAL);
-    Vector3 pos = { 0, 0, 0 }, rot = { 15, 40, -20 }, scl = { 1, 1, 1 };
+    Vector3 pos = { 0, 0, 0 }, scl = { 1, 1, 1 };
+    Quaternion rot = Quaternion_FromEuler((Vector3){ 15 * DEG2RAD, 40 * DEG2RAD, -20 * DEG2RAD });
     Camera3D cam = { .position = { 4, 3, 8 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 } };
 
     press_at(SCR_W * 0.5f + 3.0f, SCR_H * 0.5f - 45.0f);
@@ -212,7 +216,9 @@ TEST(local_rotate_stays_a_valid_euler)
     drag_to(SCR_W * 0.5f - 45.0f, SCR_H * 0.5f - 3.0f);
     Mge_Gizmo3D(&pos, &rot, &scl, cam, 2.0f);
 
-    CHECK(rot.x == rot.x && rot.y == rot.y && rot.z == rot.z); // finite
+    CHECK(rot.x == rot.x && rot.y == rot.y && rot.z == rot.z && rot.w == rot.w); // finite
+    float n = sqrtf(rot.x * rot.x + rot.y * rot.y + rot.z * rot.z + rot.w * rot.w);
+    CHECK_F(n, 1.0f); // still unit length
     release();
     Mge_Gizmo3D(&pos, &rot, &scl, cam, 2.0f);
     Mge_SetGizmoMode(GIZMO_TRANSLATE);
@@ -229,6 +235,6 @@ int main(void)
     RUN(centre_ball_drag_moves_on_the_view_plane);
     RUN(scale_drag_grows_the_axis_component);
     RUN(rotate_drag_spins_the_axis);
-    RUN(local_rotate_stays_a_valid_euler);
+    RUN(local_rotate_stays_a_unit_quaternion);
     return test_summary();
 }

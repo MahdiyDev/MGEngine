@@ -77,7 +77,8 @@ test_gizmo$(EXE): test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c $(MLIB
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c -lm
 
 # editor .mgscene (de)serialiser + path helpers; the parser reads via Mge_LoadFileText (pak-aware)
-IO_ENGINE = ../source/mge_utils.c ../source/mge_pak.c
+# and converts rotations via the quaternion helpers (mge_math.c)
+IO_ENGINE = ../source/mge_utils.c ../source/mge_pak.c ../source/mge_math.c
 test_scene_io$(EXE): test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c $(IO_ENGINE) ../editor/scene.h ../editor/scene_io.h $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c $(IO_ENGINE) -lm
 

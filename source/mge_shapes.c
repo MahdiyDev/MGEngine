@@ -225,20 +225,19 @@ void Draw_Arrow3D(Vector3 start, Vector3 end, Color color)
     MgeGL_End();
 }
 
-// true if any component is non-zero (skip the rotation maths for the common case)
-static bool has_rotation(Vector3 deg)
+// true unless `q` is identity -- lets the common unrotated case skip the maths.
+// x=y=z=0 covers both {0,0,0,1} and a zero-initialised {0,0,0,0}.
+static bool has_rotation(Quaternion q)
 {
-    return deg.x != 0.0f || deg.y != 0.0f || deg.z != 0.0f;
+    return q.x != 0.0f || q.y != 0.0f || q.z != 0.0f;
 }
 
-void Draw_CubeEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color)
+void Draw_CubeEx(Vector3 center, Vector3 size, Quaternion rotation, Color color)
 {
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
 
-    const bool rot = has_rotation(rotationDeg);
-    const Matrix R = rot
-        ? Matrix_RotateXYZ((Vector3){ rotationDeg.x * DEG2RAD, rotationDeg.y * DEG2RAD, rotationDeg.z * DEG2RAD })
-        : Matrix_Identity();
+    const bool rot = has_rotation(rotation);
+    const Matrix R = rot ? Quaternion_ToMatrix(rotation) : Matrix_Identity();
 
     // 6 faces, each: outward normal + its 4 corner OFFSETS from centre (bottom-
     // left, bottom-right, top-right, top-left seen from outside). Rotated about
@@ -282,17 +281,15 @@ void Draw_CubeEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color)
 
 void Draw_Cube(Vector3 center, Vector3 size, Color color)
 {
-    Draw_CubeEx(center, size, (Vector3){ 0.0f, 0.0f, 0.0f }, color);
+    Draw_CubeEx(center, size, Quaternion_Identity(), color);
 }
 
-void Draw_CubeWiresEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color color)
+void Draw_CubeWiresEx(Vector3 center, Vector3 size, Quaternion rotation, Color color)
 {
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
 
-    const bool rot = has_rotation(rotationDeg);
-    const Matrix R = rot
-        ? Matrix_RotateXYZ((Vector3){ rotationDeg.x * DEG2RAD, rotationDeg.y * DEG2RAD, rotationDeg.z * DEG2RAD })
-        : Matrix_Identity();
+    const bool rot = has_rotation(rotation);
+    const Matrix R = rot ? Quaternion_ToMatrix(rotation) : Matrix_Identity();
 
     Vector3 c[8] = {
         { -x, -y, -z }, { x, -y, -z }, { x, y, -z }, { -x, y, -z },
@@ -318,7 +315,7 @@ void Draw_CubeWiresEx(Vector3 center, Vector3 size, Vector3 rotationDeg, Color c
 
 void Draw_CubeWires(Vector3 center, Vector3 size, Color color)
 {
-    Draw_CubeWiresEx(center, size, (Vector3){ 0.0f, 0.0f, 0.0f }, color);
+    Draw_CubeWiresEx(center, size, Quaternion_Identity(), color);
 }
 
 void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color color)

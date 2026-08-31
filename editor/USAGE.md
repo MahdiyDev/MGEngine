@@ -193,13 +193,14 @@ render
 object "GameCam"
   kind camera               # transform-only view camera (omit for a normal 3d object)
   position 0 3.5 13
-  rotation -8 -90 0         # pitch, yaw, roll -> look direction
+  rotation 0 0.38 0 0.92    # orientation quaternion x y z w (identity looks -Z)
 
 object "Floor"
   primitive plane          # cube | sphere | plane
   active 1
   position 0 -1.1 0
-  rotation 0 0 0            # XYZ euler degrees
+  # rotation omitted -> identity. Written as `rotation x y z w` (quaternion) when
+  # it isn't; a legacy 3-value `rotation <deg> <deg> <deg>` still reads as euler.
   scale 24 0.2 24
   shininess 32
   tiling 1 1
@@ -294,8 +295,8 @@ The current selection's fields, live:
 | selection | fields |
 | --- | --- |
 | **Environment** | sun (`lights[0]`) direction / colour / ambient / diffuse / specular; skybox (`choose folder...` / `use engine default` / `reload`); **main camera** combo |
-| **Object** | **active** toggle, **primitive** dropdown, the `Transform` — position, **rotation** (euler °), size (= `transform.scale`), a **parent** combo; `shininess`; **tiling** / **offset**; a **triplanar** toggle (+ scale); then one **group per material map** (drop an image from Resources on the thumbnail to assign it) |
-| **Camera** | active, position, rotation (pitch / yaw / roll); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
+| **Object** | **active** toggle, **primitive** dropdown, the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo; `shininess`; **tiling** / **offset**; a **triplanar** toggle (+ scale); then one **group per material map** (drop an image from Resources on the thumbnail to assign it) |
+| **Camera** | active, position, rotation (euler °); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
 | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 
 Each **material-map group** is a square thumbnail (`Mge_GuiImageButton`) plus that
