@@ -112,6 +112,35 @@ void Mge_UnloadTexture(Texture2D texture)
     MgeGL_UnloadTexture(texture.id);
 }
 
+Texture2D Mge_LoadTextureHDR(const char* fileName)
+{
+    Texture2D texture = { 0 };
+
+    size_t dataSize = 0;
+    unsigned char* fileData = Mge_LoadFileData(fileName, &dataSize);
+    if (fileData == NULL)
+        return texture;
+
+    int w = 0, h = 0, comp = 0;
+    float* px = stbi_loadf_from_memory(fileData, (int)dataSize, &w, &h, &comp, 0);
+    Mge_UnloadFileData(fileData);
+
+    if (px != NULL) {
+        int channels = (comp == 4) ? 4 : 3;
+        texture.id = MgeGL_LoadTextureHDR(px, w, h, channels);
+        texture.width = w;
+        texture.height = h;
+        texture.mipmaps = 1;
+        texture.format = (channels == 4) ? PIXELFORMAT_UNCOMPRESSED_R32G32B32A32
+                                         : PIXELFORMAT_UNCOMPRESSED_R32G32B32;
+        stbi_image_free(px);
+    } else {
+        TRACE_LOG(LOG_WARNING, "IMAGE: [%s] failed to load HDR: %s", fileName, stbi_failure_reason());
+    }
+
+    return texture;
+}
+
 void Mge_SetTextureWrap(Texture2D texture, int wrap)
 {
     MgeGL_SetTextureWrap(texture.id, wrap, wrap);

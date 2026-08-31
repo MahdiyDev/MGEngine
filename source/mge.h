@@ -483,6 +483,36 @@ typedef struct Material {
 	float triplanarScale;
 } Material;
 
+// --- Physically-based rendering (Cook-Torrance metallic/roughness workflow) ---
+//
+// A separate lighting path from `Material` / Mge_BeginLighting3D. Each map is
+// optional: id 0 -> use the matching *Value / albedoColor scalar instead.
+// Load `albedo` as sRGB; the rest (normal / metallic / roughness / ao) linear.
+// See Mge_BeginPBR3D / Mge_BeginPBR3DIBL / Mge_SetPBRMaterial.
+typedef struct PBRMaterial {
+	Texture2D albedo;
+	Texture2D normal;
+	Texture2D metallic;
+	Texture2D roughness;
+	Texture2D ao;
+	Vector3 albedoColor;   // linear RGB, used when `albedo.id` == 0
+	float metallicValue;   // 0 dielectric .. 1 metal
+	float roughnessValue;  // 0 mirror .. 1 fully rough
+	float aoValue;         // ambient-occlusion multiplier (1 = none)
+} PBRMaterial;
+
+// Image-based lighting: an environment (Mge_LoadEnvironment) prefiltered into an
+// irradiance cubemap (diffuse), a roughness-mip prefilter cubemap (specular) and
+// a BRDF integration LUT. Feed it to Mge_BeginPBR3DIBL and draw the background
+// with Mge_DrawEnvironmentSkybox.
+typedef struct Environment {
+	unsigned int cubemap;      // the source env, equirect -> cube (RGB16F)
+	unsigned int irradiance;   // 32x32 diffuse-irradiance cubemap
+	unsigned int prefilter;    // mip-chained specular-prefilter cubemap
+	unsigned int brdfLUT;      // 512x512 RG16F BRDF integration texture (2D)
+	int prefilterMips;
+} Environment;
+
 // Light kinds:
 //   LIGHT_DIRECTIONAL  infinitely far away, parallel rays (the sun). Uses
 //                      `direction` only; no position, no distance falloff.
@@ -682,6 +712,7 @@ Texture2D Mge_LoadTexture(const char *fileName);
 // (see Mge_SetGammaCorrection). Specular / normal / data maps stay linear.
 Texture2D Mge_LoadTextureFromImageEx(Image image, bool sRGB);
 Texture2D Mge_LoadTextureEx(const char *fileName, bool sRGB);
+Texture2D Mge_LoadTextureHDR(const char *fileName); // Radiance .hdr -> an RGB16F float texture (for IBL / PBR)
 void Mge_UnloadTexture(Texture2D texture); // free the GPU texture (no-op when id == 0)
 
 // Texture wrap mode (see TextureWrap). Mge_SetTextureWrap sets both axes;
@@ -1134,6 +1165,29 @@ void Mge_BeginLighting3D(Light light, Camera3D camera);                       //
 void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera);  // up to MGE_MAX_LIGHTS
 void Mge_SetMaterial(Material material);                 // no-op unless lighting is active
 void Mge_EndLighting3D(void);
+
+// --- Physically-based rendering ------------------------------------------------
+//
+//   Mge_BeginMode3D(cam);
+//     Mge_BeginPBR3DIBL(lights, n, cam, env);   // or Mge_BeginPBR3D for direct-only
+//       Mge_SetPBRMaterial(mat);  Draw_Sphere(...);  // or Mge_DrawModel(model)
+//     Mge_EndPBR3D();
+//     Mge_DrawEnvironmentSkybox(env, cam);       // the lit background
+//   Mge_EndMode3D();
+//
+// The shader outputs LINEAR HDR -- render into an Mge_LoadRenderTextureHDR target
+// and finish with Mge_DrawRenderTextureHDR / Mge_DrawBloom for tone mapping.
+PBRMaterial Mge_DefaultPBRMaterial(void);                 // white dielectric, roughness 0.5
+void Mge_BeginPBR3D(const Light* lights, int count, Camera3D camera);       // direct light only
+void Mge_BeginPBR3DIBL(const Light* lights, int count, Camera3D camera, Environment env);
+void Mge_SetPBRMaterial(PBRMaterial material);
+void Mge_EndPBR3D(void);
+
+// Load an equirectangular .hdr and precompute its IBL maps (renders several
+// cube passes -- do this once at load time, needs a live GL context).
+Environment Mge_LoadEnvironment(const char* hdrPath);
+void Mge_UnloadEnvironment(Environment* env);
+void Mge_DrawEnvironmentSkybox(Environment env, Camera3D camera); // inside Mge_BeginMode3D
 
 // --- Shadow mapping (directional / spot) ------------------------------------
 //

@@ -292,6 +292,29 @@ int MgeGL_LoadTexture(const void* data, int width, int height, int format, int m
     return (int)id;
 }
 
+// float texture (e.g. an .hdr equirectangular environment map). `channels` is
+// 3 or 4; stored as RGB(A)16F, linear + clamp-to-edge, no mipmaps.
+int MgeGL_LoadTextureHDR(const float* data, int width, int height, int channels)
+{
+    if (data == NULL)
+        return 0;
+
+    GLint internalFmt = (channels == 4) ? GL_RGBA16F : GL_RGB16F;
+    GLenum fmt = (channels == 4) ? GL_RGBA : GL_RGB;
+
+    unsigned int id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, width, height, 0, fmt, GL_FLOAT, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return (int)id;
+}
+
 void MgeGL_UnloadTexture(unsigned int id)
 {
     if (id != 0 && id != MGEGL.State.whiteTexture)

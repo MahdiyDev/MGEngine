@@ -647,6 +647,53 @@ static void scene_ssao(void)
     Mge_UnloadGBuffer(&g);
 }
 
+// PBR + IBL: a metallic/rough sphere grid under an environment map.
+static void scene_pbr(void)
+{
+    Environment env = Mge_LoadEnvironment("../assets/hdr/newport_loft.hdr");
+    if (env.irradiance == 0) {
+        printf("  %-16s  (skipped -- assets/hdr not present)\n", "pbr");
+        return;
+    }
+    RenderTexture hdr = Mge_LoadRenderTextureHDR(W, H);
+
+    Light lights[2] = {
+        Mge_MakePointLight((Vector3){ -6, 6, 8 }, (Vector3){ 12, 12, 12 }),
+        Mge_MakePointLight((Vector3){ 6, -3, 8 }, (Vector3){ 6, 6, 7 }),
+    };
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0, 0, 10 };
+    cam.target = (Vector3){ 0, 0, -1 };
+
+    Mge_BeginDrawing();
+    Mge_BeginTextureMode(hdr);
+    Mge_ClearBackground((Color){ 4, 4, 6, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginPBR3DIBL(lights, 2, cam, env);
+    for (int row = 0; row < 5; row++) {
+        for (int col = 0; col < 5; col++) {
+            PBRMaterial m = Mge_DefaultPBRMaterial();
+            m.albedoColor = (Vector3){ 0.6f, 0.16f, 0.13f };
+            m.metallicValue = row / 4.0f;
+            m.roughnessValue = (col / 4.0f < 0.05f) ? 0.05f : col / 4.0f;
+            Mge_SetPBRMaterial(m);
+            Draw_Sphere((Vector3){ (col - 2) * 2.2f, (row - 2) * 2.2f, 0 }, 0.9f, WHITE);
+        }
+    }
+    Mge_EndPBR3D();
+    Mge_DrawEnvironmentSkybox(env, cam);
+    Mge_EndMode3D();
+    Mge_EndTextureMode();
+
+    Mge_DrawRenderTextureHDR(hdr, TONEMAP_ACES, 1.0f);
+    check("pbr");
+    Mge_EndDrawing();
+
+    Mge_UnloadRenderTexture(hdr);
+    Mge_UnloadEnvironment(&env);
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -673,6 +720,7 @@ int main(void)
     scene_bloom();
     scene_deferred();
     scene_ssao();
+    scene_pbr();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

@@ -151,6 +151,7 @@ void MgeGL_Vertex3f(float x, float y, float z);
 void MgeGL_TexCoord2f(float x, float y);
 void MgeGL_Normal3f(float x, float y, float z);
 int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount, int sRGB);
+int MgeGL_LoadTextureHDR(const float *data, int width, int height, int channels); // RGB(A)16F, linear, clamp
 void MgeGL_UnloadTexture(unsigned int id); // glDeleteTextures; ignores 0 and the shared white texture
 void MgeGL_SetTextureWrap(unsigned int id, int wrapS, int wrapT); // GL_TEXTURE_WRAP_S/T from a TextureWrap
 

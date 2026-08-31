@@ -24,6 +24,8 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
   mge_dialog.c          native "open file" dialog (Mge_OpenFileDialog / Mge_OpenImageDialog)
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
+  mge_pbr.c            physically-based rendering -- Cook-Torrance BRDF + material
+  mge_ibl.c            image-based lighting precompute (irradiance / prefilter / BRDF LUT)
   mge_shadow.c         shadow mapping: directional depth map + point-light depth cube
   mge_material.c        Material / MaterialMap construction helpers
   mge_mesh.c           Mesh: vertices + indices + textures, own GPU buffers
@@ -42,7 +44,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
   mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
-  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
+  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / ...HDR (float) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 builder/               THE APP -- scene editor (fly-camera + TAB edit mode + gizmo + panels)
@@ -63,6 +65,7 @@ test/                  unit tests (no window/GL); test/glstub/ = a fake glad so 
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, hdr, bloom, deferred_shading, ssao, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
+examples/pbr/          spheres (Cook-Torrance + IBL, metallic x roughness grid)
 examples/materials/    textured_cube, tiling_triplanar
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -170,12 +173,12 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~20 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~21 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
 mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
-tone-mapped vs clamped, a bloom glow, a deferred-shaded scene, an SSAO scene, the
-cube/sphere/plane primitives, a rotated cube with each gizmo mode, the rotate
-gizmo head-on, a scripted rotate drag) one frame
+tone-mapped vs clamped, a bloom glow, a deferred-shaded scene, an SSAO scene,
+a PBR + IBL sphere grid, the cube/sphere/plane primitives, a rotated cube with
+each gizmo mode, the rotate gizmo head-on, a scripted rotate drag) one frame
 each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
@@ -651,6 +654,47 @@ three terms; `directional` / `point` / `spotlight` isolate the three light types
 two specular models over a low-shininess floor; `gamma_correction` toggles sRGB
 output; `shadow_mapping` casts a directional shadow; `builder/main.c` combines a
 directional fill with an orbiting point light.
+
+### PBR & image-based lighting
+
+A separate lighting path from Blinn-Phong: the **Cook-Torrance** microfacet BRDF
+(GGX distribution, Smith geometry, Schlick Fresnel) with a metallic / roughness
+`PBRMaterial`, plus an **image-based** ambient term from an environment map.
+
+```c
+Environment env = Mge_LoadEnvironment("assets/hdr/newport_loft.hdr"); // precompute, once
+
+PBRMaterial m = Mge_DefaultPBRMaterial();
+m.albedo = Mge_LoadTextureEx("albedo.png", true);   // sRGB
+m.normal = ...; m.metallic = ...; m.roughness = ...; m.ao = ...; // rest linear
+// or leave a map at id 0 and set m.albedoColor / m.metallicValue / m.roughnessValue
+
+Mge_BeginTextureMode(hdrRT);                          // PBR outputs linear HDR
+Mge_BeginMode3D(cam);
+    Mge_BeginPBR3DIBL(lights, n, cam, env);           // or Mge_BeginPBR3D (direct only)
+        Mge_SetPBRMaterial(m);  Draw_Sphere(...);     // or Mge_DrawModel(model)
+    Mge_EndPBR3D();
+    Mge_DrawEnvironmentSkybox(env, cam);              // the lit background
+Mge_EndMode3D();
+Mge_EndTextureMode();
+Mge_DrawRenderTextureHDR(hdrRT, TONEMAP_ACES, exposure);  // tone-map on the way out
+```
+
+`Mge_LoadEnvironment` does the LearnOpenGL IBL precompute at load: equirect →
+cubemap, convolve to a 32² **irradiance** cube (diffuse), **prefilter** to a
+5-mip cube by roughness (specular), and bake the 512² **BRDF integration LUT**.
+It renders several cube passes — needs a live GL context, do it once.
+
+Lights use the same `Light` struct/constructors; PBR reads `color` and
+`diffuse` as radiance and the attenuation terms as `1/(c + l·d + q·d²)` (set
+`quadratic = 1`, `linear = 0` for physical `1/d²`). Load `albedo` **sRGB**, every
+other map **linear**. The PBR shader takes up to `MGE_MAX_LIGHTS` (8) direct
+lights; for many lights use the deferred path instead. It's forward-only —
+no shadow maps yet.
+
+Demo: `examples/pbr/spheres.c` — a metallic × roughness sphere grid under the
+`assets/hdr/` environment, plus the downloaded `assets/pbr/rusted_iron/` texture
+set on a few spheres. **SPACE** stops the orbit, **I** toggles IBL.
 
 ### Shadow mapping
 
@@ -1330,6 +1374,7 @@ External material this engine's design and shaders are based on.
 | LearnOpenGL — [Framebuffers](https://learnopengl.com/Advanced-OpenGL/Framebuffers) / [Cubemaps](https://learnopengl.com/Advanced-OpenGL/Cubemaps) | `RenderTexture` + post-processing kernels, skybox + environment mapping (`mge_cubemap.c`) |
 | LearnOpenGL — [Instancing](https://learnopengl.com/Advanced-OpenGL/Instancing) / [Anti-Aliasing](https://learnopengl.com/Advanced-OpenGL/Anti-Aliasing) / [Geometry Shader](https://learnopengl.com/Advanced-OpenGL/Geometry-Shader) | `mge_instancing.c` (`ModelBatch`), MSAA (`mge_msaa.c`), explode / normal-viz (`mge_geometry.c`) |
 | LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) / [HDR](https://learnopengl.com/Advanced-Lighting/HDR) / [Bloom](https://learnopengl.com/Advanced-Lighting/Bloom) / [Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading) / [SSAO](https://learnopengl.com/Advanced-Lighting/SSAO) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`), RGBA16F render target + tone mapping (`mge_framebuffer.c`), bright-pass + Gaussian bloom (`mge_bloom.c`), G-buffer + full-screen lighting pass (`mge_deferred.c`), hemisphere-kernel ambient occlusion (`mge_ssao.c`) |
+| LearnOpenGL — [PBR: Theory](https://learnopengl.com/PBR/Theory) / [Lighting](https://learnopengl.com/PBR/Lighting) / [IBL: Diffuse irradiance](https://learnopengl.com/PBR/IBL/Diffuse-irradiance) / [Specular IBL](https://learnopengl.com/PBR/IBL/Specular-IBL) | the Cook-Torrance BRDF + metallic/roughness material (`mge_pbr.c`) and the irradiance / prefilter / BRDF-LUT precompute (`mge_ibl.c`); `assets/hdr/newport_loft.hdr` and `assets/pbr/rusted_iron/` are LearnOpenGL's resources |
 | LearnOpenGL — [Shadow Mapping](https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping) / [Point Shadows](https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows) | `ShadowMap` / `PointShadowMap`, the depth pass + PCF (`mge_shadow.c`) |
 | LearnOpenGL — [Normal Mapping](https://learnopengl.com/Advanced-Lighting/Normal-Mapping) / [Parallax Mapping](https://learnopengl.com/Advanced-Lighting/Parallax-Mapping) | derivative-TBN normal maps, parallax-occlusion mapping (`MATERIAL_MAP_NORMAL` / `MATERIAL_MAP_HEIGHT`); `assets/bricks/` is LearnOpenGL's `bricks2` set |
 | LearnOpenGL — [Advanced Data](https://learnopengl.com/Advanced-OpenGL/Advanced-Data) | batched vertex attributes (`Mge_MakeMeshFromArrays` — one VBO, block per attribute) |

@@ -115,6 +115,8 @@ void glDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei 
 #define GL_RGBA8         0x8058
 #define GL_SRGB8         0x8C41
 #define GL_SRGB8_ALPHA8  0x8C43
+#define GL_RGB16F        0x881B
+#define GL_RGBA16F       0x881A
 
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS    0x8B82

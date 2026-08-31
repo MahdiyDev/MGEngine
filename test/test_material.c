@@ -39,6 +39,21 @@ TEST(default_material)
     CHECK(m.triplanarScale == 1.0f);
 }
 
+TEST(default_pbr_material)
+{
+    PBRMaterial m = Mge_DefaultPBRMaterial();
+    CHECK(m.albedo.id == 0 && m.normal.id == 0 && m.metallic.id == 0);
+    CHECK(m.roughness.id == 0 && m.ao.id == 0); // no maps -> shader uses the scalars
+    CHECK(m.albedoColor.x == 1.0f && m.albedoColor.y == 1.0f && m.albedoColor.z == 1.0f);
+    CHECK(m.metallicValue == 0.0f);   // dielectric
+    CHECK(m.roughnessValue == 0.5f);
+    CHECK(m.aoValue == 1.0f);
+
+    Environment e = { 0 };
+    CHECK(e.cubemap == 0 && e.irradiance == 0 && e.prefilter == 0 && e.brdfLUT == 0);
+    // Mge_BeginPBR3DIBL / Mge_DrawEnvironmentSkybox guard on the zero handles.
+}
+
 TEST(map_slots)
 {
     // the slots are distinct and COUNT is the last
@@ -83,6 +98,7 @@ TEST(set_material_texture_guards)
 int main(void)
 {
     RUN(default_material);
+    RUN(default_pbr_material);
     RUN(map_slots);
     RUN(set_material_texture);
     RUN(set_material_texture_guards);

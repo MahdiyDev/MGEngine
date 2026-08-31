@@ -32,3 +32,15 @@ void Mge_SetMaterialTexture(Material* material, int mapIndex, Texture2D texture)
         return;
     material->maps[mapIndex].texture = texture;
 }
+
+// PBR: a white dielectric, mid roughness. Each map defaults to id 0 (unused) ->
+// the shader falls back to the *Value / albedoColor scalars.
+PBRMaterial Mge_DefaultPBRMaterial(void)
+{
+    PBRMaterial m = { 0 };
+    m.albedoColor = (Vector3){ 1.0f, 1.0f, 1.0f };
+    m.metallicValue = 0.0f;
+    m.roughnessValue = 0.5f;
+    m.aoValue = 1.0f;
+    return m;
+}
