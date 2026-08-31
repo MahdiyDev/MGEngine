@@ -192,6 +192,42 @@ bool Mge_GuiInputText(const char* label, char* buf, int bufSize)
     return ImGui::InputText(label, buf, (size_t)bufSize);
 }
 
+bool Mge_GuiTreeNode(const char* id, bool selected, bool* outClicked)
+{
+    if (!s_inFrame)
+        return false;
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+        ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (selected)
+        flags |= ImGuiTreeNodeFlags_Selected;
+    bool open = ImGui::TreeNodeEx(id, flags);
+    if (outClicked != nullptr)
+        *outClicked = ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen();
+    return open;
+}
+void Mge_GuiTreePop(void)
+{
+    if (s_inFrame)
+        ImGui::TreePop();
+}
+void Mge_GuiIndent(void)
+{
+    if (s_inFrame)
+        ImGui::Indent();
+}
+void Mge_GuiUnindent(void)
+{
+    if (s_inFrame)
+        ImGui::Unindent();
+}
+
+void Mge_GuiImage(unsigned int textureId, float size)
+{
+    if (!s_inFrame || textureId == 0)
+        return;
+    ImGui::Image((ImTextureID)(intptr_t)textureId, ImVec2(size, size));
+}
+
 void Mge_GuiLogBox(const char* id, const char* text)
 {
     if (!s_inFrame)

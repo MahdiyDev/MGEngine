@@ -127,6 +127,38 @@ TEST(path_helpers)
 #endif
 }
 
+TEST(fs_list_rename_remove)
+{
+    Path_MakeDirs("pu_tmp/a/b");
+    FILE* f = fopen("pu_tmp/a/one.txt", "wb");
+    CHECK(f != NULL);
+    fputs("x", f);
+    fclose(f);
+    f = fopen("pu_tmp/a/two.md", "wb");
+    fclose(f);
+
+    CHECK(Path_IsDir("pu_tmp/a") && !Path_IsDir("pu_tmp/a/one.txt"));
+
+    char names[16][128];
+    int nd = Path_List("pu_tmp/a", NULL, true, names, 16);
+    CHECK(nd == 1 && strcmp(names[0], "b") == 0);
+    int nf = Path_List("pu_tmp/a", NULL, false, names, 16);
+    CHECK(nf == 2);
+    int txt = Path_List("pu_tmp/a", ".txt", false, names, 16);
+    CHECK(txt == 1 && strcmp(names[0], "one.txt") == 0);
+    CHECK(Path_List("pu_tmp/nope", NULL, false, names, 16) == -1);
+
+    CHECK(Path_MTime("pu_tmp/a/one.txt") > 0);
+    CHECK(Path_MTime("pu_tmp/nope") == 0);
+
+    CHECK(Path_Rename("pu_tmp/a/one.txt", "pu_tmp/a/renamed.txt"));
+    CHECK(Path_MTime("pu_tmp/a/renamed.txt") > 0 && Path_MTime("pu_tmp/a/one.txt") == 0);
+
+    CHECK(Path_Remove("pu_tmp"));       // recursive
+    CHECK(!Path_IsDir("pu_tmp"));
+    CHECK(Path_Remove("pu_tmp"));       // already gone -> still true
+}
+
 // ---- .mgscene round-trip ----
 
 static void build_scene(Scene* s)
@@ -264,6 +296,7 @@ TEST(canonical_scene_file_takes_its_name_from_the_folder)
 int main(void)
 {
     RUN(path_helpers);
+    RUN(fs_list_rename_remove);
     RUN(scene_mge_round_trip);
     RUN(load_rejects_a_non_scene_file);
     RUN(canonical_scene_file_takes_its_name_from_the_folder);

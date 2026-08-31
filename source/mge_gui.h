@@ -57,6 +57,18 @@ bool Mge_GuiSelectable(const char* label, bool selected);  // list row; true whe
 // rename-in-place). `doubleClicked` may be NULL.
 bool Mge_GuiSelectableEx(const char* label, bool selected, bool* doubleClicked);
 
+// A collapsible tree node. Returns true while expanded -- draw the children then,
+// and call Mge_GuiTreePop. `id` must be unique among siblings. `selected` draws
+// it highlighted; `outClicked` (may be NULL) reports a click on the label.
+bool Mge_GuiTreeNode(const char* id, bool selected, bool* outClicked);
+void Mge_GuiTreePop(void);
+void Mge_GuiIndent(void);
+void Mge_GuiUnindent(void);
+
+// Display a texture (no interaction). `textureId` is a Texture2D.id; 0 draws
+// nothing.
+void Mge_GuiImage(unsigned int textureId, float size);
+
 // A single-line text field. Writes into `buf` (NUL-terminated, <= bufSize).
 // Returns true the frame the text changes.
 bool Mge_GuiInputText(const char* label, char* buf, int bufSize);

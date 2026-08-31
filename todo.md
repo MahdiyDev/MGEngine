@@ -219,14 +219,25 @@ phases so the app keeps working the whole way.
 - Deferred: "Build whole project" (every scene at once) is a Phase 6 concern
       (release bundle); Build here compiles the active scene.
 
-## Phase 5 -- resource explorer (bottom panel)
+## Phase 5 -- resource explorer (bottom panel)   [DONE]
 
-- [ ] File tree of the project `res/` (folders expandable, file icons /
-      thumbnails for images).
-- [ ] Ops: **add** (import via file dialog -> copy into `res/`), **delete**,
-      **rename**, **move** (drag between folders), **copy**, new folder.
-- [ ] Drag a resource row onto an inspector texture slot to assign it.
-- [ ] Thumbnails for image files (load small, cache; unload on panel close).
+- [x] `editor/resources.c`: recursive tree of the project `<root>/res/`
+      (`Mge_GuiTreeNode` folders + file rows). Image thumbnails (`Mge_GuiImage`),
+      cached, flushed on project change / shutdown.
+- [x] Ops: **Import** (file dialog -> `Path_CopyFile` into the selected folder),
+      **New Folder** (name modal), **Rename**, **Delete** (confirm modal;
+      recursive for folders). `pathutil`: `Path_IsDir` / `Rename` / `Remove` /
+      `List` / `MTime`. Unit-covered in `test_scene_io` (`fs_list_rename_remove`).
+- [x] Assign: with a 3D object selected, an image row shows **D S N H** buttons
+      -> `Mge_LoadTextureEx` into that material slot + set `scene.texPath` +
+      mark dirty.
+- [x] GUI additions: `Mge_GuiTreeNode` / `TreePop`, `Mge_GuiImage`,
+      `Mge_GuiIndent` / `Unindent`.
+- Assign UI: a selected image + a selected object shows an `assign to:
+      diffuse / specular / normal / height` bar above the tree (no per-row
+      button clutter).
+- Deferred to **Phase 7**: drag-and-drop (move / reparent / assign) and copy --
+      our `Mge_Gui*` layer doesn't expose ImGui drag/drop yet.
 
 ## Phase 6 -- build project (release bundle)
 
@@ -242,6 +253,16 @@ phases so the app keeps working the whole way.
 
 ## Phase 7 -- editor polish
 
+- [ ] **Drag and drop** (needs `Mge_Gui*` drag/drop wrappers over ImGui's
+      `BeginDragDropSource` / `Target` / `AcceptPayload`, payload = a string):
+  - resource explorer: drag a file/folder row onto another folder -> move it
+    (`Path_Rename`); onto `res/` root -> move to top level.
+  - drag an image row onto an inspector material thumbnail -> assign that slot
+    (replaces the resources-panel D/S/N/H `assign to:` bar).
+  - hierarchy: drag an object row onto another -> reparent (`Transform.parent`);
+    drop between rows -> reorder.
+- [ ] Resource explorer: **copy** (Ctrl+C / Ctrl+V or a Copy button) + **New
+      Folder** context menu; multi-select.
 - [ ] Undo / redo stack (transform edits, add/delete/rename, primitive change).
 - [ ] Duplicate object (Ctrl+D), multi-select + group gizmo.
 - [ ] Gizmo grid / increment snapping (hold a modifier).

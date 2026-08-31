@@ -1373,7 +1373,7 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | --- | --- |
 | frame | `Mge_GuiBeginFrame` / `Mge_GuiEndFrame`, `Mge_GuiShutdown` |
 | boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (full-height edge dock) / `Mge_GuiBeginPanel` (exact screen rect, no title bar — for a docked shell) + matching `End*` |
-| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiSetNextItemWidth`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiSelectableEx` (reports double-click), `Mge_GuiImageButton` (square texture thumbnail; id `0` → a "+" placeholder), `Mge_GuiBeginMenu` / `Mge_GuiMenuItem` / `Mge_GuiEndMenu` (button → popup menu) |
+| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiSetNextItemWidth`, `Mge_GuiIndent` / `Unindent`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiSelectableEx` (reports double-click), `Mge_GuiTreeNode` / `Mge_GuiTreePop`, `Mge_GuiImage` / `Mge_GuiImageButton` (id `0` → a "+" placeholder), `Mge_GuiLogBox` (read-only auto-scrolling text), `Mge_GuiBeginMenu` / `Mge_GuiMenuItem` / `Mge_GuiEndMenu` (button → popup menu) |
 | modals | `Mge_GuiOpenPopup` (trigger) + `Mge_GuiBeginPopup` / `Mge_GuiEndPopup` (every frame) + `Mge_GuiClosePopup` (dismiss from inside) |
 | inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputText`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
 

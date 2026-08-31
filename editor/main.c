@@ -39,7 +39,7 @@ enum {
     TOPBAR_H = 46,
     LEFT_W = 240,
     RIGHT_W = 320,
-    BOTTOM_H = 120,
+    BOTTOM_H = 172,
 };
 
 int main(void)
@@ -63,6 +63,8 @@ int main(void)
     FileOps ops = { 0 };
     Play play;
     Play_Init(&play);
+    Resources res;
+    Resources_Init(&res);
 
     int fpsShown = 0, drawsShown = 0;
     double fpsAt = 0.0;
@@ -128,7 +130,7 @@ int main(void)
         if (play.showConsole)
             Play_DrawConsole(&play, rBottom);
         else
-            Resources_Draw(rBottom, &project, &scene, fpsShown, drawsShown);
+            Resources_Draw(&res, rBottom, &project, &scene, fpsShown, drawsShown);
 
         // Ctrl+S -> save the active scene (EDIT mode only; VIEW mode uses S to fly)
         bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
@@ -153,6 +155,7 @@ int main(void)
     }
 
     Play_Shutdown(&play, &scene, &camera);
+    Resources_Shutdown(&res);
     Scene_Shutdown(&scene);
     Mge_GuiShutdown();
     Mge_CloseWindow();

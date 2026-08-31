@@ -20,7 +20,7 @@ A scene editor built on top of the engine library — see
 | `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
 | `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection (Object: active, primitive, transform, material slots. Light: type, colour, attenuation / direction) |
-| `resources.c` / `.h` | the **bottom** panel: the project resource explorer (`<root>/res/`) — a stub until Phase 5 |
+| `resources.c` / `.h` | the **bottom** panel: the project resource explorer — a tree of `<root>/res/` with import / new folder / rename / delete, image thumbnails, and one-click assign to the selected object's material slots |
 
 ```sh
 make            # from the repo root -> build/editor(.exe)
@@ -40,7 +40,7 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 |           |    (the 3D scene fills     |           |  right  RIGHT_W (320)
 |           |     the whole window;      |           |
 |           |     panels draw on top)    |           |
-+--------------------------------------------------+  bottom BOTTOM_H (120)
++--------------------------------------------------+  bottom BOTTOM_H (172)
 | Resources                                        |
 +--------------------------------------------------+
 ```
@@ -193,6 +193,24 @@ GPU. `#` starts a comment.
 target FPS, MSAA, output name, debug / release cflags, `startupScene`) then one
 `scene "<name>"` line per scene. `.c` files are **not** listed; the build
 (Phase 4) globs each scene directory, so a new `.c` needs no registration.
+
+## Resources (bottom panel)
+
+A tree of the project's shared `<root>/res/`. Click a folder's arrow to expand
+it; click a name to select it (the target for the next operation).
+
+| button | |
+| --- | --- |
+| **Import** | file dialog → copies the file into the selected folder (or `res/`) |
+| **New Folder** | name modal → `mkdir` under the selected folder |
+| **Rename** / **Delete** | act on the selection (Delete asks first; folders go recursively) |
+
+Image files (`png` / `jpg` / `bmp` / `tga` / …) show a small thumbnail, cached
+until the panel's project changes. Select an image **and** a 3D object, and an
+**assign to: diffuse / specular / normal / height** bar appears above the tree —
+click a slot to load that texture into the object's material (stored
+`res/…`-relative, marks the scene dirty). The panel swaps with the build
+**Console** while that's open.
 
 ## The Hierarchy (left panel)
 

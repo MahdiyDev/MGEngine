@@ -213,3 +213,43 @@ long Path_MTime(const char* path)
     struct stat st;
     return (stat(path, &st) == 0) ? (long)st.st_mtime : 0;
 }
+
+bool Path_IsDir(const char* path)
+{
+    struct stat st;
+    return stat(path, &st) == 0 && (st.st_mode & S_IFDIR);
+}
+
+bool Path_Rename(const char* from, const char* to)
+{
+    return rename(from, to) == 0;
+}
+
+bool Path_Remove(const char* path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0)
+        return true; // already gone
+
+    if (!(st.st_mode & S_IFDIR))
+        return remove(path) == 0;
+
+    char kids[256][128];
+    int n = Path_List(path, NULL, false, kids, 256);
+    for (int i = 0; i < n; i++) {
+        char child[1024];
+        Path_Join(path, kids[i], child, sizeof(child));
+        Path_Remove(child);
+    }
+    n = Path_List(path, NULL, true, kids, 256);
+    for (int i = 0; i < n; i++) {
+        char child[1024];
+        Path_Join(path, kids[i], child, sizeof(child));
+        Path_Remove(child);
+    }
+#if defined(_WIN32)
+    return _rmdir(path) == 0;
+#else
+    return rmdir(path) == 0;
+#endif
+}

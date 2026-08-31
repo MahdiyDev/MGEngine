@@ -42,3 +42,13 @@ int Path_List(const char* dir, const char* ext, bool wantDirs, char (*out)[128],
 
 // Last-modified time of `path` as a Unix timestamp, or 0 if it can't be stat'd.
 long Path_MTime(const char* path);
+
+// true if `path` exists and is a directory.
+bool Path_IsDir(const char* path);
+
+// Rename / move `from` to `to`. Returns true on success.
+bool Path_Rename(const char* from, const char* to);
+
+// Delete `path` -- a file, or a directory and everything under it. Returns true
+// on success (or if it was already gone).
+bool Path_Remove(const char* path);
