@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-void Scene_Init(Scene* s)
+void Scene_Init(Scene* s, int width, int height)
 {
     *s = (Scene){ 0 };
 
@@ -37,6 +37,11 @@ void Scene_Init(Scene* s)
     s->sky = Mge_LoadCubemapDir("assets/skybox");
     if (s->sky.id == 0)
         s->sky = Mge_LoadCubemapDir("../assets/skybox");
+
+    s->hdrRT = Mge_LoadRenderTextureHDR(width, height);
+    s->hdrOn = false; // opt-in -- tone mapping also affects the (LDR) skybox
+    s->toneMap = TONEMAP_ACES;
+    s->exposure = 1.0f;
 }
 
 void Scene_Shutdown(Scene* s)
@@ -47,6 +52,7 @@ void Scene_Shutdown(Scene* s)
 
     Mge_UnloadShadowMap(&s->shadow);
     Mge_UnloadCubemap(s->sky);
+    Mge_UnloadRenderTexture(s->hdrRT);
 }
 
 void Scene_AddShape(Scene* s, PrimitiveKind primitive)
@@ -136,6 +142,9 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
         Mge_EndShadowPass();
     }
 
+    if (s->hdrOn)
+        Mge_BeginTextureMode(s->hdrRT); // lit pass -> floating-point target
+
     Mge_ClearBackground((Color){ 20, 21, 26, 255 });
 
     Mge_BeginMode3D(camera);
@@ -164,5 +173,11 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
         busy = Mge_Gizmo3D(pos, Scene_SelRotation(s), Scene_SelScale(s), camera, GIZMO_SIZE);
 
     Mge_EndMode3D();
+
+    if (s->hdrOn) {
+        Mge_EndTextureMode();
+        Mge_DrawRenderTextureHDR(s->hdrRT, s->toneMap, s->exposure);
+    }
+
     return busy;
 }

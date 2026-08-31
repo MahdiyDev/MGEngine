@@ -487,6 +487,45 @@ static void scene_tiling(void)
     Mge_UnloadTexture(t);
 }
 
+// HDR: a very bright light rendered into an RGBA16F target, then tone-mapped.
+// Also checks the "raw clamp" path (no tone map) so both branches run.
+static void scene_hdr(void)
+{
+    RenderTexture hdr = Mge_LoadRenderTextureHDR(W, H);
+
+    Light bright = Mge_MakePointLight((Vector3){ 0, 1.5f, 2.0f }, (Vector3){ 20.0f, 20.0f, 18.0f });
+    bright.ambient = 0.03f;
+    Light fill = Mge_MakePointLight((Vector3){ -2.0f, 1.0f, -4.0f }, (Vector3){ 0.3f, 0.5f, 1.0f });
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0, 1.4f, 4.0f };
+    cam.target = (Vector3){ 0, 0, -1 };
+    Light lights[2] = { bright, fill };
+
+    const char* names[2] = { "hdr_tonemap", "hdr_clamp" };
+    for (int pass = 0; pass < 2; pass++) {
+        Mge_BeginDrawing();
+        Mge_BeginTextureMode(hdr);
+        Mge_ClearBackground((Color){ 3, 3, 5, 255 });
+        Mge_BeginMode3D(cam);
+        Mge_BeginLighting3DEx(lights, 2, cam);
+        Draw_Cube((Vector3){ 0, -1.0f, -4 }, (Vector3){ 6, 0.3f, 16 }, (Color){ 200, 195, 185, 255 });
+        Draw_Cube((Vector3){ 0, 0.4f, -3 }, (Vector3){ 1.2f, 1.2f, 1.2f }, (Color){ 210, 120, 90, 255 });
+        Mge_EndLighting3D();
+        Mge_EndMode3D();
+        Mge_EndTextureMode();
+
+        if (pass == 0)
+            Mge_DrawRenderTextureHDR(hdr, TONEMAP_ACES, 1.0f);
+        else
+            Mge_DrawRenderTextureFX(hdr, POSTFX_NONE);
+        check(names[pass]);
+        Mge_EndDrawing();
+    }
+
+    Mge_UnloadRenderTexture(hdr);
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -509,6 +548,7 @@ int main(void)
     scene_parallax();
     scene_texwrap();
     scene_tiling();
+    scene_hdr();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

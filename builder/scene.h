@@ -28,9 +28,14 @@ typedef struct Scene {
     float shadowRadius;
 
     Cubemap sky;
+
+    RenderTexture hdrRT;  // the lit pass renders here when hdrOn
+    bool hdrOn;
+    int toneMap;          // ToneMap
+    float exposure;
 } Scene;
 
-void Scene_Init(Scene* s);
+void Scene_Init(Scene* s, int width, int height);
 void Scene_Shutdown(Scene* s);
 
 // Spawn a primitive at the origin, name it, and select it. No-op when the scene

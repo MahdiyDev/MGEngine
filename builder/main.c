@@ -75,7 +75,7 @@ int main(void)
     };
 
     Scene scene;
-    Scene_Init(&scene);
+    Scene_Init(&scene, width, height);
 
     int fpsShown = 0, drawsShown = 0;
     double fpsAt = 0.0;

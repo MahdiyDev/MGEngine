@@ -267,6 +267,7 @@ typedef struct RenderTexture {
     Texture2D texture;         // colour attachment -- sample this
     unsigned int depthStencil; // renderbuffer (not sampleable)
     int width, height;
+    bool hdr;                  // true -> RGBA16F colour (Mge_LoadRenderTextureHDR)
 } RenderTexture;
 
 // Shadow map: a depth-only framebuffer rendered from a light's point of view.
@@ -297,6 +298,14 @@ typedef enum {
     POSTFX_BLUR,       // 3x3 gaussian kernel
     POSTFX_EDGE        // 3x3 edge-detection kernel
 } PostFX;
+
+// Tone-mapping operators for Mge_DrawRenderTextureHDR -- collapse an HDR
+// (RGBA16F) image back into the [0,1] display range.
+typedef enum {
+    TONEMAP_REINHARD = 0, // c / (c + 1) -- exposure is ignored
+    TONEMAP_EXPOSURE,     // 1 - exp(-c * exposure) -- LearnOpenGL's exposure control
+    TONEMAP_ACES          // Narkowicz ACES filmic approximation, scaled by exposure
+} ToneMap;
 
 #define RED			CLITERAL(Color) { 255, 0, 0, 255 }
 #define GREEN		CLITERAL(Color) { 0, 255, 0, 255 }
@@ -707,6 +716,22 @@ void Mge_UnloadRenderTexture(RenderTexture target);
 void Mge_BeginTextureMode(RenderTexture target); // redirect drawing into `target`
 void Mge_EndTextureMode(void);                   // back to the window framebuffer
 void Mge_DrawRenderTextureFX(RenderTexture target, int effect); // a PostFX; POSTFX_NONE just blits
+
+// HDR: render the lit scene into a floating-point RenderTexture (colour is not
+// clamped to 1.0), then tone-map it back to the display range on the way out.
+// A bright light no longer blows out to flat white -- the tone curve keeps
+// detail, and `exposure` shifts what range is visible (like a camera stop).
+//
+//   RenderTexture hdr = Mge_LoadRenderTextureHDR(w, h);
+//   Mge_BeginTextureMode(hdr);
+//       Mge_ClearBackground(...); Mge_BeginMode3D(cam); ...lit scene...; Mge_EndMode3D();
+//   Mge_EndTextureMode();
+//   Mge_DrawRenderTextureHDR(hdr, TONEMAP_ACES, exposure);   // -> the window
+//
+// The tone-map pass also applies gamma, unless Mge_SetGammaCorrection(true) is
+// on (then it leaves it to GL_FRAMEBUFFER_SRGB) -- use one or the other.
+RenderTexture Mge_LoadRenderTextureHDR(int width, int height);
+void Mge_DrawRenderTextureHDR(RenderTexture target, int toneMap, float exposure); // a ToneMap
 
 // Cube maps / skybox / environment mapping.
 //

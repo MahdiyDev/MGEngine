@@ -31,7 +31,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_depth.c          depth test / clip planes / polygon offset / depth preview
   mge_stencil.c        stencil test + Mge_DrawObjectOutline
   mge_cull.c           face culling on/off + cull face / winding
-  mge_framebuffer.c    RenderTexture + full-screen post-processing effects
+  mge_framebuffer.c    RenderTexture + full-screen post-processing + HDR tone mapping
   mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
   mge_geometry.c       geometry-shader effects: explode, normal visualization
   mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
@@ -59,7 +59,7 @@ vendor/
 test/                  unit tests (no window/GL); test/glstub/ = a fake glad so mge_gl.c itself is testable
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, hdr, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
 examples/materials/    textured_cube, tiling_triplanar
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -167,11 +167,12 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~16 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~17 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
-mirror-repeat wrapped quad, a tiled plane + a triplanar box, the
-cube/sphere/plane primitives, a rotated cube with each gizmo mode, the rotate
-gizmo head-on, a scripted rotate drag) one frame each, reads the
+mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
+tone-mapped vs clamped, the cube/sphere/plane primitives, a rotated cube with
+each gizmo mode, the rotate gizmo head-on, a scripted rotate drag) one frame
+each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
@@ -302,6 +303,40 @@ maps and leaves specular linear) and treat `Light.color` as linear.
 
 Demo: `examples/lighting/gamma_correction.c` — a lit scene + a black→white ramp,
 toggling correction every 3 s (or SPACE).
+
+### HDR & tone mapping
+
+A normal `RenderTexture` is `RGBA8` — a value above `1.0` is clamped, so a bright
+light flattens to featureless white. `Mge_LoadRenderTextureHDR` gives an
+`RGBA16F` colour attachment instead: the lit scene is stored at its true
+intensity, then a full-screen **tone-map** pass squeezes that range back to
+`[0,1]` for the display, keeping the highlight roll-off.
+
+```c
+RenderTexture hdr = Mge_LoadRenderTextureHDR(w, h);
+...
+Mge_BeginTextureMode(hdr);
+    Mge_ClearBackground(...); Mge_BeginMode3D(cam); ...lit scene...; Mge_EndMode3D();
+Mge_EndTextureMode();
+Mge_DrawRenderTextureHDR(hdr, TONEMAP_ACES, exposure);   // -> the window
+```
+
+| `ToneMap` | curve |
+| --- | --- |
+| `TONEMAP_REINHARD` | `c / (c + 1)` — `exposure` ignored |
+| `TONEMAP_EXPOSURE` | `1 - exp(-c · exposure)` — LearnOpenGL's exposure control |
+| `TONEMAP_ACES` | Narkowicz filmic ACES approximation, input scaled by `exposure` |
+
+`exposure` shifts which range lands in view, like a camera stop — raise it to pull
+detail out of dim areas, lower it to keep bright areas from clipping. The pass
+also applies gamma, **unless** `Mge_SetGammaCorrection(true)` is on (then
+`GL_FRAMEBUFFER_SRGB` does it) — use one or the other, not both. Tone mapping
+darkens an LDR skybox along with everything else; a true HDR pipeline would use an
+HDR environment map.
+
+Demo: `examples/lighting/hdr.c` — a corridor with one very bright light; SPACE
+toggles tone map vs raw clamp, T cycles the operator, UP/DOWN adjust exposure.
+The builder's sidebar has an **HDR** toggle + tone-map + exposure.
 
 ### GL debug output
 
@@ -1011,6 +1046,10 @@ window so 2D coordinates and 3D aspect line up.
 
 Demo: `examples/framebuffer/post_process.c` cycles through every effect.
 
+For a **floating-point** target (values above `1.0` survive), use
+`Mge_LoadRenderTextureHDR` + `Mge_DrawRenderTextureHDR(target, TONEMAP_*, exposure)`
+— see [HDR & tone mapping](#hdr--tone-mapping).
+
 ### Cube maps, skybox & environment mapping
 
 A `Cubemap` is six square textures sampled by a 3D direction.
@@ -1196,7 +1235,7 @@ External material this engine's design and shaders are based on.
 | LearnOpenGL — [Depth testing](https://learnopengl.com/Advanced-OpenGL/Depth-testing) / [Stencil testing](https://learnopengl.com/Advanced-OpenGL/Stencil-testing) / [Face culling](https://learnopengl.com/Advanced-OpenGL/Face-culling) | `mge_depth.c`, `mge_stencil.c` + object outlining, `mge_cull.c` |
 | LearnOpenGL — [Framebuffers](https://learnopengl.com/Advanced-OpenGL/Framebuffers) / [Cubemaps](https://learnopengl.com/Advanced-OpenGL/Cubemaps) | `RenderTexture` + post-processing kernels, skybox + environment mapping (`mge_cubemap.c`) |
 | LearnOpenGL — [Instancing](https://learnopengl.com/Advanced-OpenGL/Instancing) / [Anti-Aliasing](https://learnopengl.com/Advanced-OpenGL/Anti-Aliasing) / [Geometry Shader](https://learnopengl.com/Advanced-OpenGL/Geometry-Shader) | `mge_instancing.c` (`ModelBatch`), MSAA (`mge_msaa.c`), explode / normal-viz (`mge_geometry.c`) |
-| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`) |
+| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) / [HDR](https://learnopengl.com/Advanced-Lighting/HDR) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`), RGBA16F render target + tone mapping (`Mge_LoadRenderTextureHDR` / `Mge_DrawRenderTextureHDR`) |
 | LearnOpenGL — [Shadow Mapping](https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping) / [Point Shadows](https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows) | `ShadowMap` / `PointShadowMap`, the depth pass + PCF (`mge_shadow.c`) |
 | LearnOpenGL — [Normal Mapping](https://learnopengl.com/Advanced-Lighting/Normal-Mapping) / [Parallax Mapping](https://learnopengl.com/Advanced-Lighting/Parallax-Mapping) | derivative-TBN normal maps, parallax-occlusion mapping (`MATERIAL_MAP_NORMAL` / `MATERIAL_MAP_HEIGHT`); `assets/bricks/` is LearnOpenGL's `bricks2` set |
 | LearnOpenGL — [Advanced Data](https://learnopengl.com/Advanced-OpenGL/Advanced-Data) | batched vertex attributes (`Mge_MakeMeshFromArrays` — one VBO, block per attribute) |

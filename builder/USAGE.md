@@ -44,6 +44,9 @@ up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when f
 - **FPS / draws** — refreshed once a second (`Mge_GetFps` / `Mge_GetDrawCalls`).
 - **shadows** — checkbox, on by default. The Sun (first light) casts a 2048²
   shadow map each frame; editing its direction moves the shadows.
+- **HDR** — checkbox, off by default. Renders the lit pass into an RGBA16F target
+  and tone-maps it out; reveals a **tone map** dropdown (Reinhard / Exposure /
+  ACES) and an **exposure** slider. Note it also tone-maps the (LDR) skybox.
 - **GIZMO** — Move / Rotate / Scale, one active (`Mge_SetGizmoMode`); and
   **SPACE** World / Local (`Mge_SetGizmoSpace`), shown as `SPACE: World|Local`.
   Local aligns the handles to a rotated object's own axes.

@@ -128,6 +128,13 @@ void Sidebar_Draw(Scene* s, bool editMode, int fps, int draws)
         snprintf(row, sizeof(row), "FPS: %d   draws: %d", fps, draws);
         Mge_GuiLabel(row);
         Mge_GuiCheckbox("shadows", &s->shadowsOn);
+
+        Mge_GuiCheckbox("HDR", &s->hdrOn);
+        if (s->hdrOn) {
+            static const char* const TONE_NAMES[3] = { "Reinhard", "Exposure", "ACES" };
+            Mge_GuiCombo("tone map", &s->toneMap, TONE_NAMES, 3);
+            Mge_GuiSliderFloat("exposure", &s->exposure, 0.1f, 4.0f);
+        }
         Mge_GuiSeparator();
 
         gizmo_switch();

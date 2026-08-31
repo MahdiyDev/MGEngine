@@ -56,7 +56,36 @@ static const char* fxFrag =
     "    FragColor = vec4(c, 1.0);\n"
     "}\n";
 
+// ---- HDR tone-mapping shader (collapses an RGBA16F image to the display range) ----
+
+static const char* hdrFrag =
+    "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "in vec2 vUV;\n"
+    "uniform sampler2D hdrTex;\n"
+    "uniform int toneMap;\n"       // matches the ToneMap enum
+    "uniform float exposure;\n"
+    "uniform int applyGamma;\n"    // 0 when GL_FRAMEBUFFER_SRGB will do it instead
+    "\n"
+    "vec3 aces(vec3 x)\n"
+    "{\n"
+    // Narkowicz 2015 filmic approximation of the ACES curve
+    "    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;\n"
+    "    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);\n"
+    "}\n"
+    "void main()\n"
+    "{\n"
+    "    vec3 hdr = texture(hdrTex, vUV).rgb;\n"
+    "    vec3 m;\n"
+    "    if (toneMap == 1)      m = vec3(1.0) - exp(-hdr * exposure);\n"  // exposure
+    "    else if (toneMap == 2) m = aces(hdr * exposure);\n"             // ACES
+    "    else                   m = hdr / (hdr + vec3(1.0));\n"          // Reinhard
+    "    if (applyGamma == 1) m = pow(m, vec3(1.0 / 2.2));\n"
+    "    FragColor = vec4(m, 1.0);\n"
+    "}\n";
+
 static unsigned int s_fxProgram = 0;
+static unsigned int s_hdrProgram = 0;
 static unsigned int s_quadVao = 0;
 static unsigned int s_quadVbo = 0;
 
@@ -68,6 +97,9 @@ static void EnsureFxResources(void)
     unsigned int vs = MgeGL_LoadShader(fxVert, GL_VERTEX_SHADER, "postfx vertex");
     unsigned int fs = MgeGL_LoadShader(fxFrag, GL_FRAGMENT_SHADER, "postfx fragment");
     s_fxProgram = MgeGL_CreateShaderProgram(vs, fs);
+
+    unsigned int hfs = MgeGL_LoadShader(hdrFrag, GL_FRAGMENT_SHADER, "hdr tonemap fragment");
+    s_hdrProgram = MgeGL_CreateShaderProgram(vs, hfs);
 
     // a full-screen triangle pair in clip space: [pos.xy][uv]
     const float quad[24] = {
@@ -102,18 +134,22 @@ static void SetOrtho(int w, int h)
     MgeGL_LoadIdentity();
 }
 
-RenderTexture Mge_LoadRenderTexture(int width, int height)
+static RenderTexture LoadRT(int width, int height, int hdr)
 {
     RenderTexture rt = { 0 };
     rt.width = width;
     rt.height = height;
+    rt.hdr = hdr ? true : false;
 
     glGenFramebuffers(1, &rt.fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, rt.fbo);
 
     glGenTextures(1, &rt.texture.id);
     glBindTexture(GL_TEXTURE_2D, rt.texture.id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    if (hdr)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+    else
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -122,7 +158,7 @@ RenderTexture Mge_LoadRenderTexture(int width, int height)
     rt.texture.width = width;
     rt.texture.height = height;
     rt.texture.mipmaps = 1;
-    rt.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+    rt.texture.format = hdr ? PIXELFORMAT_UNCOMPRESSED_R16G16B16A16 : PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
 
     glGenRenderbuffers(1, &rt.depthStencil);
     glBindRenderbuffer(GL_RENDERBUFFER, rt.depthStencil);
@@ -135,6 +171,16 @@ RenderTexture Mge_LoadRenderTexture(int width, int height)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
     return rt;
+}
+
+RenderTexture Mge_LoadRenderTexture(int width, int height)
+{
+    return LoadRT(width, height, 0);
+}
+
+RenderTexture Mge_LoadRenderTextureHDR(int width, int height)
+{
+    return LoadRT(width, height, 1);
 }
 
 void Mge_UnloadRenderTexture(RenderTexture target)
@@ -188,4 +234,29 @@ void Mge_DrawRenderTextureFX(RenderTexture target, int effect)
     glBindTexture(GL_TEXTURE_2D, 0);
 
     MgeGL_SetShader(MgeGL_GetDefaultShaderId()); // restore for later batcher draws
+}
+
+void Mge_DrawRenderTextureHDR(RenderTexture target, int toneMap, float exposure)
+{
+    MgeGL_Draw();
+    EnsureFxResources();
+
+    MgeGL_SetShader(s_hdrProgram);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, target.texture.id);
+    glUniform1i(glGetUniformLocation(s_hdrProgram, "hdrTex"), 0);
+    glUniform1i(glGetUniformLocation(s_hdrProgram, "toneMap"), toneMap);
+    glUniform1f(glGetUniformLocation(s_hdrProgram, "exposure"), (exposure > 0.0f) ? exposure : 1.0f);
+    // if gamma correction is on, GL_FRAMEBUFFER_SRGB encodes on write -- don't double up
+    glUniform1i(glGetUniformLocation(s_hdrProgram, "applyGamma"), Mge_GetGammaCorrection() ? 0 : 1);
+
+    glDisable(GL_DEPTH_TEST);
+    glBindVertexArray(s_quadVao);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    MgeGL_RegisterDrawCall();
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    MgeGL_SetShader(MgeGL_GetDefaultShaderId());
 }
