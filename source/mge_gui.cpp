@@ -9,6 +9,8 @@
 #include <imgui_impl_opengl3.h>
 
 #include <cfloat>
+#include <cstdio>
+#include <cstring>
 
 static bool s_ready = false;   // backend initialised
 static bool s_inFrame = false; // between BeginFrame / EndFrame
@@ -307,6 +309,53 @@ bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size)
         : ImGui::ImageButton("img", (ImTextureID)(intptr_t)textureId, box);
     ImGui::PopID();
     return clicked;
+}
+
+// --- drag & drop ---
+
+#define MGE_DND_TYPE "MGE_STR"
+#define MGE_DND_MAX 512
+
+void Mge_GuiDragSource(const char* payload, const char* label)
+{
+    if (!s_inFrame || payload == nullptr)
+        return;
+    if (!ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+        return;
+
+    char buf[MGE_DND_MAX] = { 0 };
+    snprintf(buf, sizeof(buf), "%s", payload);
+    ImGui::SetDragDropPayload(MGE_DND_TYPE, buf, sizeof(buf));
+    ImGui::TextUnformatted((label != nullptr) ? label : payload);
+    ImGui::EndDragDropSource();
+}
+
+bool Mge_GuiDropTarget(char* out, int outSize)
+{
+    if (!s_inFrame || out == nullptr || outSize <= 0)
+        return false;
+    if (!ImGui::BeginDragDropTarget())
+        return false;
+
+    bool got = false;
+    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(MGE_DND_TYPE)) {
+        int n = (p->DataSize < outSize) ? p->DataSize : outSize - 1;
+        memcpy(out, p->Data, (size_t)n);
+        out[n] = '\0';
+        got = true;
+    }
+    ImGui::EndDragDropTarget();
+    return got;
+}
+
+bool Mge_GuiBeginContextMenu(const char* id)
+{
+    return s_inFrame && ImGui::BeginPopupContextItem(id);
+}
+void Mge_GuiEndContextMenu(void)
+{
+    if (s_inFrame)
+        ImGui::EndPopup();
 }
 
 bool Mge_GuiCheckbox(const char* label, bool* value)

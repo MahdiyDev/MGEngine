@@ -14,6 +14,27 @@ static void gizmo_button(const char* label, GizmoMode mode)
     Mge_GuiSameLine();
 }
 
+static void gizmo_menu(void)
+{
+    if (!Mge_GuiBeginMenu("Gizmo"))
+        return;
+
+    Mge_GuiLabel("snap increments (hold Ctrl while dragging)");
+    float mv, rot, scl;
+    Mge_GetGizmoSnap(&mv, &rot, &scl);
+    bool ch = false;
+    Mge_GuiSetNextItemWidth(120.0f);
+    ch |= Mge_GuiInputFloat("move", &mv);
+    Mge_GuiSetNextItemWidth(120.0f);
+    ch |= Mge_GuiInputFloat("rotate (deg)", &rot);
+    Mge_GuiSetNextItemWidth(120.0f);
+    ch |= Mge_GuiInputFloat("scale", &scl);
+    if (ch)
+        Mge_SetGizmoSnap(mv, rot, scl);
+
+    Mge_GuiEndMenu();
+}
+
 static void render_menu(Scene* s)
 {
     if (!Mge_GuiBeginMenu("Render"))
@@ -81,6 +102,7 @@ static TopbarResult scene_menu(const Project* proj, const Scene* s)
         if (Mge_GuiMenuItem("New Scene..."))   r.action = TOPBAR_SCENE_NEW;
         if (Mge_GuiMenuItem("Add Scene..."))   r.action = TOPBAR_SCENE_ADD;
         if (Mge_GuiMenuItem("Save Scene"))     r.action = TOPBAR_SCENE_SAVE;
+        if (Mge_GuiMenuItem("Revert Scene"))   r.action = TOPBAR_SCENE_REVERT;
         if (Mge_GuiMenuItem("New Script..."))  r.action = TOPBAR_SCENE_NEWSCRIPT;
     } else {
         Mge_GuiLabel("(save the project to add scenes)");
@@ -141,6 +163,8 @@ TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s,
         Mge_SetGizmoSpace(space == 1 ? GIZMO_LOCAL : GIZMO_WORLD);
     Mge_GuiSameLine();
 
+    gizmo_menu();
+    Mge_GuiSameLine();
     render_menu(s);
 
     Mge_GuiEndPanel();

@@ -298,22 +298,39 @@ phases so the app keeps working the whole way.
       and hot-reload no longer freeze the window. Build Release stays synchronous
       (it ships every scene at once). `test_scene_io` covers the new scene fields.
 
-## Phase 7 -- editor polish
+## Phase 7 -- editor polish   [DONE]
 
-- [ ] **Drag and drop** (needs `Mge_Gui*` drag/drop wrappers over ImGui's
-      `BeginDragDropSource` / `Target` / `AcceptPayload`, payload = a string):
-  - resource explorer: drag a file/folder row onto another folder -> move it
-    (`Path_Rename`); onto `res/` root -> move to top level.
+- [x] **Drag and drop** -- `Mge_GuiDragSource` / `Mge_GuiDropTarget` (string
+      payload) + `Mge_GuiBeginContextMenu` in `mge_gui`:
+  - resources: drag a file/folder row onto a folder -> move (`Path_Rename`); onto
+    the `res/` header -> top level. `Path_CopyTree` for recursive copies.
   - drag an image row onto an inspector material thumbnail -> assign that slot
-    (replaces the resources-panel D/S/N/H `assign to:` bar).
-  - hierarchy: drag an object row onto another -> reparent (`Transform.parent`);
-    drop between rows -> reorder.
-- [ ] Resource explorer: **copy** (Ctrl+C / Ctrl+V or a Copy button) + **New
-      Folder** context menu; multi-select.
-- [ ] Undo / redo stack (transform edits, add/delete/rename, primitive change).
-- [ ] Duplicate object (Ctrl+D), multi-select + group gizmo.
-- [ ] Gizmo grid / increment snapping (hold a modifier).
-- [ ] Delete confirmation; "revert scene" (reload `scene.mgscene`).
+    (the old resources `assign to:` bar is gone).
+  - hierarchy: drag a row onto another -> reorder (`Scene_MoveObject`, re-maps
+    every stored object index); Shift-drop -> set `Transform.parent`.
+- [x] Resources: **Copy / Paste** (buttons, Ctrl+C / Ctrl+V, right-click menu),
+      right-click **context menu** (New Folder / Rename / Copy / Paste / Delete),
+      **multi-select** (ctrl-click); multi delete + a plural confirm.
+- [x] **Undo / redo** (`editor/history.c`) -- whole-`Scene` snapshots, coalesced
+      per edit "burst" (`History_Rest` refreshes the baseline when idle,
+      `History_Record` at every mutation site). `Ctrl+Z` / `Ctrl+Y` /
+      `Ctrl+Shift+Z`. `Scene_RestoreSnapshot` keeps live GPU handles and
+      **salvages material textures / the skybox by source path** -- an undo that
+      didn't touch materials re-reads nothing (a frame hitch there was also
+      eating fast key taps, so redo could be missed). History resets on scene
+      switch / new / revert.
+- [x] **Duplicate** (`Ctrl+D`, `Scene_DuplicateSelectedObjects`) + **multi-select**
+      (Shift-click in the viewport, ctrl-click in the hierarchy) + **group gizmo**
+      (translate the whole selection about its centroid; rotate / scale act on
+      the primary).
+- [x] **Gizmo snapping** -- hold **Ctrl** while dragging to snap to the increments
+      in the top-bar **Gizmo** menu (`Mge_SetGizmoSnap`, default 0.5 / 15deg /
+      0.25). A gizmo given only a position (light / group) is move-only.
+- [x] **Delete confirmation** (viewport `Delete` key + hierarchy `x` -> a
+      "Delete N object(s)?" modal) + **Revert Scene** (Scene menu -> reload
+      `scene.mgscene`, guarded by the unsaved-changes modal).
+- [x] `parent` serialised in `.mgscene`; `test_scene_io` covers it. Reparent is
+      grouping only -- transform composition down the chain stays in "Later".
 
 ## Later / optional
 

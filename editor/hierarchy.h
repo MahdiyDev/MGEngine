@@ -5,5 +5,8 @@
 
 #include <mge.h>
 #include "scene.h"
+#include "history.h"
 
-void Hierarchy_Draw(Rectangle rect, Scene* s);
+// Draws the panel. Returns true when the user asked to delete the current
+// selection (via a row's `x`) -- the caller confirms + records history.
+bool Hierarchy_Draw(Rectangle rect, Scene* s, History* h);

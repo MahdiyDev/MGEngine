@@ -153,6 +153,8 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
         wv3(f, "position", o->transform.position);
         wv3(f, "rotation", o->transform.rotation);
         wv3(f, "scale", o->transform.scale);
+        if (o->transform.parent >= 0)
+            wi(f, "parent", o->transform.parent); // grouping only; index into this list
         wf(f, "shininess", o->material.shininess);
         wv2(f, "tiling", o->material.tiling);
         wv2(f, "offset", o->material.offset);
@@ -360,6 +362,8 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
                 obj->transform.rotation = (Vector3){ x, y, z };
             else if (strcmp(key, "scale") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
                 obj->transform.scale = (Vector3){ x, y, z };
+            else if (strcmp(key, "parent") == 0)
+                obj->transform.parent = atoi(rest);
             else if (strcmp(key, "shininess") == 0)
                 obj->material.shininess = (float)atof(rest);
             else if (strcmp(key, "tiling") == 0 && sscanf(rest, "%f %f", &x, &y) == 2)
@@ -412,6 +416,18 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
     if (s->mainCamera >= 0 &&
         (s->mainCamera >= s->objectCount || s->objects[s->mainCamera].kind != OBJECT_CAMERA))
         s->mainCamera = -1; // stale index -> no game camera
+
+    for (int i = 0; i < s->objectCount; i++) { // reject a stale / self / cyclic parent
+        int p = s->objects[i].transform.parent;
+        if (p < 0 || p >= s->objectCount || p == i) {
+            s->objects[i].transform.parent = -1;
+            continue;
+        }
+        for (int q = p, guard = 0; q >= 0 && guard <= s->objectCount; guard++) {
+            if (q == i) { s->objects[i].transform.parent = -1; break; }
+            q = s->objects[q].transform.parent;
+        }
+    }
 
     if (s->lightCount == 0) { // a scene must keep a sun for the shadow pass
         s->lights[0] = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });

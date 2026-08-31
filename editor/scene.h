@@ -30,7 +30,12 @@ typedef struct Scene {
     int lightCount;
 
     int selKind;  // SEL_*
-    int selIndex;
+    int selIndex; // primary selection: the gizmo pivot + the inspector's target
+
+    // multi-select (only when selKind == SEL_OBJECT): the *other* selected object
+    // indices. `selIndex` is always one of the selected; these are the rest.
+    int selExtra[SCENE_MAX_OBJECTS];
+    int selExtraCount;
 
     // --- Environment: the sun is lights[0]; here the skybox + which camera drives
     //     the view when the project is run (the editor always uses its fly-cam).
@@ -87,6 +92,36 @@ bool Scene_MainCamera(const Scene* s, Camera3D* out);
 // is a no-op -- the shadow pass depends on it. Selection falls back sensibly.
 void Scene_DeleteObject(Scene* s, int index);
 void Scene_DeleteLight(Scene* s, int index);
+
+// Delete every selected object (multi-select aware); no-op unless SEL_OBJECT.
+void Scene_DeleteSelectedObjects(Scene* s);
+
+// Move object `from` to index `to`, shifting the rest. Re-maps every index that
+// refers to an object (selection, mainCamera, transform.parent).
+void Scene_MoveObject(Scene* s, int from, int to);
+
+// Set (or clear, parent < 0) object `child`'s parent. Rejects self / a cycle.
+// Grouping only -- transforms are not yet composed down the chain.
+void Scene_SetParent(Scene* s, int child, int parent);
+
+// How many parents `i` has above it (0 = a root). For hierarchy indentation.
+int Scene_ParentDepth(const Scene* s, int i);
+
+// Duplicate every selected object just off its original; select the copies.
+// Leaves material-map GL ids at 0 -- the caller must run Scene_LoadMaterialTextures.
+// Returns the number of copies made (0 if full / nothing selected).
+int Scene_DuplicateSelectedObjects(Scene* s);
+
+// --- selection ---
+// `additive` extends the multi-selection; otherwise it replaces it. Selecting a
+// light / Environment always clears the object multi-selection.
+void Scene_SelectObject(Scene* s, int index, bool additive);
+bool Scene_IsObjectSelected(const Scene* s, int index);
+void Scene_ClearSelection(Scene* s);
+
+// Restore `s` from a whole-Scene snapshot (undo/redo): keeps the live GPU
+// resources, then rebuilds material textures + the skybox from `projectRoot`.
+void Scene_RestoreSnapshot(Scene* s, const Scene* snap, const char* projectRoot);
 
 // Left-click picking: nearest object centre, or the lamp. Click on empty space
 // deselects. Call only when the gizmo is not being dragged.

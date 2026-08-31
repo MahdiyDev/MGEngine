@@ -103,6 +103,21 @@ void Mge_GuiClosePopup(void);
 // clicked. `strId` must be unique among sibling widgets.
 bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size);
 
+// --- drag & drop (string payloads) ---
+// Call Mge_GuiDragSource right after the widget that should be draggable: while
+// the user drags it, `payload` (a short string, <= 511 bytes) rides along and
+// `label` shows under the cursor. Call Mge_GuiDropTarget right after the widget
+// that should accept a drop: the frame a drag is released over it, the payload is
+// copied into `out` (NUL-terminated, <= outSize) and it returns true. Both are
+// no-ops off-frame / when there is no active drag.
+void Mge_GuiDragSource(const char* payload, const char* label);
+bool Mge_GuiDropTarget(char* out, int outSize);
+
+// Right-click context menu attached to the widget just drawn. Returns true while
+// open -- put Mge_GuiMenuItem rows inside and call Mge_GuiEndContextMenu.
+bool Mge_GuiBeginContextMenu(const char* id);
+void Mge_GuiEndContextMenu(void);
+
 // --- inputs -- each returns true the frame its value changes ---
 bool Mge_GuiCheckbox(const char* label, bool* value);
 bool Mge_GuiCombo(const char* label, int* index, const char* const* items, int count); // dropdown

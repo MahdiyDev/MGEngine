@@ -1188,6 +1188,12 @@ void       Mge_SetGizmoMode(GizmoMode mode);
 GizmoMode  Mge_GetGizmoMode(void);
 void       Mge_SetGizmoSpace(GizmoSpace space);
 GizmoSpace Mge_GetGizmoSpace(void);
+// Snap increments used while a gizmo drag is held with Ctrl: translate units,
+// rotate degrees, scale step. A value <= 0 disables snapping for that channel.
+void Mge_SetGizmoSnap(float move, float rotateDeg, float scale);
+void Mge_GetGizmoSnap(float* move, float* rotateDeg, float* scale);
+// `rotation` / `scale` may be NULL. If BOTH are NULL the gizmo is move-only
+// regardless of the current mode (a light, or a multi-select group pivot).
 bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 
 #ifndef MGE_MAX_LIGHTS

@@ -16,12 +16,13 @@ A scene editor built on top of the engine library — see
 | `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; New Script; Quit) with the unsaved-changes confirm modal + the name-entry modal |
 | `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog`. `SceneBuild_Compile` blocks; `SceneBuild_Start` / `_Poll` / `_Clear` (`SceneBuildJob`) run the compiler as a detached process the editor polls each frame |
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
+| `history.c` / `.h` | `History`: undo / redo as whole-`Scene` snapshots. `History_Record` at each mutation site (coalesced per edit burst), `History_Rest` refreshes the baseline when idle, `Scene_RestoreSnapshot` puts a snapshot back — reusing already-loaded material textures / the skybox by source path so an undo re-reads no files |
 | `play.c` / `.h` | Play / Stop / Build: snapshot the scene, compile + load, run `MgeScene_Update` each frame, hot-reload on change, restore on Stop; draws the console panel |
 | `release.c` / `.h` | **Build Release**: compile every scene `-O2 -DNDEBUG -s`, `Mge_PakWrite` the data, stage `<root>/dist/` with a copy of the standalone player |
 | `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
-| `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light / Camera), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
-| `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection — Environment (sun + skybox + main camera), Object (active, primitive, transform, material slots), Camera (transform + main-camera toggle), Light (type, colour, attenuation / direction) |
-| `resources.c` / `.h` | the **bottom** panel: the project resource explorer — a tree of `<root>/res/` with import / new folder / rename / delete, image thumbnails, and one-click assign to the selected object's material slots |
+| `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights. `+ add` menu, per-row select (ctrl-click = multi), **double-click to rename**, active toggle, `x` to delete, **drag to reorder** / Shift-drop to parent (children shown indented) |
+| `inspector.c` / `.h` | the **right** panel: type-aware inspector — Environment (sun + skybox + main camera), Object (active, primitive, transform, **parent** combo, material slots — drop an image on a thumbnail to assign it), Camera, Light. A multi-selection edits the primary + notes "group move only" |
+| `resources.c` / `.h` | the **bottom** panel: the project `res/` tree — Import / New Folder / Rename / Delete / **Copy** / **Paste**, ctrl-click multi-select, right-click context menu, **drag rows** onto folders (or the `res/` header) to move. Image thumbnails; drag one onto an inspector thumbnail to assign it |
 
 ```sh
 make            # from the repo root -> build/editor(.exe)
@@ -53,9 +54,12 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 | **TAB** / top-bar button | switch between **VIEW** mode (fly-camera, cursor locked) and **EDIT** mode (cursor free) |
 | VIEW / fly-camera | **WASD** move, mouse look |
 | EDIT — camera | hold **RIGHT mouse** to look; **WASD** flies while it is held |
-| EDIT — select | **left-click** an object or a light; click empty space to deselect |
-| EDIT — gizmo | drag a handle to **move / rotate / scale** the selection (switch mode in the top bar). Translate has axis arrows + a centre ball; rotate shows the camera-facing part of each ring; scale has cube tips. The hovered handle highlights white |
-| **Ctrl+S** (EDIT mode) | save the active scene (same as Scene ▸ Save Scene; prompts for a project location if the project is new) |
+| EDIT — select | **left-click** an object or a light; **Shift-click** adds to the selection; click empty space to deselect |
+| EDIT — gizmo | drag a handle to **move / rotate / scale** (switch mode in the top bar). Hold **Ctrl** to snap to the increments in the top-bar **Gizmo** menu. A multi-selection moves as a group about its centroid |
+| **Ctrl+S** | save the active scene (prompts for a location if the project is new) |
+| **Ctrl+Z** / **Ctrl+Y** / **Ctrl+Shift+Z** | undo / redo / redo |
+| **Ctrl+D** | duplicate the selected object(s) just off the originals |
+| **Delete** | remove the selected object(s) — asks first |
 | **Play** / **Stop** / **Build** | build + run the active scene's code. The compile runs as a **separate process** — the editor keeps drawing while it works; the result lands in the Console. Editing is paused while playing and the scene is restored on Stop |
 | **F12** | save `editor_screenshot.png` next to the executable (`Mge_TakeScreenshot`) |
 
@@ -100,6 +104,7 @@ myproject/
 | **New Scene...** | name-entry modal → creates `scenes/<name>/` (`scene.mgscene` + `<name>.c`), adds it to the project, switches |
 | **Add Scene...** | pick an existing `scenes/<name>/scene.mgscene` *inside this project* to register it (rejected otherwise) |
 | **Save Scene** | write just the active scene's `scene.mgscene` |
+| **Revert Scene** | reload `scene.mgscene` from disk, discarding unsaved edits (guarded by the unsaved-changes modal) |
 | **New Script...** | scaffold another `.c` in the active scene's folder (compiles into the same module) |
 
 New Scene / Add Scene / Save Scene / New Script need the project saved first
@@ -229,33 +234,46 @@ target FPS, MSAA, output name, debug / release cflags, `startupScene`) then one
 ## Resources (bottom panel)
 
 A tree of the project's shared `<root>/res/`. Click a folder's arrow to expand
-it; click a name to select it (the target for the next operation).
+it; click a name to select it (the target for the next operation); **ctrl-click**
+to build a multi-selection.
 
 | button | |
 | --- | --- |
 | **Import** | file dialog → copies the file into the selected folder (or `res/`) |
 | **New Folder** | name modal → `mkdir` under the selected folder |
-| **Rename** / **Delete** | act on the selection (Delete asks first; folders go recursively) |
+| **Rename** | rename the selection |
+| **Copy** / **Paste** | copy the selection (Ctrl+C); paste into the target folder (Ctrl+V), suffixing " copy" on a name clash. Recursive for folders |
+| **Delete** | remove the selection — asks first; folders go recursively |
+
+Right-click a row for the same actions as a context menu.
+
+**Drag** a row onto a folder (or onto the **`res/`** header for the top level) to
+**move** it (`Path_Rename`). Drag an image row onto a material thumbnail in the
+Inspector to assign that slot — the path is stored `res/…`-relative and the scene
+is marked dirty.
 
 Image files (`png` / `jpg` / `bmp` / `tga` / …) show a small thumbnail, cached
-until the panel's project changes. Select an image **and** a 3D object, and an
-**assign to: diffuse / specular / normal / height** bar appears above the tree —
-click a slot to load that texture into the object's material (stored
-`res/…`-relative, marks the scene dirty). The panel swaps with the build
-**Console** while that's open.
+until the panel's project changes. The panel swaps with the build **Console**
+while that's open.
 
 ## The Hierarchy (left panel)
 
 Every object and light as a row. The leading checkbox is the object's `active`
 flag (inactive = not drawn / not outlined) or the light's `enabled` flag.
-Single-click a row to select it (drives the inspector + gizmo); **double-click**
-the name to rename it in place (`ok` commits). `x` deletes — except the
+Single-click a row to select it, **ctrl-click** to multi-select; **double-click**
+the name to rename it in place (`ok` commits). `x` deletes (asks first) — except the
 directional **Sun** (light 0), which the shadow pass depends on.
 
 `+ add` opens a menu: **Cube / Sphere / Plane** (`Scene_AddShape`), **Light**
 (`Scene_AddLight`), or **Camera** (`Scene_AddCamera`) — spawned, named, and
 selected. Objects (shapes *and* cameras) share `SCENE_MAX_OBJECTS` (8); lights
 `SCENE_MAX_LIGHTS` (4).
+
+**Ctrl-click** a row to build a multi-selection. **Drag** a row onto another to
+**reorder** it there (`Scene_MoveObject` fixes up every stored object index);
+**Shift-drop** to make it a **child** of the target (`Transform.parent`) — child
+rows show indented. Parenting is grouping only for now; child transforms are not
+yet composed down the chain.
 
 The fixed **Environment** row at the top can't be deleted. Selecting it shows the
 scene's sun (`lights[0]`), the **skybox**, and the **main camera** — which
@@ -276,7 +294,7 @@ The current selection's fields, live:
 | selection | fields |
 | --- | --- |
 | **Environment** | sun (`lights[0]`) direction / colour / ambient / diffuse / specular; skybox (`choose folder...` / `use engine default` / `reload`); **main camera** combo |
-| **Object** | **active** toggle, **primitive** dropdown (cube / sphere / plane), the `Transform` — position, **rotation** (euler °), size (= `transform.scale`); `shininess`; **tiling** / **offset** (`uv' = uv*tiling + offset`); a **triplanar** toggle (+ scale); then one **group per material map** |
+| **Object** | **active** toggle, **primitive** dropdown, the `Transform` — position, **rotation** (euler °), size (= `transform.scale`), a **parent** combo; `shininess`; **tiling** / **offset**; a **triplanar** toggle (+ scale); then one **group per material map** (drop an image from Resources on the thumbnail to assign it) |
 | **Camera** | active, position, rotation (pitch / yaw / roll); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
 | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 

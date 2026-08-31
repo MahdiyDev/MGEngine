@@ -9,6 +9,7 @@
 
 #define RES_PATH_LEN 512
 #define RES_MAX_THUMBS 48
+#define RES_MAX_SEL 16
 
 typedef struct ResThumb {
     char rel[RES_PATH_LEN]; // project-root-relative ("res/...")
@@ -16,8 +17,14 @@ typedef struct ResThumb {
 } ResThumb;
 
 typedef struct Resources {
-    char sel[RES_PATH_LEN]; // selected entry, root-relative ("" = none)
+    char sel[RES_PATH_LEN]; // primary selection, root-relative ("" = none)
     bool selIsDir;
+
+    char multi[RES_MAX_SEL][RES_PATH_LEN]; // ctrl-click extras (beyond `sel`)
+    int multiCount;
+
+    char clip[RES_MAX_SEL][RES_PATH_LEN];  // Copy buffer (root-relative paths)
+    int clipCount;
 
     ResThumb thumbs[RES_MAX_THUMBS];
     int thumbCount;

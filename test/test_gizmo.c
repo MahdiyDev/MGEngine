@@ -47,6 +47,7 @@ Vector2 GetMousePosition(void) { return g_mouse; }
 bool IsMouseButtonPressed(int b) { (void)b; return !g_btnPrev && g_btn; }
 bool IsMouseButtonDown(int b) { (void)b; return g_btn != 0; }
 bool IsMouseButtonReleased(int b) { (void)b; return g_btnPrev && !g_btn; }
+bool IsKeyDown(int k) { (void)k; return false; } // no snap modifier in these tests
 
 static void frame(void) { g_btnPrev = g_btn; }
 static void press_at(float x, float y) { frame(); g_mouse = (Vector2){ x, y }; g_btn = 1; }

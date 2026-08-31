@@ -9,6 +9,7 @@
 #include "project.h"
 #include "editor_camera.h"
 #include "topbar.h"
+#include "history.h"
 
 typedef struct FileOps {
     TopbarAction pending; // action deferred behind the confirm modal (TOPBAR_NONE = none)
@@ -20,8 +21,8 @@ typedef struct FileOps {
 } FileOps;
 
 // Handle a top-bar result. Runs it now, or defers it behind a modal.
-void FileOps_Request(FileOps* ops, TopbarResult r, Project* proj, Scene* s, EditorCamera* cam);
+void FileOps_Request(FileOps* ops, TopbarResult r, Project* proj, Scene* s, EditorCamera* cam, History* h);
 
 // Draw the confirm + name-entry modals (call every frame inside the Mge_Gui
 // frame). Runs the pending / new-scene action once the user commits.
-void FileOps_Draw(FileOps* ops, Project* proj, Scene* s, EditorCamera* cam);
+void FileOps_Draw(FileOps* ops, Project* proj, Scene* s, EditorCamera* cam, History* h);

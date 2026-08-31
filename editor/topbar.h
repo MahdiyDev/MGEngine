@@ -16,6 +16,7 @@ typedef enum {
     TOPBAR_SCENE_SAVE,
     TOPBAR_SCENE_NEWSCRIPT, // scaffold another .c in the active scene's folder
     TOPBAR_SCENE_SWITCH,    // `arg` = target scene index
+    TOPBAR_SCENE_REVERT,    // reload the active scene from disk, dropping edits
     TOPBAR_BUILD,        // compile the active scene's code
     TOPBAR_BUILD_RELEASE, // compile every scene release + pak + stage dist/
     TOPBAR_PLAY,         // build (if needed), load + run the scene module

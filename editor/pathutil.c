@@ -274,3 +274,35 @@ bool Path_Remove(const char* path)
     return rmdir(path) == 0;
 #endif
 }
+
+bool Path_CopyTree(const char* src, const char* dst)
+{
+    struct stat st;
+    if (stat(src, &st) != 0)
+        return false;
+
+    if (!(st.st_mode & S_IFDIR))
+        return Path_CopyFile(src, dst);
+
+    if (!Path_MakeDirs(dst))
+        return false;
+
+    bool ok = true;
+    char names[256][128];
+
+    int n = Path_List(src, NULL, false, names, 256);
+    for (int i = 0; i < n; i++) {
+        char s[1024], d[1024];
+        Path_Join(src, names[i], s, sizeof(s));
+        Path_Join(dst, names[i], d, sizeof(d));
+        ok = Path_CopyFile(s, d) && ok;
+    }
+    n = Path_List(src, NULL, true, names, 256);
+    for (int i = 0; i < n; i++) {
+        char s[1024], d[1024];
+        Path_Join(src, names[i], s, sizeof(s));
+        Path_Join(dst, names[i], d, sizeof(d));
+        ok = Path_CopyTree(s, d) && ok;
+    }
+    return ok;
+}

@@ -17,12 +17,15 @@
 
 enum { PROMPT_SCENE = 0, PROMPT_SCRIPT = 1 };
 
+// set each call so the static scene-load path can reset undo history
+static History* s_hist;
+
 static bool dirty(const Project* p, const Scene* s) { return s->dirty || p->dirty; }
 
 static bool is_guarded(TopbarAction a)
 {
     return a == TOPBAR_PROJECT_NEW || a == TOPBAR_PROJECT_OPEN ||
-        a == TOPBAR_SCENE_SWITCH || a == TOPBAR_QUIT;
+        a == TOPBAR_SCENE_SWITCH || a == TOPBAR_SCENE_REVERT || a == TOPBAR_QUIT;
 }
 
 // ---- scene <-> project.activeScene ----
@@ -57,6 +60,11 @@ static void load_active_scene(Project* p, Scene* s, EditorCamera* cam, int index
     }
     Scene_LoadSkybox(s, root);
     s->dirty = false;
+
+    if (s_hist != NULL) { // a fresh scene -> no history to undo into
+        History_Reset(s_hist);
+        History_SetRoot(s_hist, root);
+    }
 }
 
 static long file_bytes(const char* path)
@@ -277,6 +285,10 @@ static void run(FileOps* ops, TopbarAction a, int arg, Project* p, Scene* s, Edi
         if (arg >= 0 && arg < p->sceneCount && arg != p->activeScene)
             load_active_scene(p, s, cam, arg);
         break;
+    case TOPBAR_SCENE_REVERT:
+        if (p->path[0] != '\0' && p->activeScene >= 0)
+            load_active_scene(p, s, cam, p->activeScene); // reload from disk
+        break;
     case TOPBAR_SCENE_NEW:
         ops->namePrompt = true;
         ops->promptKind = PROMPT_SCENE;
@@ -297,8 +309,9 @@ static void run(FileOps* ops, TopbarAction a, int arg, Project* p, Scene* s, Edi
     }
 }
 
-void FileOps_Request(FileOps* ops, TopbarResult r, Project* proj, Scene* s, EditorCamera* cam)
+void FileOps_Request(FileOps* ops, TopbarResult r, Project* proj, Scene* s, EditorCamera* cam, History* h)
 {
+    s_hist = h;
     if (r.action == TOPBAR_NONE)
         return;
 
@@ -311,8 +324,9 @@ void FileOps_Request(FileOps* ops, TopbarResult r, Project* proj, Scene* s, Edit
     run(ops, r.action, r.arg, proj, s, cam);
 }
 
-void FileOps_Draw(FileOps* ops, Project* proj, Scene* s, EditorCamera* cam)
+void FileOps_Draw(FileOps* ops, Project* proj, Scene* s, EditorCamera* cam, History* h)
 {
+    s_hist = h;
     // --- unsaved-changes confirm ---
     if (Mge_GuiBeginPopup(CONFIRM_ID)) {
         Mge_GuiLabel("The project or scene has unsaved changes.");

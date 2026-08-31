@@ -564,7 +564,10 @@ void       Mge_SetGizmoMode(GizmoMode mode);
 GizmoMode  Mge_GetGizmoMode(void);
 void       Mge_SetGizmoSpace(GizmoSpace space); // WORLD = global axes; LOCAL = the object's own
 GizmoSpace Mge_GetGizmoSpace(void);
-// rotation / scale may be NULL. Returns true while a handle is being dragged.
+void Mge_SetGizmoSnap(float move, float rotateDeg, float scale); // <=0 disables a channel
+void Mge_GetGizmoSnap(float* move, float* rotateDeg, float* scale);
+// rotation / scale may be NULL; if BOTH are NULL the gizmo is move-only whatever
+// the mode. Hold Ctrl while dragging to snap. Returns true while a handle is dragged.
 bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 ```
 
@@ -1389,6 +1392,7 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiSetNextItemWidth`, `Mge_GuiIndent` / `Unindent`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiSelectableEx` (reports double-click), `Mge_GuiTreeNode` / `Mge_GuiTreePop`, `Mge_GuiImage` / `Mge_GuiImageButton` (id `0` → a "+" placeholder), `Mge_GuiLogBox` (read-only auto-scrolling text), `Mge_GuiBeginMenu` / `Mge_GuiMenuItem` / `Mge_GuiEndMenu` (button → popup menu) |
 | modals | `Mge_GuiOpenPopup` (trigger) + `Mge_GuiBeginPopup` / `Mge_GuiEndPopup` (every frame) + `Mge_GuiClosePopup` (dismiss from inside) |
 | inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputText`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
+| drag & drop | `Mge_GuiDragSource(payload, label)` after a draggable widget, `Mge_GuiDropTarget(out, n)` after a drop target (string payloads); `Mge_GuiBeginContextMenu` / `Mge_GuiEndContextMenu` (right-click menu on the last widget) |
 
 Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
 `Mge_GuiButton` return `true` on click. Gate your own picking and camera on

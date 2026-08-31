@@ -27,6 +27,7 @@ enum { H_NONE = -1, H_X = 0, H_Y = 1, H_Z = 2, H_UNIFORM = 3, H_CENTER = 4 };
 
 static GizmoMode s_mode = GIZMO_TRANSLATE;
 static GizmoSpace s_space = GIZMO_WORLD;
+static Vector3 s_snap = { 0.5f, 15.0f, 0.25f }; // move units, rotate degrees, scale step
 static int s_drag = H_NONE;
 static Vector3 s_startPos, s_startRot, s_startScale;
 static Vector3 s_dragAxis;      // world direction of the grabbed axis, captured at drag start
@@ -40,6 +41,17 @@ void Mge_SetGizmoMode(GizmoMode mode) { s_mode = mode; }
 GizmoMode Mge_GetGizmoMode(void) { return s_mode; }
 void Mge_SetGizmoSpace(GizmoSpace space) { s_space = space; }
 GizmoSpace Mge_GetGizmoSpace(void) { return s_space; }
+
+void Mge_SetGizmoSnap(float move, float rotateDeg, float scale)
+{
+    s_snap = (Vector3){ move, rotateDeg, scale };
+}
+void Mge_GetGizmoSnap(float* move, float* rotateDeg, float* scale)
+{
+    if (move != NULL) *move = s_snap.x;
+    if (rotateDeg != NULL) *rotateDeg = s_snap.y;
+    if (scale != NULL) *scale = s_snap.z;
+}
 
 // ---- small helpers ----
 
@@ -244,6 +256,15 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
     float len = size;
     float thick = size * 0.045f;
 
+    // only a position given (a light, or a multi-select group pivot) -> move-only,
+    // whatever the toolbar mode is. Restored before returning.
+    GizmoMode savedMode = s_mode;
+    if (rotation == NULL && scale == NULL)
+        s_mode = GIZMO_TRANSLATE;
+
+    // hold Ctrl while dragging to snap to the configured increments
+    bool snap = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+
     set_axes(rotation); // world axes, or the object's own (local space / scale)
 
     // which handle is under the cursor this frame
@@ -275,6 +296,10 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
             // consistent sense whichever side of the ring you view it from
             if (dot3(s_dragAxis, to_camera(s_startPos, camera)) < 0.0f)
                 rad = -rad;
+            if (snap && s_snap.y > 0.0f) {
+                float step = s_snap.y * (float)DEG2RAD;
+                rad = roundf(rad / step) * step;
+            }
             Matrix newR = Matrix_Multiply(
                 Matrix_RotateXYZ((Vector3){ s_startRot.x * DEG2RAD, s_startRot.y * DEG2RAD, s_startRot.z * DEG2RAD }),
                 Matrix_Rotate(s_dragAxis, rad));
@@ -295,6 +320,10 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
                 Vector2 tot = { m.x - s_startMouse.x, m.y - s_startMouse.y };
                 float dr = (tot.x * su.y - tot.y * su.x) / det;
                 float du = (sr.x * tot.y - sr.y * tot.x) / det;
+                if (snap && s_snap.x > 0.0f) {
+                    dr = roundf(dr / s_snap.x) * s_snap.x;
+                    du = roundf(du / s_snap.x) * s_snap.x;
+                }
                 *position = add3(s_startPos, add3(mul3(right, dr), mul3(up, du)));
             }
         } else {
@@ -312,16 +341,28 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
                 if (s_mode == GIZMO_SCALE && scale) {
                     float f = 1.0f + t * 1.5f;
                     if (f < 0.05f) f = 0.05f;
+                    float step = s_snap.z;
                     if (s_drag == H_UNIFORM) {
-                        *scale = mul3(s_startScale, f);
+                        Vector3 v = mul3(s_startScale, f);
+                        if (snap && step > 0.0f) {
+                            v.x = roundf(v.x / step) * step; if (v.x < step) v.x = step;
+                            v.y = roundf(v.y / step) * step; if (v.y < step) v.y = step;
+                            v.z = roundf(v.z / step) * step; if (v.z < step) v.z = step;
+                        }
+                        *scale = v;
                     } else {
                         *scale = s_startScale;
                         float* comp = (s_drag == H_X) ? &scale->x : (s_drag == H_Y) ? &scale->y : &scale->z;
-                        float* start = (s_drag == H_X) ? &s_startScale.x : (s_drag == H_Y) ? &s_startScale.y : &s_startScale.z;
-                        *comp = *start * f;
+                        float start = (s_drag == H_X) ? s_startScale.x : (s_drag == H_Y) ? s_startScale.y : s_startScale.z;
+                        float val = start * f;
+                        if (snap && step > 0.0f) { val = roundf(val / step) * step; if (val < step) val = step; }
+                        *comp = val;
                     }
                 } else { // translate
-                    *position = add3(s_startPos, mul3(axis, t * len));
+                    float step = t * len;
+                    if (snap && s_snap.x > 0.0f)
+                        step = roundf(step / s_snap.x) * s_snap.x;
+                    *position = add3(s_startPos, mul3(axis, step));
                 }
             }
         }
@@ -366,5 +407,6 @@ bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D 
     MgeGL_SetDepthFunc(DEPTH_LESS);
     MgeGL_SetDepthMask(true);
 
+    s_mode = savedMode;
     return s_drag != H_NONE;
 }

@@ -16,7 +16,8 @@ static const char* const WRAP_NAMES[4] = { "Repeat", "Clamp", "Mirror", "Mirror 
 // `wrap` / `texPath` point at the editor's stored state for this slot.
 // Returns true if anything changed this frame.
 static bool material_slot(Material* mat, int mapIndex, unsigned char* wrap, char* texPath,
-    const char* name, const char* id, bool showColor, float valueMax, const char* valueLabel)
+    const char* name, const char* id, bool showColor, float valueMax, const char* valueLabel,
+    const char* projRoot)
 {
     MaterialMap* m = &mat->maps[mapIndex];
     char lbl[32];
@@ -33,6 +34,23 @@ static bool material_slot(Material* mat, int mapIndex, unsigned char* wrap, char
             Mge_SetTextureWrap(m->texture, *wrap); // re-apply the chosen wrap
             snprintf(texPath, SCENE_TEXPATH_LEN, "%s", path);
             free(path);
+            changed = true;
+        }
+    }
+    // drop an image from the Resources panel onto the thumbnail to assign it
+    char drop[SCENE_TEXPATH_LEN];
+    if (Mge_GuiDropTarget(drop, (int)sizeof(drop))) {
+        char full[1024];
+        if (projRoot != NULL && projRoot[0] != '\0' && !Path_IsAbsolute(drop))
+            Path_Join(projRoot, drop, full, sizeof(full));
+        else
+            snprintf(full, sizeof(full), "%s", drop);
+        Texture2D t = Mge_LoadTextureEx(full, mapIndex == MATERIAL_MAP_DIFFUSE);
+        if (t.id != 0) {
+            Mge_UnloadTexture(m->texture);
+            m->texture = t;
+            Mge_SetTextureWrap(m->texture, *wrap);
+            snprintf(texPath, SCENE_TEXPATH_LEN, "%s", drop);
             changed = true;
         }
     }
@@ -66,7 +84,7 @@ static bool material_slot(Material* mat, int mapIndex, unsigned char* wrap, char
 
 // A camera object: transform only. Position + rotation drive the game view when
 // this camera is the scene's main camera (Environment > main camera).
-static void inspect_camera(Scene* s, Project* proj)
+static bool inspect_camera(Scene* s)
 {
     Object* o = &s->objects[s->selIndex];
     bool ch = false;
@@ -83,21 +101,57 @@ static void inspect_camera(Scene* s, Project* proj)
         ch = true;
     }
     Mge_GuiLabel("the editor always uses its own fly-camera.");
-    (void)proj;
-    if (ch)
-        s->dirty = true;
+    return ch;
 }
 
-static void inspect_object(Scene* s, Project* proj)
+// A "parent" combo: none, or any other object. Grouping only for now.
+static bool parent_combo(Scene* s)
+{
+    char names[SCENE_MAX_OBJECTS + 1][32];
+    const char* ptrs[SCENE_MAX_OBJECTS + 1];
+    int obj[SCENE_MAX_OBJECTS + 1];
+    int count = 0, cur = 0;
+
+    snprintf(names[count], sizeof(names[0]), "(none)");
+    ptrs[count] = names[count];
+    obj[count] = -1;
+    count++;
+    for (int i = 0; i < s->objectCount; i++) {
+        if (i == s->selIndex)
+            continue;
+        snprintf(names[count], sizeof(names[0]), "%s", s->objectNames[i]);
+        ptrs[count] = names[count];
+        obj[count] = i;
+        if (i == s->objects[s->selIndex].transform.parent)
+            cur = count;
+        count++;
+    }
+    if (Mge_GuiCombo("parent", &cur, ptrs, count)) {
+        Scene_SetParent(s, s->selIndex, obj[cur]);
+        return true;
+    }
+    return false;
+}
+
+static bool inspect_object(Scene* s, Project* proj)
 {
     Object* o = &s->objects[s->selIndex];
-    if (o->kind == OBJECT_CAMERA) {
-        inspect_camera(s, proj);
-        return;
-    }
+    if (o->kind == OBJECT_CAMERA)
+        return inspect_camera(s);
+
+    char root[512];
+    Project_Root(proj, root, sizeof(root));
+
     unsigned char* wrap = s->texWrap[s->selIndex];
     char (*tex)[SCENE_TEXPATH_LEN] = s->texPath[s->selIndex];
     bool ch = false;
+
+    if (s->selExtraCount > 0) {
+        char note[64];
+        snprintf(note, sizeof(note), "%d objects selected -- group move only", s->selExtraCount + 1);
+        Mge_GuiLabel(note);
+        Mge_GuiSeparator();
+    }
 
     static const char* prims[3] = { "cube", "sphere", "plane" };
     ch |= Mge_GuiCheckbox("active", &o->active);
@@ -113,6 +167,7 @@ static void inspect_object(Scene* s, Project* proj)
     ch |= Mge_GuiInputVec3("position", &o->transform.position);
     ch |= Mge_GuiInputVec3("rotation", &o->transform.rotation);
     ch |= Mge_GuiInputVec3("size", &o->transform.scale);
+    ch |= parent_combo(s);
     Mge_GuiSeparator();
 
     Mge_GuiLabel("material");
@@ -122,16 +177,15 @@ static void inspect_object(Scene* s, Project* proj)
     ch |= Mge_GuiCheckbox("triplanar", &o->material.triplanar); // project diffuse from world XYZ
     if (o->material.triplanar)
         ch |= Mge_GuiInputFloat("triplanar scale", &o->material.triplanarScale);
-    ch |= material_slot(&o->material, MATERIAL_MAP_DIFFUSE, &wrap[MATERIAL_MAP_DIFFUSE], tex[MATERIAL_MAP_DIFFUSE], "diffuse map", "diffuse", true, 2.0f, "gain");
-    ch |= material_slot(&o->material, MATERIAL_MAP_SPECULAR, &wrap[MATERIAL_MAP_SPECULAR], tex[MATERIAL_MAP_SPECULAR], "specular map", "specular", true, 1.0f, "strength");
-    ch |= material_slot(&o->material, MATERIAL_MAP_NORMAL, &wrap[MATERIAL_MAP_NORMAL], tex[MATERIAL_MAP_NORMAL], "normal map", "normal", false, 4.0f, "strength");
-    ch |= material_slot(&o->material, MATERIAL_MAP_HEIGHT, &wrap[MATERIAL_MAP_HEIGHT], tex[MATERIAL_MAP_HEIGHT], "height map (parallax)", "height", false, 0.2f, "scale");
+    ch |= material_slot(&o->material, MATERIAL_MAP_DIFFUSE, &wrap[MATERIAL_MAP_DIFFUSE], tex[MATERIAL_MAP_DIFFUSE], "diffuse map", "diffuse", true, 2.0f, "gain", root);
+    ch |= material_slot(&o->material, MATERIAL_MAP_SPECULAR, &wrap[MATERIAL_MAP_SPECULAR], tex[MATERIAL_MAP_SPECULAR], "specular map", "specular", true, 1.0f, "strength", root);
+    ch |= material_slot(&o->material, MATERIAL_MAP_NORMAL, &wrap[MATERIAL_MAP_NORMAL], tex[MATERIAL_MAP_NORMAL], "normal map", "normal", false, 4.0f, "strength", root);
+    ch |= material_slot(&o->material, MATERIAL_MAP_HEIGHT, &wrap[MATERIAL_MAP_HEIGHT], tex[MATERIAL_MAP_HEIGHT], "height map (parallax)", "height", false, 0.2f, "scale", root);
 
-    if (ch)
-        s->dirty = true;
+    return ch;
 }
 
-static void inspect_light(Scene* s)
+static bool inspect_light(Scene* s)
 {
     Light* l = &s->lights[s->selIndex];
     static const char* kinds[3] = { "directional", "point", "spot" };
@@ -153,9 +207,7 @@ static void inspect_light(Scene* s)
         Mge_GuiSeparator();
         ch |= Mge_GuiInputVec3("direction", &l->direction);
     }
-
-    if (ch)
-        s->dirty = true;
+    return ch;
 }
 
 static const char* const SKY_FACES[6] = { "right", "left", "top", "bottom", "front", "back" };
@@ -217,7 +269,7 @@ static void import_skybox(Scene* s, Project* proj, const char* srcDir)
 
 // The Environment pseudo-entity: the sun (lights[0]), the skybox, and which
 // camera object drives the built game's view.
-static void inspect_environment(Scene* s, Project* proj)
+static bool inspect_environment(Scene* s, Project* proj)
 {
     bool ch = false;
 
@@ -288,11 +340,10 @@ static void inspect_environment(Scene* s, Project* proj)
     if (count == 1)
         Mge_GuiLabel("add a Camera in the hierarchy (+ add > Camera)");
 
-    if (ch)
-        s->dirty = true;
+    return ch;
 }
 
-void Inspector_Draw(Rectangle rect, Scene* s, Project* proj)
+void Inspector_Draw(Rectangle rect, Scene* s, Project* proj, History* h)
 {
     if (!Mge_GuiBeginPanel("Inspector", rect.x, rect.y, rect.width, rect.height)) {
         Mge_GuiEndPanel();
@@ -302,14 +353,20 @@ void Inspector_Draw(Rectangle rect, Scene* s, Project* proj)
     Mge_GuiLabel("INSPECTOR");
     Mge_GuiSeparator();
 
+    bool changed = false;
     if (s->selKind == SEL_ENV)
-        inspect_environment(s, proj);
+        changed = inspect_environment(s, proj);
     else if (s->selKind == SEL_OBJECT)
-        inspect_object(s, proj);
+        changed = inspect_object(s, proj);
     else if (s->selKind == SEL_LIGHT)
-        inspect_light(s);
+        changed = inspect_light(s);
     else
         Mge_GuiLabel("(nothing selected)");
+
+    if (changed) {
+        History_Record(h);
+        s->dirty = true;
+    }
 
     Mge_GuiEndPanel();
 }

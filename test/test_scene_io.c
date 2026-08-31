@@ -193,6 +193,7 @@ static void build_scene(Scene* s)
     s->objects[2].kind = OBJECT_CAMERA;
     s->objects[2].transform.rotation = (Vector3){ -5, -90, 15 };
     strcpy(s->objectNames[2], "GameCam");
+    s->objects[1].transform.parent = 0; // Ball parented to Floor (grouping)
     s->objectCount = 3;
 
     strcpy(s->skyDir, "res/sky_night");
@@ -247,6 +248,8 @@ TEST(scene_mge_round_trip)
     CHECK_F(b.objects[2].transform.rotation.z, 15.0f);
     CHECK(b.mainCamera == 2);
     CHECK(strcmp(b.skyDir, "res/sky_night") == 0);
+    CHECK(b.objects[1].transform.parent == 0);  // parent link round-trips
+    CHECK(b.objects[0].transform.parent == -1); // default when absent
     CHECK(b.objects[1].active == false);
     CHECK_F(b.objects[1].transform.position.x, 2.5f);
     CHECK_F(b.objects[1].transform.rotation.y, 20.0f);

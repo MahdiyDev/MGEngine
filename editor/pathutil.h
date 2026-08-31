@@ -31,8 +31,12 @@ void Path_Join(const char* a, const char* b, char* out, size_t outSize);
 // exists.
 bool Path_MakeDirs(const char* dir);
 
-// Copy the file at `src` to `dst` (binary). Returns true on success.
+// Copy the file at `src` to `dst` (binary). A src==dst copy is a safe no-op.
+// Returns true on success.
 bool Path_CopyFile(const char* src, const char* dst);
+
+// Recursively copy `src` (a file or a whole directory tree) to `dst`.
+bool Path_CopyTree(const char* src, const char* dst);
 
 // List entries of `dir` into `out` (each <= 128 chars, name only). `ext` filters
 // files by extension (e.g. ".c"); pass NULL for "all files". `wantDirs` lists
