@@ -118,6 +118,13 @@ TEST(path_helpers)
     CHECK(strcmp(out, "a/b/c.png") == 0);
     Path_Join("a/b", "/abs/c.png", out, sizeof(out));
     CHECK(strcmp(out, "/abs/c.png") == 0);
+
+    CHECK(Path_Equal("a/b/c", "a\\b\\c"));       // separator-agnostic
+    CHECK(Path_Equal("a/b/", "a/b"));            // trailing slash ignored
+    CHECK(!Path_Equal("a/b/c", "a/b"));
+#if defined(_WIN32)
+    CHECK(Path_Equal("C:/Proj", "c:\\proj"));    // case-insensitive on Windows
+#endif
 }
 
 // ---- .mgscene round-trip ----
@@ -167,7 +174,7 @@ TEST(scene_mge_round_trip)
     build_scene(&a);
     Camera3D camA = { .position = { 1, 2, 3 }, .target = { 0, 0, -1 }, .up = { 0, 1, 0 }, .fovy = 55.0f };
 
-    CHECK(Scene_Save(&a, path, camA));
+    CHECK(Scene_Save(&a, path, camA, "scene_io_tmp")); // project root = the tmp dir
     CHECK(strcmp(a.name, "myscene") == 0); // name follows the file stem
     CHECK(!a.dirty);
     CHECK(strcmp(a.texPath[1][MATERIAL_MAP_DIFFUSE], "res/ball_albedo.png") == 0);
@@ -229,11 +236,37 @@ TEST(load_rejects_a_non_scene_file)
     remove("scene_io_tmp/bogus.mgscene");
 }
 
+// in the project layout the file is always `scene.mgscene`; the name comes from
+// the containing folder, not the stem.
+TEST(canonical_scene_file_takes_its_name_from_the_folder)
+{
+    Path_MakeDirs("scene_io_tmp/scenes/level1");
+    const char* path = "scene_io_tmp/scenes/level1/scene.mgscene";
+
+    Scene a;
+    build_scene(&a);
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 60.0f };
+    CHECK(Scene_Save(&a, path, cam, "scene_io_tmp"));
+    CHECK(strcmp(a.name, "level1") == 0);
+    // texture ends up under the PROJECT res/, stored root-relative
+    CHECK(strcmp(a.texPath[1][MATERIAL_MAP_DIFFUSE], "res/ball_albedo.png") == 0);
+
+    Scene b;
+    CHECK(Scene_Load(&b, path, NULL));
+    CHECK(strcmp(b.name, "level1") == 0);
+
+    remove(path);
+    remove("scene_io_tmp/scenes/level1/level1.c");
+    RMDIR("scene_io_tmp/scenes/level1");
+    RMDIR("scene_io_tmp/scenes");
+}
+
 int main(void)
 {
     RUN(path_helpers);
     RUN(scene_mge_round_trip);
     RUN(load_rejects_a_non_scene_file);
+    RUN(canonical_scene_file_takes_its_name_from_the_folder);
 
     RMDIR("scene_io_tmp/res"); // best-effort tidy-up
     RMDIR("scene_io_tmp");

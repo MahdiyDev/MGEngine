@@ -41,34 +41,73 @@ static void render_menu(Scene* s)
     Mge_GuiEndMenu();
 }
 
-static TopbarAction file_menu(Scene* s)
+static TopbarResult project_menu(const Project* proj)
 {
-    TopbarAction act = TOPBAR_NONE;
-    if (!Mge_GuiBeginMenu("File"))
-        return act;
-    if (Mge_GuiMenuItem("New")) act = TOPBAR_NEW;
-    if (Mge_GuiMenuItem("Open...")) act = TOPBAR_OPEN;
-    if (Mge_GuiMenuItem(s->path[0] ? "Save" : "Save...")) act = TOPBAR_SAVE;
-    if (Mge_GuiMenuItem("Save As...")) act = TOPBAR_SAVE_AS;
-    if (Mge_GuiMenuItem("Build")) act = TOPBAR_BUILD;
+    TopbarResult r = { TOPBAR_NONE, 0 };
+    if (!Mge_GuiBeginMenu("Project"))
+        return r;
+    if (Mge_GuiMenuItem("New Project..."))  r.action = TOPBAR_PROJECT_NEW;
+    if (Mge_GuiMenuItem("Open Project...")) r.action = TOPBAR_PROJECT_OPEN;
+    if (Mge_GuiMenuItem(proj->path[0] ? "Save Project" : "Save Project...")) r.action = TOPBAR_PROJECT_SAVE;
     Mge_GuiEndMenu();
-    return act;
+    return r;
 }
 
-TopbarAction Topbar_Draw(Rectangle rect, Scene* s, bool* editMode)
+static TopbarResult scene_menu(const Project* proj, const Scene* s)
+{
+    TopbarResult r = { TOPBAR_NONE, 0 };
+
+    char label[96];
+    snprintf(label, sizeof(label), "Scene: %s%s", s->name, s->dirty ? " *" : "");
+    if (!Mge_GuiBeginMenu(label))
+        return r;
+
+    for (int i = 0; i < proj->sceneCount; i++) {
+        char row[80];
+        snprintf(row, sizeof(row), "%s %s", (i == proj->activeScene) ? ">" : " ", proj->scenes[i]);
+        if (Mge_GuiMenuItem(row)) {
+            r.action = TOPBAR_SCENE_SWITCH;
+            r.arg = i;
+        }
+    }
+    Mge_GuiSeparator();
+
+    bool haveProject = proj->path[0] != '\0';
+    if (haveProject) {
+        if (Mge_GuiMenuItem("New Scene..."))  r.action = TOPBAR_SCENE_NEW;
+        if (Mge_GuiMenuItem("Add Scene..."))  r.action = TOPBAR_SCENE_ADD;
+        if (Mge_GuiMenuItem("Save Scene"))    r.action = TOPBAR_SCENE_SAVE;
+    } else {
+        Mge_GuiLabel("(save the project to add scenes)");
+    }
+    Mge_GuiEndMenu();
+    return r;
+}
+
+TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s, bool* editMode)
 {
     if (!Mge_GuiBeginPanel("##topbar", rect.x, rect.y, rect.width, rect.height)) {
         Mge_GuiEndPanel();
-        return TOPBAR_NONE;
+        return (TopbarResult){ TOPBAR_NONE, 0 };
     }
 
-    TopbarAction act = file_menu(s);
+    TopbarResult r = project_menu(proj);
     Mge_GuiSameLine();
 
-    // scene name + unsaved marker
-    char title[80];
-    snprintf(title, sizeof(title), "%s%s", s->name, s->dirty ? " *" : "");
-    Mge_GuiLabel(title);
+    char proj_title[80];
+    snprintf(proj_title, sizeof(proj_title), "%s%s", proj->name, proj->dirty ? " *" : "");
+    Mge_GuiLabel(proj_title);
+    Mge_GuiSameLine();
+
+    TopbarResult sr = scene_menu(proj, s);
+    if (sr.action != TOPBAR_NONE)
+        r = sr;
+    Mge_GuiSameLine();
+
+    if (Mge_GuiButton("Build")) {
+        r.action = TOPBAR_BUILD;
+        r.arg = 0;
+    }
     Mge_GuiSameLine();
     Mge_GuiSeparator();
     Mge_GuiSameLine();
@@ -94,5 +133,5 @@ TopbarAction Topbar_Draw(Rectangle rect, Scene* s, bool* editMode)
     render_menu(s);
 
     Mge_GuiEndPanel();
-    return act;
+    return r;
 }

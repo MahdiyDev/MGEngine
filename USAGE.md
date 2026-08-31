@@ -48,17 +48,19 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_screenshot.c     Mge_TakeScreenshot / MgeGL_SaveScreenshot -- framebuffer -> PNG (stb_image_write)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-editor/                THE APP -- scene editor (docked panel shell around a viewport)
-  main.c               window, loop, panel-rectangle layout, close guard, the shared Mge_Gui frame
+editor/                THE APP -- project / scene editor (docked panel shell around a viewport)
+  main.c               window, loop, panel-rectangle layout, close guard; owns the Project + Scene
   editor_camera.c/.h   the yaw/pitch fly-cam (VIEW = always fly, EDIT = fly on RIGHT mouse)
+  project.c/.h         Project struct: global config + scene list + path helpers
+  project_io.c/.h      project.mgproject read/write -- flat text, data only
   scene.c/.h           entities, selection, picking, add/delete/new, the render passes
   scene_io.c/.h        .mgscene read/write (Scene_Save / Scene_Load) -- flat text, data only
   pathutil.c/.h        path + fs helpers (dir/base/join/isabsolute/mkdirs/copyfile)
-  sceneops.c/.h        File-menu actions + the unsaved-changes confirm modal
-  topbar.c/.h          top strip: File menu, scene name, mode, gizmo, Render menu
+  fileops.c/.h         Project + Scene menu actions + the unsaved-changes / new-scene modals
+  topbar.c/.h          top strip: Project menu, Scene dropdown, mode, gizmo, Render menu
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
   inspector.c/.h       right panel: the type-aware inspector (+ texture slots)
-  resources.c/.h       bottom panel: per-scene resource explorer (stub until Phase 4)
+  resources.c/.h       bottom panel: per-scene resource explorer (stub until Phase 5)
   USAGE.md             editor docs
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
@@ -965,7 +967,8 @@ Linux: `zenity`, then `kdialog`) filtered to image extensions and returns a
 `Mge_SaveFileDialog(title, filterName, filterExts, defaultName)` is the save
 counterpart (overwrite prompt, pre-filled name). The dialogs never change the
 process working directory. The editor's inspector uses the open dialog for the
-material-map thumbnails; the File menu uses both for `.mgscene` open / save.
+material-map thumbnails; the editor's Project / Scene menus use both for
+`project.mgproject` and `scene.mgscene` open / save.
 
 ### Mesh
 

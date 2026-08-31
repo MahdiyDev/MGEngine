@@ -55,6 +55,32 @@ bool Path_IsAbsolute(const char* path)
     return path[0] != '\0' && path[1] == ':'; // drive letter
 }
 
+static char norm(char c)
+{
+    if (c == '\\')
+        c = '/';
+#if defined(_WIN32)
+    if (c >= 'A' && c <= 'Z')
+        c += 32;
+#endif
+    return c;
+}
+
+bool Path_Equal(const char* a, const char* b)
+{
+    size_t la = strlen(a), lb = strlen(b);
+    if (la > 0 && (a[la - 1] == '/' || a[la - 1] == '\\'))
+        la--;
+    if (lb > 0 && (b[lb - 1] == '/' || b[lb - 1] == '\\'))
+        lb--;
+    if (la != lb)
+        return false;
+    for (size_t i = 0; i < la; i++)
+        if (norm(a[i]) != norm(b[i]))
+            return false;
+    return true;
+}
+
 void Path_Join(const char* a, const char* b, char* out, size_t outSize)
 {
     if (Path_IsAbsolute(b) || a[0] == '\0') {

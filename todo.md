@@ -55,7 +55,7 @@
 # PLAN — Editor overhaul (`builder/` -> `editor/`)
 
 Turn the demo `builder` into a real scene editor: panel UI, multi-scene
-projects, a per-scene resource root, and hot-reloadable scene DLLs. Do it in
+projects, a shared resource root, and hot-reloadable scene DLLs. Do it in
 phases so the app keeps working the whole way.
 
 ## Terms / model
@@ -66,8 +66,8 @@ phases so the app keeps working the whole way.
   opens a *project*; everything else lives inside it.
   ```
   project.mgproject   global config + scene list
+  res/                one shared resource root for the whole project
   scenes/<name>/      one subdirectory per scene
-  res/                project-wide shared resources (optional)
   build/              generated build output (gitignored)
   ```
 - **Scene** = `scenes/<name>/` containing:
@@ -76,12 +76,12 @@ phases so the app keeps working the whole way.
                     that scene's module; adding a new `.c` needs no registration
                     -- the build globs the directory and the editor watches for
                     new files.
-  - `res/`       -- this scene's resource root (textures, models, hdr, ...);
-                    resolves before the project `res/`.
+- Resources (textures / models / hdr) live in **one** `<root>/res/`; scene-file
+  texture paths are stored `res/<file>` relative to the project root.
 - **Building the project** generates one build from `project.mgproject`: compiles each
   scene's globbed `*.c` -> a `<name>` module, links `libmgengine`, and produces
-  the runnable app (runtime host + `libmgengine` + scene modules + packed `res/`).
-  Debug = loose files + hot-reloadable per-scene DLLs; Release = one bundle.
+  the runnable app (runtime host + `libmgengine` + scene modules + packed
+  `res/`). Debug = loose files + hot-reloadable per-scene DLLs; Release = one bundle.
 - The **editor owns all object/light storage** (the in-editor `Scene` struct).
   Scene code only reads/writes it through a passed context, so rebuilding /
   reloading never loses live edits.
@@ -142,17 +142,17 @@ phases so the app keeps working the whole way.
 
 - [x] `scene.mgscene` text format (flat, line-based, diffable, no JSON): `camera` +
       `render` sections, one `object` / `light` block per entity (primitive,
-      transform, active, name, `m0..m3` material slots with `res/`-relative
-      texture paths + colours/values/wrap). `#` comments.
-- [x] `Scene_Save` / `Scene_Load` in `scene_io.c` -- **data only, no GL**.
-      `Scene_LoadMaterialTextures` (in `scene.c`) brings textures onto the GPU
-      afterwards. On Save, textures outside `res/` are copied in + paths rewritten.
-      Path helpers in `pathutil.c`. Unit test: `test/test_scene_io.c` (round-trip
-      + path helpers, hermetic).
+      transform, active, name, `m0..m3` material slots with `res/<file>` texture
+      paths relative to the project root + colours/values/wrap). `#` comments.
+- [x] `Scene_Save(.., projectRoot)` / `Scene_Load` in `scene_io.c` -- **data only,
+      no GL**. `Scene_LoadMaterialTextures(s, projectRoot)` (in `scene.c`) brings
+      textures onto the GPU afterwards. On Save, textures outside `<root>/res/`
+      are copied in + paths rewritten. Path helpers in `pathutil.c`. Unit test:
+      `test/test_scene_io.c` (round-trip + path helpers, hermetic).
 - [x] File menu (New / Open / Save / Save As / Build) in `topbar.c`; actions +
       guard in `sceneops.c`. Engine additions: `Mge_SaveFileDialog`,
       `Mge_SetWindowShouldClose`, `Mge_GuiOpenPopup/BeginPopup/EndPopup/ClosePopup`.
-- [x] Save As scaffolds `<dir>/res/` + a `<name>.c` scene-code template (Phase 4).
+- [x] Save scaffolds `<dir>/<name>.c` (scene-code template) beside `scene.mgscene`.
 - [x] Unsaved-changes guard: `Scene.dirty` (set by every mutator / inspector edit
       / gizmo drag / rename); New / Open / window-close pop a Save/Discard/Cancel
       modal. Scene name in the top bar shows a `*` while dirty.
@@ -161,30 +161,37 @@ phases so the app keeps working the whole way.
   scene root. Phase 3 puts scenes under a project and makes "New Scene" scaffold
   the full directory.
 
-## Phase 3 -- project model & multi-scene
+## Phase 3 -- project model & multi-scene   [DONE]
 
-- [ ] `project.mgproject` text format (flat, like a `.mgscene`): a `[project]`
-      section (name, window w/h, targetFps, msaa, output name, `cflags.debug`,
-      `cflags.release`, `startupScene`) + one `scene "<name>"` line per scene
-      (path relative to the project root). `editor/project_io.c` --
-      `Project_Save` / `Project_Load` (data only), unit test like
-      `test_scene_io`.
-- [ ] The editor opens a **project**, not a bare `.mgscene`. File menu becomes:
-      Project New / Open / Save; Scene New / Open (within the project) / Save /
-      Save As. On launch with no project -> a default in-memory project holding
-      one untitled scene (so the app still runs immediately).
-- [ ] **New Scene** -> create `scenes/<name>/` with a template `<name>.c` (reuse
-      the Phase 2 scaffold) + an empty `scene.mgscene` + `res/`, add a
-      `scene "<name>"` line to `project.mgproject`, switch to it. **Add Scene** ->
-      point at an existing `scenes/<name>/`.
-- [ ] A **Scenes** list (a project panel, or a top-bar dropdown): click to switch
-      the active scene; the unsaved-changes guard applies on switch.
-- [ ] A scene is a *directory* -- its `.c` files are globbed, never enumerated in
-      `project.mgproject`. The editor rescans the scene dir (on focus / a watch) and a
-      newly-added `.c` just joins the next build. No registration step.
-- [ ] **New Script** action (resources panel / a scene menu) scaffolds a
-      `<name>.c` in the scene dir from a template.
-- [ ] `.gitignore` `**/build/`, `*_live_*.dll`, `*.pak*`.
+- [x] `project.mgproject` text format (flat, `.mgscene`-style): a `settings`
+      section (window w/h, targetFps, msaa, output, cflagsDebug/Release,
+      startupScene) + one `scene "<name>"` line per scene. `editor/project.c`
+      (Project struct + Default/Add/Remove/Find + Root/SceneDir/SceneFile path
+      helpers) + `editor/project_io.c` (Project_Save / Project_Load, data only).
+      Unit test `test/test_project_io.c` (round-trip + helpers, hermetic).
+- [x] The editor opens a **project**. Top bar: **Project** menu (New / Open /
+      Save Project) + **Scene** dropdown (scene list to switch, New / Add / Save
+      Scene). Launch = an in-memory default project with one "untitled" scene, so
+      the app still runs immediately; scene-file ops unlock once it's saved.
+- [x] **New Scene** -> name-entry modal -> `scenes/<name>/` with `scene.mgscene`
+      + a `<name>.c` template, added to `project.mgproject`, switched to.
+      **Add Scene** -> pick an existing `scenes/<name>/scene.mgscene`.
+      `scene_io.c`: a canonical `scene.mgscene` takes its name from the folder.
+- [x] Scene switch via the top-bar dropdown; unsaved-changes guard (now also
+      `Project.dirty`) applies. `editor/fileops.c` (was `sceneops.c`) executes
+      every Project + Scene action + the two modals. **Ctrl+S** (EDIT mode) =
+      Save Scene (prompts for a location when the project is new).
+- [x] One shared `<root>/res/` for the whole project (not per-scene). Scene-file
+      texture paths are `res/<file>` relative to the project root;
+      `Scene_Save(.., projectRoot)` / `Scene_LoadMaterialTextures(s, projectRoot)`.
+      `Project_ResDir` helper.
+- [x] A scene is a directory -- `.c` files are **not** listed in
+      `project.mgproject`; Phase 4's build globs the folder. (The mtime watch for
+      hot reload lands with Phase 4.)
+- [x] `.gitignore` `**/build/`, `*_live_*.dll`, `*.pak` / `*.pak.*`, plus the
+      `test_project_io` binary + tmp dir.
+- Deferred to Phase 4: the **New Script** action (it's about code, and Phase 4
+      owns the per-scene build + `.c` discovery).
 
 ## Phase 4 -- scene as code + hot reload
 
@@ -205,8 +212,8 @@ phases so the app keeps working the whole way.
 
 ## Phase 5 -- resource explorer (bottom panel)
 
-- [ ] File tree of the active scene's `res/` (folders expandable, file icons /
-      thumbnails for images); the project `res/` shown alongside.
+- [ ] File tree of the project `res/` (folders expandable, file icons /
+      thumbnails for images).
 - [ ] Ops: **add** (import via file dialog -> copy into `res/`), **delete**,
       **rename**, **move** (drag between folders), **copy**, new folder.
 - [ ] Drag a resource row onto an inspector texture slot to assign it.
@@ -218,7 +225,7 @@ phases so the app keeps working the whole way.
       split at ~1 GB into `<name>.pak.001`, `.002`, ... A reader that maps a
       logical path across the split files.
 - [ ] Editor **Build Release**: for the whole project -- compile every scene
-      module `-O2 -DNDEBUG -s`, pack each scene's `res/` (+ the project `res/`)
+      module `-O2 -DNDEBUG -s`, pack the project `res/`
       into paks, and stage a runnable folder: a slim runtime host +
       `libmgengine.dll` + the scene modules + paks + `project.mgproject`.
 - [ ] Debug build stays loose-file (fast iteration); release mounts the pak

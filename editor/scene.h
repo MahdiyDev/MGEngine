@@ -55,8 +55,9 @@ void Scene_Shutdown(Scene* s);
 void Scene_New(Scene* s);
 
 // (Re)load every material-map texture from `texPath` into the GL ids, resolving
-// relative paths against the scene's directory. Call after Scene_Load.
-void Scene_LoadMaterialTextures(Scene* s);
+// project-root-relative paths against `projectRoot` (may be "" / NULL for the
+// in-memory default project). Call after Scene_Load.
+void Scene_LoadMaterialTextures(Scene* s, const char* projectRoot);
 
 // Spawn a primitive at the origin, name it, and select it. No-op when the scene
 // is full (SCENE_MAX_OBJECTS).

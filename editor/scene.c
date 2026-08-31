@@ -76,10 +76,9 @@ void Scene_New(Scene* s)
     reset_data(s);
 }
 
-void Scene_LoadMaterialTextures(Scene* s)
+void Scene_LoadMaterialTextures(Scene* s, const char* projectRoot)
 {
-    char dir[512];
-    Path_Dir(s->path, dir, sizeof(dir));
+    const char* root = (projectRoot != NULL) ? projectRoot : "";
 
     for (int i = 0; i < s->objectCount; i++) {
         for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
@@ -91,10 +90,10 @@ void Scene_LoadMaterialTextures(Scene* s)
                 continue;
 
             char full[1024];
-            if (Path_IsAbsolute(rel))
+            if (Path_IsAbsolute(rel) || root[0] == '\0')
                 snprintf(full, sizeof(full), "%s", rel);
             else
-                Path_Join(dir, rel, full, sizeof(full));
+                Path_Join(root, rel, full, sizeof(full)); // paths are project-root-relative
 
             Texture2D t = Mge_LoadTextureEx(full, m == MATERIAL_MAP_DIFFUSE);
             if (t.id == 0 && !Path_IsAbsolute(rel)) // fall back to a cwd-relative path

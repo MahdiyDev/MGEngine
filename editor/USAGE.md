@@ -6,16 +6,18 @@ A scene editor built on top of the engine library — see
 
 | file | contents |
 | --- | --- |
-| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, the close-button guard, and the shared `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair every panel draws into |
+| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, the close-button guard. Owns the `Project` + the active `Scene` |
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |
+| `project.c` / `project.h` | `Project`: global config (window / build settings) + the scene list. `Project_Default` / `Project_AddScene` / `Project_RemoveScene`, and `Project_Root` / `Project_SceneDir` / `Project_SceneFile` path helpers |
+| `project_io.c` / `.h` | `project.mgproject` read / write (`Project_Save` / `Project_Load`) — flat text, **data only** |
 | `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures`, and the render passes (shadow + lit + gizmo + skybox) |
 | `scene_io.c` / `.h` | `.mgscene` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
-| `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `MakeDirs` / `CopyFile` — small path + fs helpers for scene I/O |
-| `sceneops.c` / `.h` | executes File-menu actions (New / Open / Save / Save As / Build / Quit) with the unsaved-changes confirm modal |
-| `topbar.c` / `.h` | the **top** strip: a **File** menu, scene name + `*` dirty marker, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
+| `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `MakeDirs` / `CopyFile` — small path + fs helpers |
+| `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; Build; Quit) with the unsaved-changes confirm modal + the new-scene name modal |
+| `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save) with a `*` dirty marker, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
 | `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection (Object: active, primitive, transform, material slots. Light: type, colour, attenuation / direction) |
-| `resources.c` / `.h` | the **bottom** panel: the per-scene resource explorer — a stub until Phase 4 |
+| `resources.c` / `.h` | the **bottom** panel: the project resource explorer (`<root>/res/`) — a stub until Phase 5 |
 
 ```sh
 make            # from the repo root -> build/editor(.exe)
@@ -49,26 +51,53 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 | EDIT — camera | hold **RIGHT mouse** to look; **WASD** flies while it is held |
 | EDIT — select | **left-click** an object or a light; click empty space to deselect |
 | EDIT — gizmo | drag a handle to **move / rotate / scale** the selection (switch mode in the top bar). Translate has axis arrows + a centre ball; rotate shows the camera-facing part of each ring; scale has cube tips. The hovered handle highlights white |
+| **Ctrl+S** (EDIT mode) | save the active scene (same as Scene ▸ Save Scene; prompts for a project location if the project is new) |
 | **F12** | save `editor_screenshot.png` next to the executable (`Mge_TakeScreenshot`) |
 
 Panels are only clickable in EDIT mode. Engine input is suppressed while a widget
 has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
 
-## Scenes (`.mgscene`)
+## Projects & scenes
 
-The top-bar **File** menu:
+The editor's document is a **project**: a directory with a `project.mgproject`
+at its root, holding global config + a list of scenes, one shared `res/` for the
+whole project, and a `scenes/<name>/` subdirectory per scene (its `scene.mgscene`
++ `.c` files). On launch you get an in-memory default project with one scene,
+"untitled" — save it to put it on disk.
+
+```
+myproject/
+  project.mgproject
+  res/                  textures / models / hdr -- shared by every scene
+  scenes/
+    level1/
+      scene.mgscene     editor-authored objects / lights / camera
+      level1.c          scene logic (every .c here joins the build -- Phase 4)
+```
+
+**Project** menu:
 
 | item | |
 | --- | --- |
-| **New** | reset to a fresh default scene (floor + sun + lamp) |
-| **Open...** | native file dialog → pick a `.mgscene`; textures resolve against its folder |
-| **Save** | write back to the current file (or prompt if the scene was never saved) |
-| **Save As...** | native save dialog → writes `<name>.mgscene`, creates `<name>/res/`, and scaffolds a `<name>.c` template (Phase 4 compiles it) |
-| **Build** | stub until Phase 4 |
+| **New Project...** | native save dialog → choose a location + name; creates a folder `<name>/` and writes `project.mgproject` + `res/` + `scenes/untitled/` inside it |
+| **Open Project...** | pick a `project.mgproject`; loads it and opens its `startupScene` |
+| **Save Project** | write `project.mgproject` + the active scene's `scene.mgscene` |
 
-The title shows the scene name with a trailing `*` while there are unsaved edits.
-**New / Open** and the window close button, when the scene is dirty, first pop a
-**Save / Discard / Cancel** modal.
+**Scene** dropdown (labelled `Scene: <active> *`):
+
+| item | |
+| --- | --- |
+| *(scene list)* | click a name to switch to it (`>` marks the active one) |
+| **New Scene...** | name-entry modal → creates `scenes/<name>/` (`scene.mgscene` + `<name>.c`), adds it to the project, switches |
+| **Add Scene...** | pick an existing `scenes/<name>/scene.mgscene` *inside this project* to register it (rejected otherwise) |
+| **Save Scene** | write just the active scene's `scene.mgscene` |
+
+New Scene / Add Scene / Save Scene need the project saved first (they write into
+its folder). Scene names are folder-safe (`[A-Za-z0-9_-]`) and can't be `build`,
+`res`, `scenes`, `obj`, `bin`. The project + scene names each show a trailing
+`*` while dirty.
+**New / Open Project**, a scene **switch**, and the window close button — when
+the project or scene is dirty — first pop a **Save / Discard / Cancel** modal.
 
 A `.mgscene` file is a flat, indentation-cosmetic, line-based text format —
 diffable, no JSON dependency. One `object` / `light` block per entity, plus
@@ -106,7 +135,7 @@ object "Floor"
   m0.color 90 95 105 255    # m0..m3 = diffuse / specular / normal / height
   m0.value 1
   m0.wrap 0
-  m0.texture "res/floor.png"   # relative to the scene dir; absolute also works
+  m0.texture "res/floor.png"   # relative to the project root; absolute also works
 
 light "Sun"
   type directional         # directional | point | spot
@@ -117,10 +146,16 @@ light "Sun"
   ...
 ```
 
-Texture references are stored as `res/<file>` — on **Save**, any texture whose
-source lies outside the scene's `res/` is copied in and the path rewritten.
-`Scene_Load` fills the data only; `Scene_LoadMaterialTextures` then brings the
-textures onto the GPU. `#` starts a comment.
+Texture references are stored as `res/<file>`, **relative to the project root** —
+on save, any texture whose source lies outside the project `res/` is copied in
+and the path rewritten. `Scene_Load` fills the data only;
+`Scene_LoadMaterialTextures(s, projectRoot)` then brings the textures onto the
+GPU. `#` starts a comment.
+
+`project.mgproject` is the same style — a `settings` section (window size,
+target FPS, MSAA, output name, debug / release cflags, `startupScene`) then one
+`scene "<name>"` line per scene. `.c` files are **not** listed; the build
+(Phase 4) globs each scene directory, so a new `.c` needs no registration.
 
 ## The Hierarchy (left panel)
 
@@ -161,9 +196,11 @@ how the texture samples past the UV edges.
 
 ## Extending it
 
-Scene data + rendering: `scene.c`. A panel: its own `*.c` (they take a
-`Rectangle` + `Scene*` and Begin/End their own `Mge_GuiBeginPanel`). A new
-inspectable kind needs an `inspect_*` in `inspector.c` and a hierarchy row; a new
-movable kind also needs a `Scene_Sel*` accessor so `Mge_Gizmo3D` can reach its
-transform. Textures the scene loads are freed in `Scene_Shutdown` /
+Scene data + rendering: `scene.c`; project structure: `project.c`; the file/menu
+actions: `fileops.c`. A panel: its own `*.c` (they Begin/End their own
+`Mge_GuiBeginPanel`). A new inspectable kind needs an `inspect_*` in
+`inspector.c` and a hierarchy row; a new movable kind also needs a `Scene_Sel*`
+accessor so `Mge_Gizmo3D` can reach its transform. New serialised fields go in
+`scene_io.c` (writer + parser) or `project_io.c`, with a matching `test_*_io.c`
+check. Textures the scene loads are freed in `Scene_Shutdown` /
 `Scene_DeleteObject`.

@@ -46,47 +46,69 @@ static void wv2(FILE* f, const char* k, Vector2 v)
 static void wf(FILE* f, const char* k, float v) { fprintf(f, "  %s %g\n", k, (double)v); }
 static void wi(FILE* f, const char* k, int v) { fprintf(f, "  %s %d\n", k, v); }
 
-// Resolve `rel`/absolute texture source to an absolute path we can read now.
-static void resolve_tex(const char* stored, const char* sceneDir, char* out, size_t n)
+// Scene name: the folder holding it when the file is the canonical
+// `scene.mgscene` (project layout), otherwise the file's own stem.
+static void scene_name_for(const char* path, char* out, size_t outSize)
+{
+    char base[64];
+    Path_Base(path, base, sizeof(base));
+    Path_StripExt(base);
+    if (strcmp(base, "scene") == 0) {
+        char dir[512];
+        Path_Dir(path, dir, sizeof(dir));
+        if (dir[0] != '\0') {
+            Path_Base(dir, out, outSize);
+            return;
+        }
+    }
+    snprintf(out, outSize, "%s", base);
+}
+
+// Resolve `stored` (absolute, or relative to `base`) to a path we can read now.
+static void resolve_tex(const char* stored, const char* base, char* out, size_t n)
 {
     if (stored[0] == '\0')
         out[0] = '\0';
-    else if (Path_IsAbsolute(stored))
+    else if (Path_IsAbsolute(stored) || base[0] == '\0')
         snprintf(out, n, "%s", stored);
     else
-        Path_Join(sceneDir, stored, out, n);
+        Path_Join(base, stored, out, n);
 }
 
-bool Scene_Save(Scene* s, const char* path, Camera3D camera)
+bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* projectRoot)
 {
     char dir[512];
     Path_Dir(path, dir, sizeof(dir));
-    char res[600];
-    Path_Join(dir, "res", res, sizeof(res));
-    Path_MakeDirs(res);
 
-    // copy any outside textures into res/ and rewrite the stored path relative
-    for (int i = 0; i < s->objectCount; i++) {
-        for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
-            char* stored = s->texPath[i][m];
-            if (stored[0] == '\0')
-                continue;
+    const char* root = (projectRoot != NULL) ? projectRoot : "";
 
-            char src[1024];
-            resolve_tex(stored, dir, src, sizeof(src));
+    // copy any outside textures into <root>/res/ and store them root-relative
+    if (root[0] != '\0') {
+        char res[600];
+        Path_Join(root, "res", res, sizeof(res));
+        Path_MakeDirs(res);
 
-            char base[SCENE_TEXPATH_LEN - 8];
-            Path_Base(stored, base, sizeof(base));
-            char rel[SCENE_TEXPATH_LEN];
-            snprintf(rel, sizeof(rel), "res/%s", base);
+        for (int i = 0; i < s->objectCount; i++) {
+            for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+                char* stored = s->texPath[i][m];
+                if (stored[0] == '\0')
+                    continue;
 
-            char dst[1024];
-            Path_Join(dir, rel, dst, sizeof(dst));
+                char src[1024];
+                resolve_tex(stored, root, src, sizeof(src));
 
-            // already in res/ (same path) -> just normalise the stored form
-            if (strcmp(src, dst) != 0)
-                Path_CopyFile(src, dst);
-            snprintf(stored, SCENE_TEXPATH_LEN, "%s", rel);
+                char base[SCENE_TEXPATH_LEN - 8];
+                Path_Base(stored, base, sizeof(base));
+                char rel[SCENE_TEXPATH_LEN];
+                snprintf(rel, sizeof(rel), "res/%s", base);
+
+                char dst[1024];
+                Path_Join(root, rel, dst, sizeof(dst));
+
+                if (!Path_Equal(src, dst)) // already the project copy -> just normalise
+                    Path_CopyFile(src, dst);
+                snprintf(stored, SCENE_TEXPATH_LEN, "%s", rel);
+            }
         }
     }
 
@@ -94,11 +116,7 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera)
     if (f == NULL)
         return false;
 
-    // name = the file stem
-    char stem[64];
-    Path_Base(path, stem, sizeof(stem));
-    Path_StripExt(stem);
-    snprintf(s->name, sizeof(s->name), "%s", stem);
+    scene_name_for(path, s->name, sizeof(s->name));
 
     fprintf(f, "mgescene 1\n");
     fprintf(f, "name \"%s\"\n\n", s->name);
@@ -171,7 +189,7 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera)
     snprintf(s->path, sizeof(s->path), "%s", path);
     s->dirty = false;
 
-    // scaffold a scene-code template once (Phase 3 compiles it)
+    // scaffold a scene-code template once (Phase 4 compiles it)
     char code[600];
     char codeName[160];
     snprintf(codeName, sizeof(codeName), "%s.c", s->name);
@@ -183,8 +201,9 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera)
         cf = fopen(code, "wb");
         if (cf != NULL) {
             fprintf(cf,
-                "// %s -- scene logic. Compiled to a DLL and hot-reloaded by the editor (Phase 3).\n"
-                "// The editor owns object/light storage; this only reads/writes it via the context.\n"
+                "// %s -- scene logic. Every .c in this folder is compiled into the scene's\n"
+                "// module and hot-reloaded by the editor (Phase 4). The editor owns object /\n"
+                "// light storage; this only reads / writes it through the passed context.\n"
                 "#include <mge.h>\n\n"
                 "void MgeScene_Init(void* ctx) { (void)ctx; }\n"
                 "void MgeScene_Update(void* ctx, float dt) { (void)ctx; (void)dt; }\n"
@@ -378,6 +397,7 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
     }
 
     snprintf(s->path, sizeof(s->path), "%s", path);
+    scene_name_for(path, s->name, sizeof(s->name)); // folder wins for `scene.mgscene`
     s->dirty = false;
     if (outCamera != NULL)
         *outCamera = cam;

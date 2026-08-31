@@ -18,6 +18,11 @@ void Path_StripExt(char* name);
 // true for "C:\x", "C:/x", "/x", "\\server\share".
 bool Path_IsAbsolute(const char* path);
 
+// Compare two paths for equality: '/' and '\\' are equivalent, a single
+// trailing separator is ignored, and the comparison is case-insensitive on
+// Windows.
+bool Path_Equal(const char* a, const char* b);
+
 // Join `a` and `b` with a single '/' (or just `b` when it is absolute), into
 // `out`. Safe when `out` aliases neither input.
 void Path_Join(const char* a, const char* b, char* out, size_t outSize);

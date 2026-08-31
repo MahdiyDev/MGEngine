@@ -6,26 +6,28 @@
 //     hold RIGHT mouse   look around; WASD flies while held
 //     left-click         select an object / a light
 //     drag a gizmo       move / rotate / scale it (switch mode in the top bar)
+//   Ctrl+S (EDIT mode)   save the active scene       F12   screenshot
 //   panels
-//     top bar            File menu, scene name, mode, gizmo, Render menu
+//     top bar            Project + Scene menus, mode, gizmo, Render menu
 //     left (Hierarchy)   objects + lights; add / rename / toggle / delete
 //     right (Inspector)  the selection's fields
-//     bottom (Resources) per-scene resource explorer (stub until Phase 4)
+//     bottom (Resources) project resource explorer (stub until Phase 5)
 //
 // This file: the window, the frame loop, the docked-panel layout, and the one
-// Mge_Gui frame the panels share. Scene data + rendering live in scene.c; the
-// camera in editor_camera.c; File actions in sceneops.c; each panel in its own
-// <name>.c.
+// Mge_Gui frame the panels share. The Project + active Scene are owned here.
+// Scene data + rendering live in scene.c; the project in project.c; the camera
+// in editor_camera.c; File actions in fileops.c; each panel in its own <name>.c.
 #include <mge.h>
 #include <mge_gui.h>
 
 #include "scene.h"
+#include "project.h"
 #include "editor_camera.h"
 #include "topbar.h"
 #include "hierarchy.h"
 #include "inspector.h"
 #include "resources.h"
-#include "sceneops.h"
+#include "fileops.h"
 
 static const int width = 1280, height = 720;
 
@@ -49,10 +51,13 @@ int main(void)
     EditorCamera camera;
     EditorCamera_Init(&camera);
 
-    Scene scene;
-    Scene_Init(&scene, width, height);
+    Project project;
+    Project_Default(&project); // in-memory: one scene "untitled", no files yet
 
-    SceneOps ops = { 0 };
+    Scene scene;
+    Scene_Init(&scene, width, height); // GPU resources + the default "untitled" scene data
+
+    FileOps ops = { 0 };
 
     int fpsShown = 0, drawsShown = 0;
     double fpsAt = 0.0;
@@ -106,16 +111,21 @@ int main(void)
         // close button / ESC -> route through the unsaved-changes guard
         if (Mge_WindowShouldClose()) {
             Mge_SetWindowShouldClose(false);
-            SceneOps_Request(&ops, TOPBAR_QUIT, &scene, &camera);
+            FileOps_Request(&ops, (TopbarResult){ TOPBAR_QUIT, 0 }, &project, &scene, &camera);
         }
 
-        TopbarAction act = Topbar_Draw(rTop, &scene, &editMode);
+        TopbarResult tr = Topbar_Draw(rTop, &project, &scene, &editMode);
         Hierarchy_Draw(rLeft, &scene);
         Inspector_Draw(rRight, &scene);
-        Resources_Draw(rBottom, &scene, fpsShown, drawsShown);
+        Resources_Draw(rBottom, &project, &scene, fpsShown, drawsShown);
 
-        SceneOps_Request(&ops, act, &scene, &camera);
-        SceneOps_Draw(&ops, &scene, &camera);
+        // Ctrl+S -> save the active scene (EDIT mode only; VIEW mode uses S to fly)
+        bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+        if (editMode && ctrl && IsKeyPressed(KEY_S) && !guiKeyboard)
+            tr = (TopbarResult){ TOPBAR_SCENE_SAVE, 0 };
+
+        FileOps_Request(&ops, tr, &project, &scene, &camera);
+        FileOps_Draw(&ops, &project, &scene, &camera);
 
         Mge_GuiEndFrame();
 
