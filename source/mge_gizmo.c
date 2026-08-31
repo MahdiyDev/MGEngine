@@ -163,9 +163,9 @@ static void arrow_head(Vector3 base, int a, float h, float r, Color col)
     MgeGL_End();
 }
 
-// A full-circle band, but only the segments whose outward direction faces the
-// camera are drawn -- so an edge-on ring shows the near arc and a face-on ring
-// shows the whole circle (like Unreal's rotate gizmo).
+// A full-circle band centred on `c` in the plane perpendicular to axis `a`. The
+// whole circle is drawn so the three rings read as one concentric gyroscope; the
+// half facing away from the camera is dimmed rather than culled.
 static void ring(Vector3 c, int a, float radius, Camera3D cam, float bandFrac, Color col)
 {
     Vector3 U, V;
@@ -174,15 +174,14 @@ static void ring(Vector3 c, int a, float radius, Camera3D cam, float bandFrac, C
     const int N = 64;
     const float band = radius * bandFrac;
     const float inner = radius - band, outer = radius + band;
+    const unsigned char farA = (unsigned char)(col.a / 5); // back half, faint
 
     MgeGL_Begin(MGEGL_TRIANGLES);
-    MgeGL_Color4ub(col.r, col.g, col.b, col.a);
     for (int i = 0; i < N; i++) {
         float a0 = (float)i / N * 6.2831853f, a1 = (float)(i + 1) / N * 6.2831853f;
         float am = (a0 + a1) * 0.5f;
         Vector3 dm = add3(mul3(U, cosf(am)), mul3(V, sinf(am))); // segment's outward normal
-        if (dot3(dm, toCam) < -0.12f)
-            continue; // faces away from the camera
+        MgeGL_Color4ub(col.r, col.g, col.b, (dot3(dm, toCam) < 0.0f) ? farA : col.a);
         Vector3 i0 = add3(c, add3(mul3(U, cosf(a0) * inner), mul3(V, sinf(a0) * inner)));
         Vector3 i1 = add3(c, add3(mul3(U, cosf(a1) * inner), mul3(V, sinf(a1) * inner)));
         Vector3 o0 = add3(c, add3(mul3(U, cosf(a0) * outer), mul3(V, sinf(a0) * outer)));

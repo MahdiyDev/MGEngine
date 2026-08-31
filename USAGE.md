@@ -575,11 +575,10 @@ bool Mge_Gizmo3D(Vector3* position, Quaternion* rotation, Vector3* scale, Camera
 
 - **translate** — three axis arrows + a **centre ball**; drag an arrow → move
   along that axis, drag the ball → move on the view plane.
-- **rotate** — three thin rings (Unreal-style): each is a full circle but only
-  the segments facing the camera are drawn, so an edge-on ring shows its near
-  arc and a face-on ring shows the whole circle. Drag → compose a world-space
-  rotation about that axis onto `*rotation` (a `Quaternion` — no gimbal drift;
-  counter-clockwise on screen = positive).
+- **rotate** — three concentric rings (X/Y/Z), full circles so they read as one
+  gyroscope; the half facing away from the camera is dimmed, not culled. Drag →
+  compose a world-space rotation about that axis onto `*rotation` (a `Quaternion`
+  — no gimbal drift; counter-clockwise on screen = positive).
 - **scale** — axes with cube tips + a centre cube; drag an axis tip → scale that
   `size` component, drag the centre → uniform scale.
 
