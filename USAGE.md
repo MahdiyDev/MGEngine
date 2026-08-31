@@ -33,6 +33,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_cull.c           face culling on/off + cull face / winding
   mge_framebuffer.c    RenderTexture + full-screen post-processing + HDR tone mapping
   mge_bloom.c          bloom -- bright-pass + separable Gaussian + tone-mapped composite
+  mge_deferred.c       deferred shading -- G-buffer geometry pass + full-screen lighting pass
   mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
   mge_geometry.c       geometry-shader effects: explode, normal visualization
   mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
@@ -60,7 +61,7 @@ vendor/
 test/                  unit tests (no window/GL); test/glstub/ = a fake glad so mge_gl.c itself is testable
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, hdr, bloom, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, hdr, bloom, deferred_shading, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
 examples/materials/    textured_cube, tiling_triplanar
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -168,12 +169,12 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~18 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~19 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
 mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
-tone-mapped vs clamped, a bloom glow, the cube/sphere/plane primitives, a rotated
-cube with each gizmo mode, the rotate gizmo head-on, a scripted rotate drag) one
-frame
+tone-mapped vs clamped, a bloom glow, a deferred-shaded scene, the
+cube/sphere/plane primitives, a rotated cube with each gizmo mode, the rotate
+gizmo head-on, a scripted rotate drag) one frame
 each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
@@ -367,6 +368,39 @@ unless `GL_FRAMEBUFFER_SRGB` is on).
 Demo: `examples/lighting/bloom.c` — coloured lamps in a dark room; SPACE toggles
 bloom, `[` `]` the threshold, `-` `=` the intensity. The builder's sidebar has a
 **bloom** toggle (under HDR) with threshold + intensity sliders.
+
+### Deferred shading
+
+The forward path shades each fragment against every light — cost is
+`fragments × lights`, and overdraw multiplies it. **Deferred shading** draws the
+scene once into a **G-buffer** (world position, world normal, albedo + specular),
+then a single full-screen pass shades every *pixel* against every light — so
+`MGE_MAX_LIGHTS_DEFERRED` (32) small point lights stay cheap regardless of how
+much geometry piles up.
+
+```c
+GBuffer g = Mge_LoadGBuffer(w, h);
+...
+Mge_BeginMode3D(cam);
+    Mge_BeginGeometryPass(&g, cam);
+        Mge_DrawObject(obj);  Draw_Cube(...);      // the same draw calls as forward
+    Mge_EndGeometryPass();
+Mge_EndMode3D();
+
+Mge_DeferredLighting(g, lights, count, cam);        // shades into the bound framebuffer
+Mge_BlitGBufferDepth(g);                            // then forward-draw lamp cubes / a skybox
+...
+Mge_UnloadGBuffer(&g);
+```
+
+Wrap `Mge_DeferredLighting` in `Mge_BeginTextureMode(hdrRT)` to feed it into the
+HDR / bloom path. The deferred path has **no shadows and no normal / parallax /
+triplanar maps** — it's the "lots of little lights" pipeline; keep the forward
+path (and the builder) for the rest. `g.position` / `g.normal` / `g.albedoSpec`
+are plain `Texture2D`s you can blit for debugging.
+
+Demo: `examples/lighting/deferred_shading.c` — a 5×5 field under 24 drifting
+coloured point lights; **G** cycles the final image and the raw G-buffer channels.
 
 ### GL debug output
 
@@ -1265,7 +1299,7 @@ External material this engine's design and shaders are based on.
 | LearnOpenGL — [Depth testing](https://learnopengl.com/Advanced-OpenGL/Depth-testing) / [Stencil testing](https://learnopengl.com/Advanced-OpenGL/Stencil-testing) / [Face culling](https://learnopengl.com/Advanced-OpenGL/Face-culling) | `mge_depth.c`, `mge_stencil.c` + object outlining, `mge_cull.c` |
 | LearnOpenGL — [Framebuffers](https://learnopengl.com/Advanced-OpenGL/Framebuffers) / [Cubemaps](https://learnopengl.com/Advanced-OpenGL/Cubemaps) | `RenderTexture` + post-processing kernels, skybox + environment mapping (`mge_cubemap.c`) |
 | LearnOpenGL — [Instancing](https://learnopengl.com/Advanced-OpenGL/Instancing) / [Anti-Aliasing](https://learnopengl.com/Advanced-OpenGL/Anti-Aliasing) / [Geometry Shader](https://learnopengl.com/Advanced-OpenGL/Geometry-Shader) | `mge_instancing.c` (`ModelBatch`), MSAA (`mge_msaa.c`), explode / normal-viz (`mge_geometry.c`) |
-| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) / [HDR](https://learnopengl.com/Advanced-Lighting/HDR) / [Bloom](https://learnopengl.com/Advanced-Lighting/Bloom) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`), RGBA16F render target + tone mapping (`mge_framebuffer.c`), bright-pass + Gaussian bloom (`mge_bloom.c`) |
+| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) / [HDR](https://learnopengl.com/Advanced-Lighting/HDR) / [Bloom](https://learnopengl.com/Advanced-Lighting/Bloom) / [Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`), RGBA16F render target + tone mapping (`mge_framebuffer.c`), bright-pass + Gaussian bloom (`mge_bloom.c`), G-buffer + full-screen lighting pass (`mge_deferred.c`) |
 | LearnOpenGL — [Shadow Mapping](https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping) / [Point Shadows](https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows) | `ShadowMap` / `PointShadowMap`, the depth pass + PCF (`mge_shadow.c`) |
 | LearnOpenGL — [Normal Mapping](https://learnopengl.com/Advanced-Lighting/Normal-Mapping) / [Parallax Mapping](https://learnopengl.com/Advanced-Lighting/Parallax-Mapping) | derivative-TBN normal maps, parallax-occlusion mapping (`MATERIAL_MAP_NORMAL` / `MATERIAL_MAP_HEIGHT`); `assets/bricks/` is LearnOpenGL's `bricks2` set |
 | LearnOpenGL — [Advanced Data](https://learnopengl.com/Advanced-OpenGL/Advanced-Data) | batched vertex attributes (`Mge_MakeMeshFromArrays` — one VBO, block per attribute) |

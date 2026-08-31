@@ -561,6 +561,45 @@ static void scene_bloom(void)
     Mge_UnloadRenderTexture(hdr);
 }
 
+// Deferred shading: geometry pass -> G-buffer -> one full-screen lighting pass.
+static void scene_deferred(void)
+{
+    GBuffer g = Mge_LoadGBuffer(W, H);
+
+    Light lights[6];
+    for (int i = 0; i < 6; i++) {
+        float a = (float)i / 6.0f * 6.28318f;
+        lights[i] = Mge_MakePointLight((Vector3){ cosf(a) * 3.0f, 0.6f, sinf(a) * 3.0f - 3.0f },
+            (Vector3){ (i % 3 == 0) ? 3.0f : 0.4f, (i % 3 == 1) ? 3.0f : 0.4f, (i % 3 == 2) ? 3.0f : 0.4f });
+        lights[i].ambient = (i == 0) ? 0.08f : 0.0f;
+    }
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0, 3.5f, 5.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, -3 }, cam.position));
+
+    Object floorObj = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, -1.0f, -3 }, (Vector3){ 14, 0.2f, 14 },
+        (Color){ 180, 175, 170, 255 });
+    Object cube = Mge_MakeObject3D((Vector3){ 0, 0, -3 }, (Vector3){ 1.6f, 1.6f, 1.6f }, (Color){ 200, 120, 90, 255 });
+    Object ball = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ -2.4f, 0, -3 }, (Vector3){ 2, 2, 2 }, (Color){ 90, 170, 220, 255 });
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 6, 7, 10, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginGeometryPass(&g, cam);
+    Mge_DrawObject(floorObj);
+    Mge_DrawObject(cube);
+    Mge_DrawObject(ball);
+    Mge_EndGeometryPass();
+    Mge_EndMode3D();
+
+    Mge_DeferredLighting(g, lights, 6, cam);
+    check("deferred");
+    Mge_EndDrawing();
+
+    Mge_UnloadGBuffer(&g);
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -585,6 +624,7 @@ int main(void)
     scene_tiling();
     scene_hdr();
     scene_bloom();
+    scene_deferred();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

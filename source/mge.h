@@ -756,6 +756,43 @@ BloomFX Mge_LoadBloom(int sceneWidth, int sceneHeight);
 void    Mge_UnloadBloom(BloomFX* bloom);
 void    Mge_DrawBloom(RenderTexture hdrScene, BloomFX* bloom, int toneMap, float exposure);
 
+// Deferred shading. Draw the scene once into a G-buffer (position / normal /
+// albedo+specular), then a single full-screen pass shades every pixel against
+// all the lights -- so many lights stay cheap regardless of geometry overdraw.
+//
+//   GBuffer g = Mge_LoadGBuffer(w, h);
+//   Mge_BeginMode3D(cam);
+//       Mge_BeginGeometryPass(&g, cam);
+//           Mge_DrawObject(obj); Draw_Cube(...);   // the same draw calls
+//       Mge_EndGeometryPass();
+//   Mge_EndMode3D();
+//   Mge_DeferredLighting(g, lights, count, cam);   // shades into the bound framebuffer
+//   Mge_BlitGBufferDepth(g);                       // then forward-draw a skybox / lamp cubes
+//
+// No shadows or normal/parallax maps in the deferred path -- it is the "many
+// small lights" pipeline; keep the forward path for those.
+typedef struct GBuffer {
+    unsigned int fbo;
+    Texture2D position;   // RGB16F  world-space position
+    Texture2D normal;     // RGB16F  world-space normal
+    Texture2D albedoSpec; // RGBA8   .rgb albedo, .a specular strength
+    unsigned int depth;   // renderbuffer
+    int width, height;
+} GBuffer;
+
+GBuffer Mge_LoadGBuffer(int width, int height);
+void    Mge_UnloadGBuffer(GBuffer* g);
+void    Mge_BeginGeometryPass(GBuffer* g, Camera3D camera); // inside Mge_BeginMode3D
+void    Mge_EndGeometryPass(void);
+void    Mge_DeferredLighting(GBuffer g, const Light* lights, int count, Camera3D camera);
+void    Mge_BlitGBufferDepth(GBuffer g); // copy the G-buffer depth to the bound draw FBO
+
+// internal: the geometry pass / a lighting pass consumes materials; Mge_SetMaterial
+// and the light-uniform upload key off these.
+void Mge_BeginMaterialPass(void);
+void Mge_EndMaterialPass(void);
+void Mge_UploadLightUniforms(const Light* light, int index); // lights[index].* on the current shader
+
 // Cube maps / skybox / environment mapping.
 //
 //   Cubemap sky = Mge_LoadCubemapDir("assets/skybox");
@@ -1024,7 +1061,8 @@ GizmoSpace Mge_GetGizmoSpace(void);
 bool Mge_Gizmo3D(Vector3* position, Vector3* rotation, Vector3* scale, Camera3D camera, float size);
 
 #ifndef MGE_MAX_LIGHTS
-	#define MGE_MAX_LIGHTS 8   // shader hard limit; extra lights are ignored
+	#define MGE_MAX_LIGHTS 8   // forward shader hard limit; extra lights are ignored
+	#define MGE_MAX_LIGHTS_DEFERRED 32 // Mge_DeferredLighting takes up to this many
 #endif
 
 // Lighting. Call inside Mge_BeginMode3D:

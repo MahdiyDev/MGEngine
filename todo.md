@@ -45,4 +45,5 @@
 - [x] triplanar normal map (whiteout blend) + height map (per-plane parallax-occlusion march, offset-limiting; view frame carries the face sign so it aligns on every face)
 - [x] HDR: Mge_LoadRenderTextureHDR (RGBA16F) + Mge_DrawRenderTextureHDR (ToneMap: Reinhard/Exposure/ACES + exposure); builder sidebar HDR toggle; examples/lighting/hdr.c (LearnOpenGL Advanced-Lighting/HDR)
 - [x] bloom: mge_bloom.c -- BloomFX (bright pass + ping-pong Gaussian, half res) + Mge_DrawBloom (composite scene+glow, tone-mapped); builder bloom toggle + threshold/intensity; examples/lighting/bloom.c (LearnOpenGL Advanced-Lighting/Bloom)
+- [x] deferred shading: mge_deferred.c -- GBuffer (pos/normal/albedo+spec MRT) + Mge_BeginGeometryPass/EndGeometryPass + Mge_DeferredLighting (full-screen, up to 32 lights) + Mge_BlitGBufferDepth; examples/lighting/deferred_shading.c (LearnOpenGL Advanced-Lighting/Deferred-Shading). No shadows/normal maps in the deferred path; builder stays forward.
 - [x] builder starts in EDIT mode (was VIEW/fly)

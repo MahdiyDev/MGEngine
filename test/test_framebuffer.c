@@ -39,11 +39,23 @@ TEST(bloom_zero_value_is_inert)
     // Mge_DrawBloom guards on bright.fbo == 0; Mge_UnloadBloom guards on NULL.
 }
 
+TEST(gbuffer_zero_value_is_inert)
+{
+    GBuffer g = { 0 };
+    CHECK(g.fbo == 0 && g.depth == 0);
+    CHECK(g.position.id == 0 && g.normal.id == 0 && g.albedoSpec.id == 0);
+    CHECK(g.width == 0 && g.height == 0);
+    // Mge_Begin/EndGeometryPass, Mge_DeferredLighting, Mge_BlitGBufferDepth all
+    // guard on fbo == 0; Mge_UnloadGBuffer guards on NULL and per-id.
+    CHECK(MGE_MAX_LIGHTS_DEFERRED >= MGE_MAX_LIGHTS);
+}
+
 int main(void)
 {
     RUN(postfx_enum_is_contiguous);
     RUN(tonemap_enum_is_contiguous);
     RUN(render_texture_zero_value_is_inert);
     RUN(bloom_zero_value_is_inert);
+    RUN(gbuffer_zero_value_is_inert);
     return test_summary();
 }

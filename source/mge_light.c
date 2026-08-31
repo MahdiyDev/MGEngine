@@ -288,8 +288,12 @@ static const char* lightFragCode =
 
 static Shader s_shader = { 0 };
 static bool s_loaded = false;
-static bool s_active = false;
+static bool s_active = false;         // Mge_BeginLighting3D* is active
+static bool s_materialPass = false;   // a G-buffer geometry pass is active
 static LightingModel s_model = LIGHTING_BLINN_PHONG;
+
+void Mge_BeginMaterialPass(void) { s_materialPass = true; }
+void Mge_EndMaterialPass(void) { s_materialPass = false; }
 
 void Mge_SetLightingModel(LightingModel model)
 {
@@ -362,7 +366,7 @@ Light Mge_MakeLight(Vector3 position, Vector3 color)
 
 // ----- binding lights for a draw pass -----
 
-static void UploadLight(const Light* l, int i)
+void Mge_UploadLightUniforms(const Light* l, int i)
 {
     char name[48];
 #define U(field) (snprintf(name, sizeof(name), "lights[%d]." field, i), name)
@@ -422,7 +426,7 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
     MgeGL_Uniform1i("lightCount", count);
 
     for (int i = 0; i < count; i++)
-        UploadLight(&lights[i], i);
+        Mge_UploadLightUniforms(&lights[i], i);
 }
 
 void Mge_BeginLighting3D(Light light, Camera3D camera)
@@ -432,7 +436,7 @@ void Mge_BeginLighting3D(Light light, Camera3D camera)
 
 void Mge_SetMaterial(Material material)
 {
-    if (!s_active)
+    if (!s_active && !s_materialPass) // forward lighting, or a deferred geometry pass
         return;
 
     MgeGL_Draw(); // flush surfaces queued with the previous material
