@@ -9,7 +9,7 @@ A scene editor built on top of the engine library — see
 | `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, and the shared `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair every panel draws into |
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held |
 | `scene.c` / `scene.h` | `Scene`: name, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_DeleteObject` / `Scene_DeleteLight`, and the render passes (shadow + lit + gizmo + skybox) |
-| `topbar.c` / `.h` | the **top** strip: scene name, Open / Save / Build (stubs until Phase 2/3), VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (shadows / HDR / tone map / bloom) |
+| `topbar.c` / `.h` | the **top** strip: scene name, Open / Save / Build (stubs until Phase 2/3), VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
 | `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection (Object: active, primitive, transform, material slots. Light: type, colour, attenuation / direction) |
 | `resources.c` / `.h` | the **bottom** panel: the per-scene resource explorer — a stub until Phase 4 |

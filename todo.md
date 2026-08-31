@@ -112,7 +112,9 @@ app keeps working the whole way.
 - [x] **Right panel** (Inspector): the old `sidebar.c` inspector, unchanged
       (active toggle, primitive dropdown, transform vec3s, material groups).
 - [x] **Bottom panel** (Resources): stub -- scene stats + FPS/draws readout.
-- [x] MSAA is fixed at 4x; shadows / HDR / bloom moved to the top-bar Render menu.
+- [x] Top-bar Render menu: MSAA on/off (`Mge_SetMSAAEnabled` -- toggles
+      `GL_MULTISAMPLE` at runtime; count still fixed at window creation),
+      shadows, HDR + tone map, bloom.
 - [x] Added `Mge_TakeScreenshot` / `MgeGL_SaveScreenshot` (`mge_screenshot.c`,
       stb_image_write) -- editor F12, render-smoke round-trip, USAGE section.
 

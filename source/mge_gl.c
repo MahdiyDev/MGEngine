@@ -1043,6 +1043,15 @@ int MgeGL_GetSampleCount(void)
     return (int)samples;
 }
 
+void MgeGL_SetMultisample(bool enabled)
+{
+    MgeGL_Draw(); // flush geometry rasterized under the previous setting
+    if (enabled)
+        glEnable(GL_MULTISAMPLE);
+    else
+        glDisable(GL_MULTISAMPLE);
+}
+
 void MgeGL_SetBlend(bool enabled)
 {
     MgeGL_Draw(); // flush geometry drawn under the previous blend state

@@ -288,6 +288,13 @@ sample count is fixed at window creation (`glfwWindowHint(GLFW_SAMPLES, …)`).
 framebuffer only — a `RenderTexture` from `Mge_LoadRenderTexture` is still
 single-sampled, so post-processed passes don't get MSAA.
 
+The multisample *resolve* can be flipped at runtime with
+`Mge_SetMSAAEnabled(bool)` (state via `Mge_IsMSAAEnabled`) — it toggles
+`GL_MULTISAMPLE`, so it can't raise the count past what the window got, but it's
+enough for an editor on/off switch. Disabled, `Mge_GetMSAA()` reports `0`. The
+editor's top-bar **Render** menu has this toggle (labelled with the granted
+count).
+
 Demo: `examples/antialiasing/msaa.c` — orbiting cube + a thin rotating triangle
 outline; set `Mge_SetMSAA(0)` to bring the jaggies back.
 

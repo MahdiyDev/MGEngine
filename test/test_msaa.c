@@ -6,8 +6,15 @@
 #include "test.h"
 
 static int g_stubbedSamples;
+static int g_multisampleCalls;
+static bool g_multisampleState;
 
 int MgeGL_GetSampleCount(void) { return g_stubbedSamples; }
+void MgeGL_SetMultisample(bool enabled)
+{
+    g_multisampleCalls++;
+    g_multisampleState = enabled;
+}
 
 TEST(default_is_4x)
 {
@@ -36,9 +43,26 @@ TEST(set_msaa_keeps_valid_sample_counts)
 
 TEST(get_msaa_reports_the_framebuffer_sample_count)
 {
+    Mge_SetMSAAEnabled(true); // reset the runtime toggle
     g_stubbedSamples = 0;
     CHECK(Mge_GetMSAA() == 0);
     g_stubbedSamples = 4;
+    CHECK(Mge_GetMSAA() == 4);
+}
+
+TEST(runtime_toggle_forwards_and_masks_the_count)
+{
+    g_stubbedSamples = 4;
+    g_multisampleCalls = 0;
+
+    Mge_SetMSAAEnabled(false);
+    CHECK(g_multisampleCalls == 1 && g_multisampleState == false);
+    CHECK(!Mge_IsMSAAEnabled());
+    CHECK(Mge_GetMSAA() == 0); // disabled -> reports 0 even though the fb has 4
+
+    Mge_SetMSAAEnabled(true);
+    CHECK(g_multisampleState == true);
+    CHECK(Mge_IsMSAAEnabled());
     CHECK(Mge_GetMSAA() == 4);
 }
 
@@ -48,5 +72,6 @@ int main(void)
     RUN(set_msaa_clamps_below_two_to_off);
     RUN(set_msaa_keeps_valid_sample_counts);
     RUN(get_msaa_reports_the_framebuffer_sample_count);
+    RUN(runtime_toggle_forwards_and_masks_the_count);
     return test_summary();
 }

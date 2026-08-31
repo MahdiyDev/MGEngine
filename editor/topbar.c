@@ -19,6 +19,12 @@ static void render_menu(Scene* s)
     if (!Mge_GuiBeginMenu("Render"))
         return;
 
+    bool msaa = Mge_IsMSAAEnabled();
+    char msaaLbl[24];
+    snprintf(msaaLbl, sizeof(msaaLbl), "MSAA (%dx)", Mge_GetRequestedMSAA());
+    if (Mge_GuiCheckbox(msaa ? msaaLbl : "MSAA (off)", &msaa))
+        Mge_SetMSAAEnabled(msaa);
+
     Mge_GuiCheckbox("shadows", &s->shadowsOn);
     Mge_GuiCheckbox("HDR", &s->hdrOn);
     if (s->hdrOn) {

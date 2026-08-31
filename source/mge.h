@@ -654,8 +654,10 @@ bool Mge_GetGammaCorrection(void);
 void Mge_ApplyGammaState(void);      // internal: re-assert the flag (called by Mge_InitWindow)
 
 void Mge_SetMSAA(int samples);       // MSAA sample count for the window; call BEFORE Mge_InitWindow (default 4, < 2 disables)
-int  Mge_GetMSAA(void);              // sample count the driver granted (0 = none); valid after Mge_InitWindow
+int  Mge_GetMSAA(void);              // effective sample count (0 = none / disabled); valid after Mge_InitWindow
 int  Mge_GetRequestedMSAA(void);     // internal: what the platform layer should request
+void Mge_SetMSAAEnabled(bool enabled); // toggle the multisample resolve at runtime; call AFTER Mge_InitWindow
+bool Mge_IsMSAAEnabled(void);
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
 void Mge_CloseWindow(void);
