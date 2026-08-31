@@ -600,6 +600,53 @@ static void scene_deferred(void)
     Mge_UnloadGBuffer(&g);
 }
 
+// SSAO: a box wedged into a corner -- the creases should darken.
+static void scene_ssao(void)
+{
+    GBuffer g = Mge_LoadGBuffer(W, H);
+    SSAO ao = Mge_LoadSSAO(W, H);
+    ao.radius = 0.8f;
+    ao.power = 2.5f;
+
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -0.9f, -0.5f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.6f; // SSAO bites into this
+    sun.diffuse = 0.4f;
+    Light lights[1] = { sun };
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 4, 3.5f, 4 };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+
+    Object floorObj = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, -1, 0 }, (Vector3){ 12, 0.2f, 12 }, (Color){ 190, 188, 185, 255 });
+    Object wall = Mge_MakeObject3D((Vector3){ 0, 1, -2.5f }, (Vector3){ 12, 5, 0.4f }, (Color){ 185, 183, 180, 255 });
+    Object box = Mge_MakeObject3D((Vector3){ 0, 0, -1 }, (Vector3){ 2, 2, 2 }, (Color){ 200, 140, 110, 255 });
+    Object ball = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ -2.4f, -0.2f, 0 }, (Vector3){ 1.6f, 1.6f, 1.6f }, (Color){ 130, 170, 210, 255 });
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 10, 11, 15, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginGeometryPass(&g, cam);
+    Mge_DrawObject(floorObj);
+    Mge_DrawObject(wall);
+    Mge_DrawObject(box);
+    Mge_DrawObject(ball);
+    Mge_EndGeometryPass();
+    Mge_EndMode3D();
+
+    Mge_ComputeSSAO(&ao, g, cam);
+    Mge_DeferredLightingAO(g, lights, 1, cam, ao.aoBlur.texture.id);
+    check("ssao");
+
+    // also exercise the raw-AO view
+    Mge_ClearBackground((Color){ 0, 0, 0, 255 });
+    Mge_DrawRenderTextureFX(ao.aoBlur, POSTFX_NONE);
+    check("ssao_raw");
+    Mge_EndDrawing();
+
+    Mge_UnloadSSAO(&ao);
+    Mge_UnloadGBuffer(&g);
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -625,6 +672,7 @@ int main(void)
     scene_hdr();
     scene_bloom();
     scene_deferred();
+    scene_ssao();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

@@ -91,6 +91,7 @@ static const char* lightFrag =
     "uniform sampler2D gPosition;\n"
     "uniform sampler2D gNormal;\n"
     "uniform sampler2D gAlbedoSpec;\n"
+    "uniform sampler2D aoTex;\n"     // SSAO occlusion (white when disabled)
     "void main()\n"
     "{\n"
     "    vec3 N = texture(gNormal, vUV).rgb;\n"
@@ -99,6 +100,7 @@ static const char* lightFrag =
     "    vec3 P = texture(gPosition, vUV).rgb;\n"
     "    vec4 as = texture(gAlbedoSpec, vUV);\n"
     "    vec3 albedo = as.rgb; float matSpec = as.a;\n"
+    "    float ao = texture(aoTex, vUV).r;\n"
     "    vec3 V = normalize(viewPos - P);\n"
     "    vec3 lit = vec3(0.0);\n"
     "    for (int i = 0; i < lightCount && i < MAX_LIGHTS; i++) {\n"
@@ -120,7 +122,7 @@ static const char* lightFrag =
     "        float sa = (blinn == 1) ? max(dot(N, normalize(L + V)), 0.0)\n"
     "                                : max(dot(V, reflect(-L, N)), 0.0);\n"
     "        float spec = (diff > 0.0) ? pow(sa, max(shininess, 1.0)) : 0.0;\n"
-    "        vec3 amb = lights[i].ambient  * lights[i].color;\n"
+    "        vec3 amb = lights[i].ambient  * lights[i].color * ao;\n"
     "        vec3 dif = lights[i].diffuse  * diff * lights[i].color;\n"
     "        vec3 spc = lights[i].specular * matSpec * spec * lights[i].color;\n"
     "        lit += amb + (dif + spc) * atten * intensity;\n"
@@ -249,7 +251,8 @@ void Mge_EndGeometryPass(void)
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
 }
 
-void Mge_DeferredLighting(GBuffer g, const Light* lights, int count, Camera3D camera)
+static void deferred_lighting(GBuffer g, const Light* lights, int count, Camera3D camera,
+    unsigned int aoTex)
 {
     if (g.fbo == 0)
         return;
@@ -264,10 +267,13 @@ void Mge_DeferredLighting(GBuffer g, const Light* lights, int count, Camera3D ca
     glBindTexture(GL_TEXTURE_2D, g.normal.id);
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, g.albedoSpec.id);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, (aoTex != 0) ? aoTex : MgeGL_GetWhiteTexture());
     glActiveTexture(GL_TEXTURE0);
     MgeGL_Uniform1i("gPosition", 0);
     MgeGL_Uniform1i("gNormal", 1);
     MgeGL_Uniform1i("gAlbedoSpec", 2);
+    MgeGL_Uniform1i("aoTex", 3);
 
     MgeGL_Uniform3fv("viewPos", camera.position);
     MgeGL_Uniform1i("blinn", (Mge_GetLightingModel() == LIGHTING_PHONG) ? 0 : 1);
@@ -283,9 +289,23 @@ void Mge_DeferredLighting(GBuffer g, const Light* lights, int count, Camera3D ca
     glDrawArrays(GL_TRIANGLES, 0, 6);
     MgeGL_RegisterDrawCall();
     glBindVertexArray(0);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
+}
+
+void Mge_DeferredLighting(GBuffer g, const Light* lights, int count, Camera3D camera)
+{
+    deferred_lighting(g, lights, count, camera, 0);
+}
+
+void Mge_DeferredLightingAO(GBuffer g, const Light* lights, int count, Camera3D camera,
+    unsigned int aoTexture)
+{
+    deferred_lighting(g, lights, count, camera, aoTexture);
 }
 
 void Mge_BlitGBufferDepth(GBuffer g)

@@ -50,6 +50,15 @@ TEST(gbuffer_zero_value_is_inert)
     CHECK(MGE_MAX_LIGHTS_DEFERRED >= MGE_MAX_LIGHTS);
 }
 
+TEST(ssao_zero_value_is_inert)
+{
+    SSAO s = { 0 };
+    CHECK(s.aoRaw.fbo == 0 && s.aoBlur.fbo == 0 && s.noiseTex == 0);
+    CHECK(s.kernelSize == 0 && s.radius == 0.0f && s.width == 0);
+    CHECK(sizeof(s.kernel) / sizeof(s.kernel[0]) == 64); // shader takes vec3 samples[64]
+    // Mge_ComputeSSAO guards on aoRaw.fbo == 0; Mge_UnloadSSAO guards on NULL.
+}
+
 int main(void)
 {
     RUN(postfx_enum_is_contiguous);
@@ -57,5 +66,6 @@ int main(void)
     RUN(render_texture_zero_value_is_inert);
     RUN(bloom_zero_value_is_inert);
     RUN(gbuffer_zero_value_is_inert);
+    RUN(ssao_zero_value_is_inert);
     return test_summary();
 }

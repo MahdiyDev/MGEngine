@@ -787,6 +787,36 @@ void    Mge_EndGeometryPass(void);
 void    Mge_DeferredLighting(GBuffer g, const Light* lights, int count, Camera3D camera);
 void    Mge_BlitGBufferDepth(GBuffer g); // copy the G-buffer depth to the bound draw FBO
 
+// SSAO -- screen-space ambient occlusion. From the deferred G-buffer, sample a
+// hemisphere of points around each pixel and count how many are buried behind
+// nearby geometry; the result darkens the ambient term so creases and contact
+// points get subtle shadowing that no light computes. Feed the blurred result
+// to Mge_DeferredLightingAO.
+//
+//   SSAO ao = Mge_LoadSSAO(w, h);
+//   ao.radius = 0.5f; ao.bias = 0.025f; ao.power = 2.0f;
+//   ... geometry pass fills the G-buffer ...
+//   Mge_ComputeSSAO(&ao, g, cam);
+//   Mge_DeferredLightingAO(g, lights, count, cam, ao.aoBlur.texture.id);
+//
+typedef struct SSAO {
+    RenderTexture aoRaw;   // noisy occlusion, one channel
+    RenderTexture aoBlur;  // 4x4-box-blurred -- sample this
+    unsigned int noiseTex; // 4x4 tiled random rotation vectors
+    Vector3 kernel[64];     // hemisphere sample offsets
+    int kernelSize;         // how many of `kernel` to use (<= 64)
+    float radius;           // sample hemisphere radius, world units (~0.5)
+    float bias;             // depth bias to kill self-occlusion acne (~0.025)
+    float power;            // occlusion contrast (ao = pow(ao, power); ~1.5..2.5)
+    int width, height;
+} SSAO;
+
+SSAO Mge_LoadSSAO(int width, int height);
+void Mge_UnloadSSAO(SSAO* ssao);
+void Mge_ComputeSSAO(SSAO* ssao, GBuffer g, Camera3D camera); // fills ssao->aoBlur
+void Mge_DeferredLightingAO(GBuffer g, const Light* lights, int count, Camera3D camera,
+    unsigned int aoTexture); // like Mge_DeferredLighting, but ambient *= aoTexture.r
+
 // internal: the geometry pass / a lighting pass consumes materials; Mge_SetMaterial
 // and the light-uniform upload key off these.
 void Mge_BeginMaterialPass(void);
