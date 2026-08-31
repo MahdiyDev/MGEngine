@@ -8,7 +8,9 @@
 //     drag a gizmo       move / rotate / scale it (hold Ctrl to snap)
 //   Ctrl+S  save scene   Ctrl+Z / Ctrl+Y  undo / redo   Ctrl+D  duplicate
 //   Delete  remove the selection (asks first)          F12  screenshot
-//   Play / Stop          build + run the scene's code (hot-reloads on .c change)
+//   Play / Stop          a third mode: panels hide, the scene runs through its
+//                        main camera with real input; Esc or Stop returns and
+//                        restores the pre-Play scene
 //   panels
 //     top bar            Project + Scene menus, Play/Build/Console, mode, gizmo, Render
 //     left (Hierarchy)   objects + lights; add / rename / toggle / delete / reorder
@@ -75,9 +77,11 @@ int main(void)
     int fpsShown = 0, drawsShown = 0;
     double fpsAt = 0.0;
     bool prevEditMode = editMode;
+    bool prevPlaying = false;
     bool wantDeletePopup = false;
 
     for (;;) {
+        bool playing = play.playing;
         bool guiKeyboard = Mge_GuiWantsKeyboard();
         bool guiMouse = Mge_GuiWantsMouse();
 
@@ -87,10 +91,21 @@ int main(void)
             fpsAt = Mge_GetTime();
         }
 
-        if (IsKeyPressed(KEY_TAB) && !guiKeyboard)
+        if (IsKeyPressed(KEY_TAB) && !guiKeyboard && !playing)
             editMode = !editMode;
 
-        if (editMode != prevEditMode) {
+        // cursor: Play mode captures it (the module may re-enable it); leaving Play
+        // restores the EDIT/VIEW state
+        if (playing != prevPlaying) {
+            if (playing)
+                DisableCursor();
+            else if (editMode)
+                EnableCursor();
+            else
+                DisableCursor();
+            prevPlaying = playing;
+            prevEditMode = editMode;
+        } else if (!playing && editMode != prevEditMode) {
             if (editMode)
                 EnableCursor();
             else
@@ -98,22 +113,32 @@ int main(void)
             prevEditMode = editMode;
         }
 
-        EditorCamera_Update(&camera, editMode, guiMouse);
+        // --- the view camera ---
+        Camera3D view;
+        bool gameCam = playing && Scene_MainCamera(&scene, &view);
+        if (!gameCam) {
+            EditorCamera_Update(&camera, playing ? false : editMode, guiMouse && !playing);
+            view = camera.cam;
+        }
+        play.viewCam = view;
 
-        Play_Frame(&play, &project, &scene, &camera);
+        Play_Frame(&play, &project, &scene); // runs the module; may move the game camera
+
+        if (playing && Scene_MainCamera(&scene, &view))
+            play.viewCam = view;
 
         bool looking = EditorCamera_IsLooking(&camera);
-        bool interact = editMode && !looking && !guiMouse && !play.playing;
+        bool interact = editMode && !looking && !guiMouse && !playing;
 
         Mge_BeginDrawing();
 
-        bool gizmoBusy = Scene_Draw(&scene, camera.cam, interact, true);
+        bool gizmoBusy = Scene_Draw(&scene, view, interact, !playing); // no editor markers in Play
         if (gizmoBusy) {
             History_Record(&hist);
             scene.dirty = true;
         }
         if (interact && !gizmoBusy)
-            Scene_Pick(&scene, camera.cam);
+            Scene_Pick(&scene, view);
 
         // docked-panel layout, recomputed each frame (window can be resized)
         float W = (float)Mge_GetScreenWidth(), H = (float)Mge_GetScreenHeight();
@@ -125,70 +150,83 @@ int main(void)
 
         Mge_GuiBeginFrame();
 
+        // close button / Esc
         if (Mge_WindowShouldClose()) {
             Mge_SetWindowShouldClose(false);
-            FileOps_Request(&ops, (TopbarResult){ TOPBAR_QUIT, 0 }, &project, &scene, &camera, &hist);
-        }
-
-        TopbarResult tr = Topbar_Draw(rTop, &project, &scene, &editMode, play.playing, &play.showConsole);
-        if (Hierarchy_Draw(rLeft, &scene, &hist))
-            wantDeletePopup = true;
-        Inspector_Draw(rRight, &scene, &project, &hist);
-        if (play.showConsole)
-            Play_DrawConsole(&play, rBottom);
-        else
-            Resources_Draw(&res, rBottom, &project, &scene, fpsShown, drawsShown);
-
-        // --- editing hotkeys (EDIT mode, not while a field has focus / while playing) ---
-        bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
-        bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-        bool keysFree = editMode && !guiKeyboard && !play.playing;
-
-        if (keysFree && ctrl && IsKeyPressed(KEY_S))
-            tr = (TopbarResult){ TOPBAR_SCENE_SAVE, 0 };
-
-        if (keysFree && ctrl && IsKeyPressed(KEY_Z)) {
-            if (shift)
-                History_Redo(&hist, &scene);
+            if (playing)
+                Play_Action(&play, TOPBAR_STOP, &project, &scene); // Esc -> stop Play
             else
-                History_Undo(&hist, &scene);
+                FileOps_Request(&ops, (TopbarResult){ TOPBAR_QUIT, 0 }, &project, &scene, &camera, &hist);
         }
-        if (keysFree && ctrl && IsKeyPressed(KEY_Y))
-            History_Redo(&hist, &scene);
 
-        if (keysFree && ctrl && IsKeyPressed(KEY_D) && scene.selKind == SEL_OBJECT) {
-            History_Record(&hist);
-            if (Scene_DuplicateSelectedObjects(&scene) > 0) {
-                char root[512];
-                Project_Root(&project, root, sizeof(root));
-                Scene_LoadMaterialTextures(&scene, root);
+        TopbarResult tr = { TOPBAR_NONE, 0 };
+
+        if (playing) {
+            if (Play_DrawOverlay(&play, W, fpsShown))
+                tr.action = TOPBAR_STOP;
+            if (play.showConsole)
+                Play_DrawConsole(&play, rBottom);
+        } else {
+            tr = Topbar_Draw(rTop, &project, &scene, &editMode, play.playing, &play.showConsole);
+            if (Hierarchy_Draw(rLeft, &scene, &hist))
+                wantDeletePopup = true;
+            Inspector_Draw(rRight, &scene, &project, &hist);
+            if (play.showConsole)
+                Play_DrawConsole(&play, rBottom);
+            else
+                Resources_Draw(&res, rBottom, &project, &scene, fpsShown, drawsShown);
+
+            // --- editing hotkeys (EDIT mode, not while a field has focus) ---
+            bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+            bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+            bool keysFree = editMode && !guiKeyboard;
+
+            if (keysFree && ctrl && IsKeyPressed(KEY_S))
+                tr = (TopbarResult){ TOPBAR_SCENE_SAVE, 0 };
+
+            if (keysFree && ctrl && IsKeyPressed(KEY_Z)) {
+                if (shift)
+                    History_Redo(&hist, &scene);
+                else
+                    History_Undo(&hist, &scene);
             }
-        }
-        if (keysFree && IsKeyPressed(KEY_DELETE) && scene.selKind == SEL_OBJECT)
-            wantDeletePopup = true;
+            if (keysFree && ctrl && IsKeyPressed(KEY_Y))
+                History_Redo(&hist, &scene);
 
-        if (wantDeletePopup) {
-            Mge_GuiOpenPopup(DELETE_ID);
-            wantDeletePopup = false;
-        }
-        if (Mge_GuiBeginPopup(DELETE_ID)) {
-            int n = (scene.selKind == SEL_OBJECT) ? 1 + scene.selExtraCount : 0;
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Delete %d object%s?", n, n == 1 ? "" : "s");
-            Mge_GuiLabel(msg);
-            Mge_GuiSpacing();
-            if (Mge_GuiButton("Delete")) {
+            if (keysFree && ctrl && IsKeyPressed(KEY_D) && scene.selKind == SEL_OBJECT) {
                 History_Record(&hist);
-                Scene_DeleteSelectedObjects(&scene);
-                Mge_GuiClosePopup();
+                if (Scene_DuplicateSelectedObjects(&scene) > 0) {
+                    char root[512];
+                    Project_Root(&project, root, sizeof(root));
+                    Scene_LoadMaterialTextures(&scene, root);
+                }
             }
-            Mge_GuiSameLine();
-            if (Mge_GuiButton("Cancel"))
-                Mge_GuiClosePopup();
-            Mge_GuiEndPopup();
+            if (keysFree && IsKeyPressed(KEY_DELETE) && scene.selKind == SEL_OBJECT)
+                wantDeletePopup = true;
+
+            if (wantDeletePopup) {
+                Mge_GuiOpenPopup(DELETE_ID);
+                wantDeletePopup = false;
+            }
+            if (Mge_GuiBeginPopup(DELETE_ID)) {
+                int n = (scene.selKind == SEL_OBJECT) ? 1 + scene.selExtraCount : 0;
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Delete %d object%s?", n, n == 1 ? "" : "s");
+                Mge_GuiLabel(msg);
+                Mge_GuiSpacing();
+                if (Mge_GuiButton("Delete")) {
+                    History_Record(&hist);
+                    Scene_DeleteSelectedObjects(&scene);
+                    Mge_GuiClosePopup();
+                }
+                Mge_GuiSameLine();
+                if (Mge_GuiButton("Cancel"))
+                    Mge_GuiClosePopup();
+                Mge_GuiEndPopup();
+            }
         }
 
-        if (Play_Action(&play, tr.action, &project, &scene, &camera))
+        if (Play_Action(&play, tr.action, &project, &scene))
             tr.action = TOPBAR_NONE;
 
         FileOps_Request(&ops, tr, &project, &scene, &camera, &hist);
@@ -201,8 +239,8 @@ int main(void)
 
         Mge_EndDrawing();
 
-        // refresh the undo baseline once the scene settles (no drag / edit / field)
-        if (!gizmoBusy && !guiKeyboard && !hist.touched)
+        // refresh the undo baseline once the scene settles (edit mode only)
+        if (!playing && !gizmoBusy && !guiKeyboard && !hist.touched)
             History_Rest(&hist, &scene);
         History_EndFrame(&hist);
 
@@ -211,7 +249,7 @@ int main(void)
     }
 
     History_Free(&hist);
-    Play_Shutdown(&play, &scene, &camera);
+    Play_Shutdown(&play, &scene);
     Resources_Shutdown(&res);
     Scene_Shutdown(&scene);
     Mge_GuiShutdown();

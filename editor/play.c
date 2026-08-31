@@ -19,7 +19,7 @@ static const char* active_name(const Project* proj)
     return proj->scenes[proj->activeScene];
 }
 
-static MgeSceneCtx make_ctx(Scene* s, EditorCamera* cam)
+static MgeSceneCtx make_ctx(Scene* s, Camera3D cam)
 {
     MgeSceneCtx c = { 0 };
     c.objects = s->objects;
@@ -28,7 +28,7 @@ static MgeSceneCtx make_ctx(Scene* s, EditorCamera* cam)
     c.lights = s->lights;
     c.lightCount = &s->lightCount;
     c.maxLights = SCENE_MAX_LIGHTS;
-    c.camera = cam->cam;
+    c.camera = cam;
     c.selected = (s->selKind == SEL_OBJECT) ? s->selIndex : -1;
     return c;
 }
@@ -82,9 +82,9 @@ static void cancel_job(Play* p)
     p->jobPurpose = JOB_NONE;
 }
 
-static void reload(Play* p, const Project* proj, Scene* s, EditorCamera* cam, const char* dll)
+static void reload(Play* p, const Project* proj, Scene* s, const char* dll)
 {
-    MgeSceneCtx ctx = make_ctx(s, cam);
+    MgeSceneCtx ctx = make_ctx(s, p->viewCam);
     SceneRuntime_Shutdown(&p->rt, &ctx);
     SceneRuntime_Unload(&p->rt);
 
@@ -103,7 +103,7 @@ static void reload(Play* p, const Project* proj, Scene* s, EditorCamera* cam, co
 }
 
 // A background compile just finished: act on p->job.ok / p->job.outDll.
-static void finish_job(Play* p, Project* proj, Scene* s, EditorCamera* cam)
+static void finish_job(Play* p, Project* proj, Scene* s)
 {
     bool ok = p->job.ok;
     char dll[768];
@@ -124,7 +124,7 @@ static void finish_job(Play* p, Project* proj, Scene* s, EditorCamera* cam)
             return;
         }
         p->snapshot = *s;
-        MgeSceneCtx ctx = make_ctx(s, cam);
+        MgeSceneCtx ctx = make_ctx(s, p->viewCam);
         SceneRuntime_Init(&p->rt, &ctx);
         char dir[700];
         Project_SceneDir(proj, active_name(proj), dir, sizeof(dir));
@@ -135,13 +135,13 @@ static void finish_job(Play* p, Project* proj, Scene* s, EditorCamera* cam)
 
     if (purpose == JOB_BUILD) {
         if (ok && p->playing)
-            reload(p, proj, s, cam, dll);
+            reload(p, proj, s, dll);
         return;
     }
 
     if (purpose == JOB_RELOAD) {
         if (ok)
-            reload(p, proj, s, cam, dll);
+            reload(p, proj, s, dll);
         else
             p->rt.sourceDigest = digest; // failed build: don't respin on the same source
         return;
@@ -150,7 +150,7 @@ static void finish_job(Play* p, Project* proj, Scene* s, EditorCamera* cam)
 
 // ---- public ----
 
-bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s, EditorCamera* cam)
+bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s)
 {
     switch (a) {
     case TOPBAR_BUILD:
@@ -159,7 +159,7 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s, EditorCamera*
 
     case TOPBAR_BUILD_RELEASE:
         if (p->playing)
-            Play_Action(p, TOPBAR_STOP, proj, s, cam);
+            Play_Action(p, TOPBAR_STOP, proj, s);
         cancel_job(p);
         Release_Build(proj, &p->log); // synchronous: ships every scene at once
         p->showConsole = true;
@@ -177,7 +177,7 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s, EditorCamera*
         if (!p->playing)
             return true;
         {
-            MgeSceneCtx ctx = make_ctx(s, cam);
+            MgeSceneCtx ctx = make_ctx(s, p->viewCam);
             SceneRuntime_Shutdown(&p->rt, &ctx);
         }
         SceneRuntime_Unload(&p->rt);
@@ -190,11 +190,11 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s, EditorCamera*
     }
 }
 
-void Play_Frame(Play* p, Project* proj, Scene* s, EditorCamera* cam)
+void Play_Frame(Play* p, Project* proj, Scene* s)
 {
     // advance an in-flight compile (started by Build / Play / a hot-reload)
     if (p->jobPurpose != JOB_NONE && SceneBuild_Poll(&p->job))
-        finish_job(p, proj, s, cam);
+        finish_job(p, proj, s);
 
     if (!p->playing)
         return;
@@ -223,8 +223,29 @@ void Play_Frame(Play* p, Project* proj, Scene* s, EditorCamera* cam)
         }
     }
 
-    MgeSceneCtx ctx = make_ctx(s, cam);
+    MgeSceneCtx ctx = make_ctx(s, p->viewCam);
     SceneRuntime_Update(&p->rt, &ctx, (float)Mge_GetDeltaTime());
+}
+
+bool Play_DrawOverlay(Play* p, float screenW, int fps)
+{
+    bool stop = false;
+    if (!Mge_GuiBeginPanel("##playbar", 0.0f, 0.0f, screenW, 34.0f)) {
+        Mge_GuiEndPanel();
+        return false;
+    }
+    if (Mge_GuiButton("[ Stop ]"))
+        stop = true;
+    Mge_GuiSameLine();
+    if (Mge_GuiButton(p->showConsole ? "[Console]" : "Console"))
+        p->showConsole = !p->showConsole;
+    Mge_GuiSameLine();
+
+    char label[96];
+    snprintf(label, sizeof(label), "PLAYING  --  Esc to stop  |  FPS %d", fps);
+    Mge_GuiLabel(label);
+    Mge_GuiEndPanel();
+    return stop;
 }
 
 void Play_DrawConsole(Play* p, Rectangle rect)
@@ -245,12 +266,12 @@ void Play_DrawConsole(Play* p, Rectangle rect)
     Mge_GuiEndPanel();
 }
 
-void Play_Shutdown(Play* p, Scene* s, EditorCamera* cam)
+void Play_Shutdown(Play* p, Scene* s)
 {
     if (p->jobPurpose != JOB_NONE)
         SceneBuild_Clear(&p->job);
     if (p->playing) {
-        MgeSceneCtx ctx = make_ctx(s, cam);
+        MgeSceneCtx ctx = make_ctx(s, p->viewCam);
         SceneRuntime_Shutdown(&p->rt, &ctx);
         p->playing = false;
     }

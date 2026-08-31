@@ -6,7 +6,7 @@ A scene editor built on top of the engine library — see
 
 | file | contents |
 | --- | --- |
-| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, the close-button guard. Owns the `Project` + the active `Scene` |
+| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, the Play-mode branch (hide panels, view through the main camera, Esc = Stop), **F12** screenshot, the close-button guard. Owns the `Project` + active `Scene` + undo `History` |
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |
 | `project.c` / `project.h` | `Project`: global config (window / build settings) + the scene list. `Project_Default` / `Project_AddScene` / `Project_RemoveScene`, and `Project_Root` / `Project_SceneDir` / `Project_SceneFile` path helpers |
 | `project_io.c` / `.h` | `project.mgproject` read / write (`Project_Save` / `Project_Load`) — flat text, **data only** |
@@ -17,7 +17,7 @@ A scene editor built on top of the engine library — see
 | `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog`. `SceneBuild_Compile` blocks; `SceneBuild_Start` / `_Poll` / `_Clear` (`SceneBuildJob`) run the compiler as a detached process the editor polls each frame |
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
 | `history.c` / `.h` | `History`: undo / redo as whole-`Scene` snapshots. `History_Record` at each mutation site (coalesced per edit burst), `History_Rest` refreshes the baseline when idle, `Scene_RestoreSnapshot` puts a snapshot back — reusing already-loaded material textures / the skybox by source path so an undo re-reads no files |
-| `play.c` / `.h` | Play / Stop / Build: snapshot the scene, compile + load, run `MgeScene_Update` each frame, hot-reload on change, restore on Stop; draws the console panel |
+| `play.c` / `.h` | Play mode: snapshot the scene, compile (async) + load the module, run `MgeScene_Update` each frame with `p->viewCam`, hot-reload on change, restore on Stop; the play-mode overlay strip + the build console |
 | `release.c` / `.h` | **Build Release**: compile every scene `-O2 -DNDEBUG -s`, `Mge_PakWrite` the data, stage `<root>/dist/` with a copy of the standalone player |
 | `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights. `+ add` menu, per-row select (ctrl-click = multi), **double-click to rename**, active toggle, `x` to delete, **drag to reorder** / Shift-drop to parent (children shown indented) |
@@ -60,7 +60,8 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 | **Ctrl+Z** / **Ctrl+Y** / **Ctrl+Shift+Z** | undo / redo / redo |
 | **Ctrl+D** | duplicate the selected object(s) just off the originals |
 | **Delete** | remove the selected object(s) — asks first |
-| **Play** / **Stop** / **Build** | build + run the active scene's code. The compile runs as a **separate process** — the editor keeps drawing while it works; the result lands in the Console. Editing is paused while playing and the scene is restored on Stop |
+| **Build** | compile the active scene's module as a separate process — the editor keeps drawing; output lands in the Console |
+| **Play** / **Stop** (or **Esc**) | enter / leave **Play mode** — panels hide, the scene runs through its main camera with real input, Stop restores it (see below) |
 | **F12** | save `editor_screenshot.png` next to the executable (`Mge_TakeScreenshot`) |
 
 Panels are only clickable in EDIT mode. Engine input is suppressed while a widget
@@ -133,13 +134,32 @@ links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`, `Mge_Load*`, etc
 
 | top-bar button | |
 | --- | --- |
-| **Build** | compile the active scene → `scenes/<name>/build/<name>_debug.dll`; output goes to the **Console** panel |
-| **Play** / **Stop** | Build, then load + run: `MgeScene_Init` once, `MgeScene_Update(ctx, dt)` every frame. Editing / the gizmo are paused. **Stop** calls `MgeScene_Shutdown` and restores the scene to its pre-Play state (Play-mode changes are discarded) |
+| **Build** | compile the active scene → `scenes/<name>/build/<name>_debug.dll` as a **separate process** (the editor keeps drawing); output goes to the **Console** panel |
+| **Play** / **Stop** | see **Play mode** below |
 | **Console** | toggle the build-log panel (replaces Resources at the bottom) |
 
-While **Play** is running, saving any `.c` in the scene folder triggers an
-automatic **rebuild + reload** (`Shutdown` old, `Init` new) — a compile error
-just shows in the console and the old module keeps running.
+### Play mode
+
+**Play** compiles the module (async), snapshots the scene, and switches the
+editor into a third mode:
+
+- the **panels disappear** — a slim strip at the top has **Stop**, a **Console**
+  toggle and the FPS; the viewport fills the window
+- the scene is viewed through its **main camera** object (Environment ▸ main
+  camera), exactly like the built player — a scene module can move that camera
+  object to move the view. A scene with no main camera falls back to the editor
+  fly-cam
+- **all input goes to the game**: `MgeScene_Update(ctx, dt)` runs every frame and
+  reads `IsKeyDown` / `GetMousePosition` / … raw. Selection, the gizmo, the
+  editing hotkeys and Tab are all inert. The module owns the cursor (it starts
+  captured; call `EnableCursor()` from the module for a menu)
+- editor markers (lamp / camera icons, the gizmo) are not drawn
+
+**Stop** (button or **Esc**) calls `MgeScene_Shutdown`, unloads the module, and
+**restores the scene to its pre-Play state** — anything the module changed is
+discarded. Saving any `.c` in the scene folder while playing triggers an
+automatic background **rebuild + reload** (`Shutdown` old, `Init` new); a compile
+error just shows in the console and the old module keeps running.
 
 The compiler is `$CC` (default `gcc`) and must be on `PATH`. The editor finds the
 engine SDK via `$MGE_ENGINE`, else by searching upward from the working directory

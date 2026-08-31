@@ -1,6 +1,7 @@
 #include "scene_io.h"
 #include "pathutil.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -369,11 +370,21 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
                 obj->transform.position = (Vector3){ x, y, z };
             else if (strcmp(key, "rotation") == 0) {
                 float qw;
-                if (sscanf(rest, "%f %f %f %f", &x, &y, &z, &qw) == 4)
+                if (sscanf(rest, "%f %f %f %f", &x, &y, &z, &qw) == 4) {
                     obj->transform.rotation = (Quaternion){ x, y, z, qw };
-                else if (sscanf(rest, "%f %f %f", &x, &y, &z) == 3) // legacy euler degrees
-                    obj->transform.rotation = Quaternion_FromEuler(
-                        (Vector3){ x * DEG2RAD, y * DEG2RAD, z * DEG2RAD });
+                } else if (sscanf(rest, "%f %f %f", &x, &y, &z) == 3) {
+                    // legacy 3-value euler-degrees line
+                    if (obj->kind == OBJECT_CAMERA) {
+                        // old camera euler: .x = pitch, .y = yaw, spherical (matches
+                        // the pre-quaternion Mge_CameraObjectForward)
+                        float yaw = y * DEG2RAD, pitch = x * DEG2RAD;
+                        Vector3 fwd = { cosf(yaw) * cosf(pitch), sinf(pitch), sinf(yaw) * cosf(pitch) };
+                        obj->transform.rotation = Quaternion_LookRotation(fwd, (Vector3){ 0, 1, 0 });
+                    } else {
+                        obj->transform.rotation = Quaternion_FromEuler(
+                            (Vector3){ x * DEG2RAD, y * DEG2RAD, z * DEG2RAD });
+                    }
+                }
             }
             else if (strcmp(key, "scale") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
                 obj->transform.scale = (Vector3){ x, y, z };

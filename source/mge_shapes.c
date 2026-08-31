@@ -237,7 +237,9 @@ void Draw_CubeEx(Vector3 center, Vector3 size, Quaternion rotation, Color color)
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
 
     const bool rot = has_rotation(rotation);
-    const Matrix R = rot ? Quaternion_ToMatrix(rotation) : Matrix_Identity();
+    // normalise defensively so a drifted / mis-built quaternion still draws a
+    // finite box instead of flying off to infinity
+    const Matrix R = rot ? Quaternion_ToMatrix(Quaternion_Normalize(rotation)) : Matrix_Identity();
 
     // 6 faces, each: outward normal + its 4 corner OFFSETS from centre (bottom-
     // left, bottom-right, top-right, top-left seen from outside). Rotated about
@@ -289,7 +291,7 @@ void Draw_CubeWiresEx(Vector3 center, Vector3 size, Quaternion rotation, Color c
     float x = size.x * 0.5f, y = size.y * 0.5f, z = size.z * 0.5f;
 
     const bool rot = has_rotation(rotation);
-    const Matrix R = rot ? Quaternion_ToMatrix(rotation) : Matrix_Identity();
+    const Matrix R = rot ? Quaternion_ToMatrix(Quaternion_Normalize(rotation)) : Matrix_Identity();
 
     Vector3 c[8] = {
         { -x, -y, -z }, { x, -y, -z }, { x, y, -z }, { -x, y, -z },

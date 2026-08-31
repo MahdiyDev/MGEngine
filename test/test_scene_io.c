@@ -323,6 +323,37 @@ TEST(legacy_euler_rotation_line)
     remove("scene_io_tmp/legacy.c");
 }
 
+// a legacy camera used a spherical yaw/pitch euler; it must still aim the same
+// after being read as a quaternion
+TEST(legacy_camera_euler_keeps_its_aim)
+{
+    Path_MakeDirs("scene_io_tmp");
+    const char* path = "scene_io_tmp/legacycam.mgscene";
+    FILE* f = fopen(path, "wb");
+    CHECK(f != NULL);
+    fprintf(f,
+        "mgescene 1\n"
+        "name \"lc\"\n"
+        "object \"Cam\"\n"
+        "  kind camera\n"
+        "  rotation -8 -90 0\n"); // pitch -8, yaw -90 (old convention)
+    fclose(f);
+
+    Scene s;
+    CHECK(Scene_Load(&s, path, NULL));
+    CHECK(s.objects[0].kind == OBJECT_CAMERA);
+
+    // old Mge_CameraObjectForward for {-8, -90, 0}
+    float yaw = -90.0f * DEG2RAD, pitch = -8.0f * DEG2RAD;
+    Vector3 want = { cosf(yaw) * cosf(pitch), sinf(pitch), sinf(yaw) * cosf(pitch) };
+    // Mge_CameraObjectForward == the orientation applied to local -Z
+    Vector3 got = Quaternion_RotateVector3(s.objects[0].transform.rotation, (Vector3){ 0, 0, -1 });
+    CHECK(feq(got.x, want.x) && feq(got.y, want.y) && feq(got.z, want.z));
+
+    remove(path);
+    remove("scene_io_tmp/lc.c");
+}
+
 TEST(load_rejects_a_non_scene_file)
 {
     FILE* f = fopen("scene_io_tmp/bogus.mgscene", "wb");
@@ -366,6 +397,7 @@ int main(void)
     RUN(fs_list_rename_remove);
     RUN(scene_mge_round_trip);
     RUN(legacy_euler_rotation_line);
+    RUN(legacy_camera_euler_keeps_its_aim);
     RUN(load_rejects_a_non_scene_file);
     RUN(canonical_scene_file_takes_its_name_from_the_folder);
 

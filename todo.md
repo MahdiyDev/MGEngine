@@ -350,13 +350,32 @@ phases so the app keeps working the whole way.
       3-value euler line. `test_scene_io` covers both. Camera objects aimed with
       `Quaternion_LookRotation`.
 - [x] Every test + `render_smoke` + `examples/objects/gizmo_3d` updated.
+- [x] Rotate gizmo draws its three rings as full concentric circles (the far
+      half dimmed, not culled) so they read as one aligned gyroscope.
+- [x] Legacy 3-value `rotation` line on an `OBJECT_CAMERA` is read with the old
+      spherical yaw/pitch convention (via `Quaternion_LookRotation`) so an
+      existing scene's camera keeps its aim. `Draw_CubeEx` / `_WiresEx`
+      normalise the quaternion so a mis-built one (e.g. an old `.rotation.y +=`
+      script) draws a finite box instead of exploding.
+
+## Play mode   [DONE]
+
+- [x] A third editor state (`play.playing`): **Play** compiles the module async,
+      snapshots the scene, hides every panel and shows a slim overlay strip
+      (Stop / Console / FPS).
+- [x] The scene is viewed through its **main camera** object each frame (a module
+      can move it), matching the built player; falls back to the fly-cam when the
+      scene has no main camera. Editor markers + gizmo are off.
+- [x] Real input to the game: `EditorCamera_Update` / `Scene_Pick` / gizmo /
+      editing hotkeys / Tab are all skipped; the cursor starts captured.
+- [x] **Stop** (button or **Esc**) shuts the module down and restores the
+      pre-Play scene. Hot-reload keeps working. `Play_*` dropped the
+      `EditorCamera*` param -- `Play.viewCam` is set by `main.c` each frame.
 
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view
       in the left panel, world = parent-chain composition).
-- [ ] **Play mode**: a third top-bar state that runs `MgeScene_Update` + real
-      input, snapshotting the scene so Stop restores it.
 - [ ] ImGui **docking** branch for freely arranged / resizable panels (currently
       panels are pinned to window edges).
 - [ ] Editor preferences file (`~/.mgeeditor` or `editor.ini`): last scene,
