@@ -54,23 +54,42 @@
 
 # PLAN — Editor overhaul (`builder/` -> `editor/`)
 
-Turn the demo `builder` into a real scene editor: panel UI, scene files, a
-per-scene resource root, and hot-reloadable scene DLLs. Do it in phases so the
-app keeps working the whole way.
+Turn the demo `builder` into a real scene editor: panel UI, multi-scene
+projects, a per-scene resource root, and hot-reloadable scene DLLs. Do it in
+phases so the app keeps working the whole way.
 
 ## Terms / model
 
-- **Scene** = a directory `scenes/<name>/` containing:
-  - `<name>.c`   -- scene logic, compiled to `<name>.dll`
-  - `scene.mge`  -- the editor-authored objects/lights/camera, serialised (text)
-  - `res/`       -- this scene's resource root (textures, models, hdr, ...)
-- The **editor owns all object/light storage** (an in-editor `Scene` struct).
-  The scene DLL only reads/writes it through a passed context, so reloading the
-  DLL never loses live edits.
-- Scene DLL contract (C only, links `libmgengine`, not static):
+- **Project** = a directory with a `project.mgproject` at its root. Holds the global
+  config (name, window w/h, target FPS, MSAA default, build output name, debug +
+  release compiler flags, startup scene) **and** the list of scenes. The editor
+  opens a *project*; everything else lives inside it.
+  ```
+  project.mgproject   global config + scene list
+  scenes/<name>/      one subdirectory per scene
+  res/                project-wide shared resources (optional)
+  build/              generated build output (gitignored)
+  ```
+- **Scene** = `scenes/<name>/` containing:
+  - `scene.mgscene`  -- the editor-authored objects / lights / camera (Phase 2)
+  - `*.c`        -- scene logic. **Every** `.c` in the scene dir is compiled into
+                    that scene's module; adding a new `.c` needs no registration
+                    -- the build globs the directory and the editor watches for
+                    new files.
+  - `res/`       -- this scene's resource root (textures, models, hdr, ...);
+                    resolves before the project `res/`.
+- **Building the project** generates one build from `project.mgproject`: compiles each
+  scene's globbed `*.c` -> a `<name>` module, links `libmgengine`, and produces
+  the runnable app (runtime host + `libmgengine` + scene modules + packed `res/`).
+  Debug = loose files + hot-reloadable per-scene DLLs; Release = one bundle.
+- The **editor owns all object/light storage** (the in-editor `Scene` struct).
+  Scene code only reads/writes it through a passed context, so rebuilding /
+  reloading never loses live edits.
+- Scene code contract (C, links `libmgengine` dynamically):
   `MgeScene_Init(MgeSceneCtx*)`, `MgeScene_Update(MgeSceneCtx*, float dt)`,
-  `MgeScene_Shutdown(MgeSceneCtx*)`. The template `Init` loads `scene.mge`; user
-  code may also add objects imperatively via `ctx->add_object(...)`.
+  `MgeScene_Shutdown(MgeSceneCtx*)` -- defined once across the scene's `.c`
+  files. The template `Init` loads `scene.mgscene`; user code may also add objects
+  imperatively via `ctx->add_object(...)`.
 
 ## Phase 0 -- engine prerequisites (do first, they ripple)
 
@@ -84,7 +103,7 @@ app keeps working the whole way.
       when `!active`. Inspector has an **active** checkbox.
 - [x] Inspector writes `obj->primitive` directly (a **primitive** dropdown);
       sphere / plane draw + outline already switch on it. No setter needed.
-- [ ] (moved to Phase 5) File API: `Mge_MountPak(path)` + make `Mge_LoadFileData`
+- [ ] (moved to Phase 6) File API: `Mge_MountPak(path)` + make `Mge_LoadFileData`
       / `Mge_LoadImage` / `Mge_LoadModel` pak-aware -- doesn't ripple through
       examples/tests, so it belongs with the release bundle work.
 
@@ -93,11 +112,12 @@ app keeps working the whole way.
 - [x] `builder/` -> `editor/`; `build/mgengine.exe` -> `build/editor.exe`;
       Makefile (`$(APP)`, `EDITOR_SRC`), `README.md`, `USAGE.md`,
       `editor/USAGE.md`, `examples/Makefile` comment. (No `.gitignore` changes
-      needed -- `build/` was already ignored; the `scenes/**` rules land in
-      Phase 3.)
+      needed -- `build/` was already ignored; the project `**/build/` + pak rules
+      land in Phase 3.)
 - [x] Split into: `main.c` (window/loop/layout), `editor_camera.c`, `topbar.c`,
       `hierarchy.c` (left), `inspector.c` (right), `resources.c` (bottom),
-      `scene.c` (data). `scene_io.c` / `scene_build.c` are Phase 2 / 3.
+      `scene.c` (data). `scene_io.c` = Phase 2; `project_io.c` = Phase 3;
+      `scene_build.c` = Phase 4.
 - [x] Engine GUI additions: `Mge_GuiBeginPanel` (exact-rect, title-bar-less
       docked panel), `Mge_GuiInputText`, `Mge_GuiSelectableEx` (double-click),
       `Mge_GuiBeginMenu` / `MenuItem` / `EndMenu`, `Mge_GuiSetNextItemWidth`.
@@ -120,7 +140,7 @@ app keeps working the whole way.
 
 ## Phase 2 -- scene as data   [DONE]
 
-- [x] `scene.mge` text format (flat, line-based, diffable, no JSON): `camera` +
+- [x] `scene.mgscene` text format (flat, line-based, diffable, no JSON): `camera` +
       `render` sections, one `object` / `light` block per entity (primitive,
       transform, active, name, `m0..m3` material slots with `res/`-relative
       texture paths + colours/values/wrap). `#` comments.
@@ -132,53 +152,84 @@ app keeps working the whole way.
 - [x] File menu (New / Open / Save / Save As / Build) in `topbar.c`; actions +
       guard in `sceneops.c`. Engine additions: `Mge_SaveFileDialog`,
       `Mge_SetWindowShouldClose`, `Mge_GuiOpenPopup/BeginPopup/EndPopup/ClosePopup`.
-- [x] Save As scaffolds `<dir>/res/` + a `<name>.c` scene-code template (Phase 3).
+- [x] Save As scaffolds `<dir>/res/` + a `<name>.c` scene-code template (Phase 4).
 - [x] Unsaved-changes guard: `Scene.dirty` (set by every mutator / inspector edit
       / gizmo drag / rename); New / Open / window-close pop a Save/Discard/Cancel
       modal. Scene name in the top bar shows a `*` while dirty.
-- Deferred: a `scenes/<name>/` convention isn't enforced -- Save As writes the
-  `.mge` wherever the user picks and treats that folder as the scene root. The
-  new-scene *directory* scaffold (vs. just the template `.c`) can come with Phase 3.
+- Superseded by Phase 3: a `scenes/<name>/` convention isn't enforced yet -- Save
+  As writes the `.mgscene` wherever the user picks and treats that folder as the
+  scene root. Phase 3 puts scenes under a project and makes "New Scene" scaffold
+  the full directory.
 
-## Phase 3 -- scene as code + hot reload
+## Phase 3 -- project model & multi-scene
 
-- [ ] `MgeSceneCtx` (the callback struct the DLL gets): add/remove/find object,
-      get selection, spawn primitive, plus `dt`, input passthrough.
-- [ ] `scene_build.c`: run `mingw32-make` for `scenes/<name>/` (a small
-      per-scene Makefile or a generated command) in **debug** or **release**;
-      capture stdout/stderr into a build-log console panel.
-- [ ] DLL load: `LoadLibrary` a copy of `<name>.dll` (Windows won't let you
-      overwrite a loaded one -> copy to `<name>_live_<n>.dll`, load that).
-- [ ] Hot reload: watch `<name>.c` (and its headers) mtime; on change -> rebuild
-      -> on success `FreeLibrary` old, load new, re-run `MgeScene_Init` against
-      the editor-owned `Scene` (which still holds the live objects).
-- [ ] `.gitignore` `scenes/**/build/`, `*_live_*.dll`, `*.pak*`.
+- [ ] `project.mgproject` text format (flat, like a `.mgscene`): a `[project]`
+      section (name, window w/h, targetFps, msaa, output name, `cflags.debug`,
+      `cflags.release`, `startupScene`) + one `scene "<name>"` line per scene
+      (path relative to the project root). `editor/project_io.c` --
+      `Project_Save` / `Project_Load` (data only), unit test like
+      `test_scene_io`.
+- [ ] The editor opens a **project**, not a bare `.mgscene`. File menu becomes:
+      Project New / Open / Save; Scene New / Open (within the project) / Save /
+      Save As. On launch with no project -> a default in-memory project holding
+      one untitled scene (so the app still runs immediately).
+- [ ] **New Scene** -> create `scenes/<name>/` with a template `<name>.c` (reuse
+      the Phase 2 scaffold) + an empty `scene.mgscene` + `res/`, add a
+      `scene "<name>"` line to `project.mgproject`, switch to it. **Add Scene** ->
+      point at an existing `scenes/<name>/`.
+- [ ] A **Scenes** list (a project panel, or a top-bar dropdown): click to switch
+      the active scene; the unsaved-changes guard applies on switch.
+- [ ] A scene is a *directory* -- its `.c` files are globbed, never enumerated in
+      `project.mgproject`. The editor rescans the scene dir (on focus / a watch) and a
+      newly-added `.c` just joins the next build. No registration step.
+- [ ] **New Script** action (resources panel / a scene menu) scaffolds a
+      `<name>.c` in the scene dir from a template.
+- [ ] `.gitignore` `**/build/`, `*_live_*.dll`, `*.pak*`.
 
-## Phase 4 -- resource explorer (bottom panel)
+## Phase 4 -- scene as code + hot reload
+
+- [ ] `MgeSceneCtx` (the callback struct scene code gets): add/remove/find
+      object, get selection, spawn primitive, plus `dt`, input passthrough.
+- [ ] `editor/scene_build.c`: from `project.mgproject` + the scene's globbed `*.c`,
+      generate + run the compile (a generated command or a small Makefile) for
+      one scene in **debug** or **release**, using the project's cflags; capture
+      stdout/stderr into a build-log console panel.
+- [ ] Per-scene DLL: compile the scene's `*.c` -> `<name>.dll` linking
+      `libmgengine`. `LoadLibrary` a copy (`<name>_live_<n>.dll`, since Windows
+      locks a loaded DLL).
+- [ ] Hot reload: watch the scene dir's `*.c` + headers mtime (and new files);
+      on change -> rebuild -> on success `FreeLibrary` old, load new, re-run
+      `MgeScene_Init` against the editor-owned `Scene` (still holding live edits).
+- [ ] "Build" in the File menu builds the whole **project** (every scene) in
+      debug; a separate "Build Release" (Phase 6) does the bundle.
+
+## Phase 5 -- resource explorer (bottom panel)
 
 - [ ] File tree of the active scene's `res/` (folders expandable, file icons /
-      thumbnails for images).
+      thumbnails for images); the project `res/` shown alongside.
 - [ ] Ops: **add** (import via file dialog -> copy into `res/`), **delete**,
       **rename**, **move** (drag between folders), **copy**, new folder.
 - [ ] Drag a resource row onto an inspector texture slot to assign it.
 - [ ] Thumbnails for image files (load small, cache; unload on panel close).
 
-## Phase 5 -- release bundle
+## Phase 6 -- build project (release bundle)
 
 - [ ] `.pak` writer: TOC header (name, offset, size, crc) + concatenated blobs;
       split at ~1 GB into `<name>.pak.001`, `.002`, ... A reader that maps a
       logical path across the split files.
-- [ ] Editor "Build Release": compile the scene DLL `-O2 -DNDEBUG -s`, pack
-      `res/` into `<name>.pak.NNN`, and stage a runnable folder:
-      `editor.exe`(or a slim runtime) + `libmgengine.dll` + `<name>.dll` + paks.
-- [ ] Debug build stays loose-file (fast iteration); release mounts the pak.
+- [ ] Editor **Build Release**: for the whole project -- compile every scene
+      module `-O2 -DNDEBUG -s`, pack each scene's `res/` (+ the project `res/`)
+      into paks, and stage a runnable folder: a slim runtime host +
+      `libmgengine.dll` + the scene modules + paks + `project.mgproject`.
+- [ ] Debug build stays loose-file (fast iteration); release mounts the pak
+      (`Mge_MountPak`, moved here from Phase 0).
 
-## Phase 6 -- editor polish
+## Phase 7 -- editor polish
 
 - [ ] Undo / redo stack (transform edits, add/delete/rename, primitive change).
 - [ ] Duplicate object (Ctrl+D), multi-select + group gizmo.
 - [ ] Gizmo grid / increment snapping (hold a modifier).
-- [ ] Delete confirmation; "revert scene" (reload `scene.mge`).
+- [ ] Delete confirmation; "revert scene" (reload `scene.mgscene`).
 
 ## Later / optional
 

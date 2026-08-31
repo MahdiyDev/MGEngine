@@ -1,4 +1,4 @@
-// scene.mge round-trip (editor/scene_io.c) + the path helpers (editor/pathutil.c).
+// .mgscene round-trip (editor/scene_io.c) + the path helpers (editor/pathutil.c).
 // Hermetic: scene_io.c's few engine dependencies are stubbed here, so no GL and
 // no other engine .o are linked.
 
@@ -93,19 +93,19 @@ TEST(path_helpers)
 {
     char out[256];
 
-    Path_Dir("a/b/c.mge", out, sizeof(out));
+    Path_Dir("a/b/c.mgscene", out, sizeof(out));
     CHECK(strcmp(out, "a/b") == 0);
-    Path_Dir("c.mge", out, sizeof(out));
+    Path_Dir("c.mgscene", out, sizeof(out));
     CHECK(out[0] == '\0');
-    Path_Dir("C:\\proj\\scene.mge", out, sizeof(out));
+    Path_Dir("C:\\proj\\scene.mgscene", out, sizeof(out));
     CHECK(strcmp(out, "C:/proj") == 0);
 
-    Path_Base("a/b/c.mge", out, sizeof(out));
-    CHECK(strcmp(out, "c.mge") == 0);
+    Path_Base("a/b/c.mgscene", out, sizeof(out));
+    CHECK(strcmp(out, "c.mgscene") == 0);
     Path_Base("plain", out, sizeof(out));
     CHECK(strcmp(out, "plain") == 0);
 
-    strcpy(out, "scene.tar.mge");
+    strcpy(out, "scene.tar.mgscene");
     Path_StripExt(out);
     CHECK(strcmp(out, "scene.tar") == 0);
 
@@ -120,7 +120,7 @@ TEST(path_helpers)
     CHECK(strcmp(out, "/abs/c.png") == 0);
 }
 
-// ---- scene.mge round-trip ----
+// ---- .mgscene round-trip ----
 
 static void build_scene(Scene* s)
 {
@@ -161,7 +161,7 @@ static void build_scene(Scene* s)
 TEST(scene_mge_round_trip)
 {
     Path_MakeDirs("scene_io_tmp");
-    const char* path = "scene_io_tmp/myscene.mge";
+    const char* path = "scene_io_tmp/myscene.mgscene";
 
     Scene a;
     build_scene(&a);
@@ -219,14 +219,14 @@ TEST(scene_mge_round_trip)
 
 TEST(load_rejects_a_non_scene_file)
 {
-    FILE* f = fopen("scene_io_tmp/bogus.mge", "wb");
+    FILE* f = fopen("scene_io_tmp/bogus.mgscene", "wb");
     CHECK(f != NULL);
     fprintf(f, "not a scene\n");
     fclose(f);
 
     Scene s;
-    CHECK(!Scene_Load(&s, "scene_io_tmp/bogus.mge", NULL));
-    remove("scene_io_tmp/bogus.mge");
+    CHECK(!Scene_Load(&s, "scene_io_tmp/bogus.mgscene", NULL));
+    remove("scene_io_tmp/bogus.mgscene");
 }
 
 int main(void)

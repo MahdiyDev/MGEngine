@@ -12,7 +12,7 @@ void Path_Dir(const char* path, char* out, size_t outSize);
 // File-name part of `path` (everything after the last separator), into `out`.
 void Path_Base(const char* path, char* out, size_t outSize);
 
-// Drop the last extension from `name` in place ("scene.mge" -> "scene").
+// Drop the last extension from `name` in place ("scene.mgscene" -> "scene").
 void Path_StripExt(char* name);
 
 // true for "C:\x", "C:/x", "/x", "\\server\share".

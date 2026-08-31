@@ -10,6 +10,7 @@
 #include <string.h>
 
 #define CONFIRM_ID "Unsaved changes"
+#define SCENE_EXT ".mgscene"
 
 static bool is_guarded(TopbarAction a)
 {
@@ -19,16 +20,17 @@ static bool is_guarded(TopbarAction a)
 static void do_save_as(Scene* s, EditorCamera* cam)
 {
     char def[128];
-    snprintf(def, sizeof(def), "%s.mge", s->name[0] ? s->name : "scene");
+    snprintf(def, sizeof(def), "%s" SCENE_EXT, s->name[0] ? s->name : "scene");
 
-    char* p = Mge_SaveFileDialog("Save scene as", "MGEngine scene", "*.mge", def);
+    char* p = Mge_SaveFileDialog("Save scene as", "MGEngine scene", "*" SCENE_EXT, def);
     if (p == NULL)
         return;
 
     char path[600];
     size_t n = strlen(p);
-    if (n < 4 || strcmp(p + n - 4, ".mge") != 0)
-        snprintf(path, sizeof(path), "%s.mge", p);
+    size_t extLen = strlen(SCENE_EXT);
+    if (n < extLen || strcmp(p + n - extLen, SCENE_EXT) != 0)
+        snprintf(path, sizeof(path), "%s" SCENE_EXT, p);
     else
         snprintf(path, sizeof(path), "%s", p);
     free(p);
@@ -39,7 +41,7 @@ static void do_save_as(Scene* s, EditorCamera* cam)
 
 static void do_open(Scene* s, EditorCamera* cam)
 {
-    char* p = Mge_OpenFileDialog("Open scene", "MGEngine scene", "*.mge");
+    char* p = Mge_OpenFileDialog("Open scene", "MGEngine scene", "*" SCENE_EXT);
     if (p == NULL)
         return;
 

@@ -9,7 +9,7 @@ A scene editor built on top of the engine library — see
 | `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, the close-button guard, and the shared `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair every panel draws into |
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |
 | `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures`, and the render passes (shadow + lit + gizmo + skybox) |
-| `scene_io.c` / `.h` | `scene.mge` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
+| `scene_io.c` / `.h` | `.mgscene` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
 | `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `MakeDirs` / `CopyFile` — small path + fs helpers for scene I/O |
 | `sceneops.c` / `.h` | executes File-menu actions (New / Open / Save / Save As / Build / Quit) with the unsaved-changes confirm modal |
 | `topbar.c` / `.h` | the **top** strip: a **File** menu, scene name + `*` dirty marker, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
@@ -54,25 +54,25 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 Panels are only clickable in EDIT mode. Engine input is suppressed while a widget
 has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
 
-## Scenes (`scene.mge`)
+## Scenes (`.mgscene`)
 
 The top-bar **File** menu:
 
 | item | |
 | --- | --- |
 | **New** | reset to a fresh default scene (floor + sun + lamp) |
-| **Open...** | native file dialog → pick a `.mge`; textures resolve against its folder |
+| **Open...** | native file dialog → pick a `.mgscene`; textures resolve against its folder |
 | **Save** | write back to the current file (or prompt if the scene was never saved) |
-| **Save As...** | native save dialog → writes `<name>.mge`, creates `<name>/res/`, and scaffolds a `<name>.c` template (Phase 3 compiles it) |
-| **Build** | stub until Phase 3 |
+| **Save As...** | native save dialog → writes `<name>.mgscene`, creates `<name>/res/`, and scaffolds a `<name>.c` template (Phase 4 compiles it) |
+| **Build** | stub until Phase 4 |
 
 The title shows the scene name with a trailing `*` while there are unsaved edits.
 **New / Open** and the window close button, when the scene is dirty, first pop a
 **Save / Discard / Cancel** modal.
 
-`scene.mge` is a flat, indentation-cosmetic, line-based text format — diffable,
-no JSON dependency. One `object` / `light` block per entity, plus `camera` and
-`render` sections:
+A `.mgscene` file is a flat, indentation-cosmetic, line-based text format —
+diffable, no JSON dependency. One `object` / `light` block per entity, plus
+`camera` and `render` sections (the leading `mgescene 1` line is the format id):
 
 ```
 mgescene 1

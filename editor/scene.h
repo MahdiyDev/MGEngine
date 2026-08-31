@@ -13,7 +13,7 @@ enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT };
 
 typedef struct Scene {
     char name[64];  // shown in the top bar; the scene-file stem
-    char path[512]; // absolute path to this scene's `scene.mge` ("" = never saved)
+    char path[512]; // absolute path to this scene's `.mgscene` file ("" = never saved)
     bool dirty;     // unsaved edits since the last load / save
 
     Object objects[SCENE_MAX_OBJECTS];

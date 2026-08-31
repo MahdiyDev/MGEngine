@@ -52,7 +52,7 @@ editor/                THE APP -- scene editor (docked panel shell around a view
   main.c               window, loop, panel-rectangle layout, close guard, the shared Mge_Gui frame
   editor_camera.c/.h   the yaw/pitch fly-cam (VIEW = always fly, EDIT = fly on RIGHT mouse)
   scene.c/.h           entities, selection, picking, add/delete/new, the render passes
-  scene_io.c/.h        scene.mge read/write (Scene_Save / Scene_Load) -- flat text, data only
+  scene_io.c/.h        .mgscene read/write (Scene_Save / Scene_Load) -- flat text, data only
   pathutil.c/.h        path + fs helpers (dir/base/join/isabsolute/mkdirs/copyfile)
   sceneops.c/.h        File-menu actions + the unsaved-changes confirm modal
   topbar.c/.h          top strip: File menu, scene name, mode, gizmo, Render menu
@@ -965,7 +965,7 @@ Linux: `zenity`, then `kdialog`) filtered to image extensions and returns a
 `Mge_SaveFileDialog(title, filterName, filterExts, defaultName)` is the save
 counterpart (overwrite prompt, pre-filled name). The dialogs never change the
 process working directory. The editor's inspector uses the open dialog for the
-material-map thumbnails; the File menu uses both for `scene.mge` open / save.
+material-map thumbnails; the File menu uses both for `.mgscene` open / save.
 
 ### Mesh
 
