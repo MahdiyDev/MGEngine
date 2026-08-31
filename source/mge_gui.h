@@ -52,6 +52,7 @@ bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size);
 
 // --- inputs -- each returns true the frame its value changes ---
 bool Mge_GuiCheckbox(const char* label, bool* value);
+bool Mge_GuiCombo(const char* label, int* index, const char* const* items, int count); // dropdown
 bool Mge_GuiInputInt(const char* label, int* value);
 bool Mge_GuiInputFloat(const char* label, float* value);
 bool Mge_GuiSliderFloat(const char* label, float* value, float min, float max);

@@ -72,6 +72,13 @@ void MgeGL_Uniform3fv(const char* name, Vector3 value)
     r->kind = 2;
     r->v = value;
 }
+void MgeGL_Uniform2fv(const char* name, Vector2 value)
+{
+    Rec* r = &g_rec[g_recCount++];
+    snprintf(r->name, sizeof(r->name), "%s", name);
+    r->kind = 2;
+    r->v = (Vector3){ value.x, value.y, 0.0f };
+}
 
 // ---- constructor tests ----
 
@@ -154,6 +161,9 @@ TEST(begin_lighting_ex_uploads_every_light)
     CHECK(feq(rec_v("matSpecularColor").x, 1.0f) && feq(rec_v("matSpecularColor").z, 1.0f));
     CHECK(rec_i("useParallax") == 0);           // parallax off until a height map is set
     CHECK(rec_i("heightMap") == 4);             // height map -> unit 4
+    CHECK(rec_i("triplanar") == 0);             // UV sampling by default
+    CHECK(feq(rec_v("uvTiling").x, 1.0f) && feq(rec_v("uvTiling").y, 1.0f)); // identity UV transform
+    CHECK(feq(rec_v("uvOffset").x, 0.0f));
     CHECK(feq(rec_f("shininess"), 32.0f));
     CHECK(rec_i("shadowsEnabled") == 0);      // plain lighting -> shadows off
     CHECK(rec_i("pointShadowEnabled") == 0);

@@ -166,6 +166,10 @@ bool Mge_GuiCheckbox(const char* label, bool* value)
 {
     return s_inFrame && ImGui::Checkbox(label, value);
 }
+bool Mge_GuiCombo(const char* label, int* index, const char* const* items, int count)
+{
+    return s_inFrame && ImGui::Combo(label, index, items, count);
+}
 bool Mge_GuiInputInt(const char* label, int* value)
 {
     return s_inFrame && ImGui::InputInt(label, value);

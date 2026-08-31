@@ -4,12 +4,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static const char* const WRAP_NAMES[4] = { "Repeat", "Clamp", "Mirror", "Mirror Once" };
+
 // One material-map slot as a group: a texture thumbnail (opens a file picker,
-// plus a clear "x"), then the slot's colour and its scalar value. `showColor` is
-// false for the normal map, where a tint is meaningless. `valueMax` / `valueLabel`
-// give the slot's `.value` its slot-specific meaning.
-static void material_slot(Material* mat, int mapIndex, const char* name, const char* id,
-    bool showColor, float valueMax, const char* valueLabel)
+// plus a clear "x"), then the slot's colour, scalar value and wrap mode.
+// `showColor` is false for the normal / height maps, where a tint is meaningless.
+// `valueMax` / `valueLabel` give the slot's `.value` its slot-specific meaning.
+// `wrap` points at the builder's stored TextureWrap for this slot.
+static void material_slot(Material* mat, int mapIndex, unsigned char* wrap, const char* name,
+    const char* id, bool showColor, float valueMax, const char* valueLabel)
 {
     MaterialMap* m = &mat->maps[mapIndex];
     char lbl[32];
@@ -22,6 +25,7 @@ static void material_slot(Material* mat, int mapIndex, const char* name, const c
         if (path != NULL) {
             Mge_UnloadTexture(m->texture);
             m->texture = Mge_LoadTextureEx(path, mapIndex == MATERIAL_MAP_DIFFUSE);
+            Mge_SetTextureWrap(m->texture, *wrap); // re-apply the chosen wrap
             free(path);
         }
     }
@@ -40,10 +44,20 @@ static void material_slot(Material* mat, int mapIndex, const char* name, const c
     }
     snprintf(lbl, sizeof(lbl), "%s##%s", valueLabel, id);
     Mge_GuiSliderFloat(lbl, &m->value, 0.0f, valueMax);
+
+    int w = *wrap;
+    snprintf(lbl, sizeof(lbl), "wrap##%s", id);
+    if (Mge_GuiCombo(lbl, &w, WRAP_NAMES, 4)) {
+        *wrap = (unsigned char)w;
+        Mge_SetTextureWrap(m->texture, w);
+    }
 }
 
-static void inspect_object(Object* o)
+static void inspect_object(Scene* s)
 {
+    Object* o = &s->objects[s->selIndex];
+    unsigned char* wrap = s->texWrap[s->selIndex];
+
     static const char* prims[3] = { "cube (3D)", "sphere (3D)", "plane (3D)" };
     Mge_GuiLabel(o->kind == OBJECT_3D ? prims[o->primitive] : "rect (2D)");
     Mge_GuiInputVec3("position", &o->position);
@@ -53,10 +67,15 @@ static void inspect_object(Object* o)
 
     Mge_GuiLabel("material");
     Mge_GuiInputFloat("shininess", &o->material.shininess);
-    material_slot(&o->material, MATERIAL_MAP_DIFFUSE, "diffuse map", "diffuse", true, 2.0f, "gain");
-    material_slot(&o->material, MATERIAL_MAP_SPECULAR, "specular map", "specular", true, 1.0f, "strength");
-    material_slot(&o->material, MATERIAL_MAP_NORMAL, "normal map", "normal", false, 4.0f, "strength");
-    material_slot(&o->material, MATERIAL_MAP_HEIGHT, "height map (parallax)", "height", false, 0.2f, "scale");
+    Mge_GuiInputVec2("tiling", &o->material.tiling);   // uv * tiling + offset -- repeat without scaling
+    Mge_GuiInputVec2("offset", &o->material.offset);
+    Mge_GuiCheckbox("triplanar", &o->material.triplanar); // project diffuse from world XYZ
+    if (o->material.triplanar)
+        Mge_GuiInputFloat("triplanar scale", &o->material.triplanarScale);
+    material_slot(&o->material, MATERIAL_MAP_DIFFUSE, &wrap[MATERIAL_MAP_DIFFUSE], "diffuse map", "diffuse", true, 2.0f, "gain");
+    material_slot(&o->material, MATERIAL_MAP_SPECULAR, &wrap[MATERIAL_MAP_SPECULAR], "specular map", "specular", true, 1.0f, "strength");
+    material_slot(&o->material, MATERIAL_MAP_NORMAL, &wrap[MATERIAL_MAP_NORMAL], "normal map", "normal", false, 4.0f, "strength");
+    material_slot(&o->material, MATERIAL_MAP_HEIGHT, &wrap[MATERIAL_MAP_HEIGHT], "height map (parallax)", "height", false, 0.2f, "scale");
 }
 
 static void inspect_light(Light* l)
@@ -133,7 +152,7 @@ void Sidebar_Draw(Scene* s, bool editMode, int fps, int draws)
         Mge_GuiLabel("INSPECTOR");
         Mge_GuiSpacing();
         if (s->selKind == SEL_OBJECT)
-            inspect_object(&s->objects[s->selIndex]);
+            inspect_object(s);
         else if (s->selKind == SEL_LIGHT)
             inspect_light(&s->lights[s->selIndex]);
         else

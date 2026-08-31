@@ -390,6 +390,103 @@ static void scene_parallax(void)
     Mge_EndDrawing();
 }
 
+// texture wrap: one quad, UVs 0..3, mirror-repeat -> a tiled + flipped pattern
+static void scene_texwrap(void)
+{
+    Texture2D t = Mge_LoadTexture("../assets/bricks/bricks2.jpg");
+    if (t.id == 0) {
+        printf("  %-16s  (skipped -- assets/bricks not present)\n", "texwrap");
+        return;
+    }
+    Mge_SetTextureWrap(t, TEXTURE_WRAP_MIRROR_REPEAT);
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 45.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0, 0, 4.5f };
+    cam.target = (Vector3){ 0, 0, -1 };
+    Light sun = Mge_MakeDirectionalLight((Vector3){ 0, 0, -1 }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.9f;
+
+    Material m = Mge_DefaultMaterial();
+    Mge_SetMaterialTexture(&m, MATERIAL_MAP_DIFFUSE, t);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 10, 10, 14, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    Mge_SetMaterial(m);
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(255, 255, 255, 255);
+    MgeGL_Normal3f(0, 0, 1);
+    const float q[4][5] = { // x, y, z, u, v  -- UV spans 0..3 so wrap shows
+        { -2, -2, 0, 0, 0 }, { 2, -2, 0, 3, 0 }, { 2, 2, 0, 3, 3 }, { -2, 2, 0, 0, 3 },
+    };
+    const int tri[6] = { 0, 1, 2, 0, 2, 3 };
+    for (int i = 0; i < 6; i++) {
+        const float* v = q[tri[i]];
+        MgeGL_TexCoord2f(v[3], v[4]);
+        MgeGL_Vertex3f(v[0], v[1], v[2]);
+    }
+    MgeGL_End();
+    Mge_EndLighting3D();
+    Mge_EndMode3D();
+    check("texwrap");
+    Mge_EndDrawing();
+
+    Mge_UnloadTexture(t);
+}
+
+// material tiling + triplanar: a tiled plane behind a stretched (1x1x3) box that
+// keeps square texels because it's projected from world space
+static void scene_tiling(void)
+{
+    Texture2D t = Mge_LoadTexture("../assets/bricks/bricks2.jpg");
+    if (t.id == 0) {
+        printf("  %-16s  (skipped -- assets/bricks not present)\n", "tiling");
+        return;
+    }
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 3.5f, 2.5f, 6.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.5f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.4f;
+
+    Material floorMat = Mge_DefaultMaterial();
+    Mge_SetMaterialTexture(&floorMat, MATERIAL_MAP_DIFFUSE, t);
+    floorMat.tiling = (Vector2){ 4.0f, 4.0f }; // repeat 4x4 instead of stretching one copy
+
+    Texture2D nrm = Mge_LoadTexture("../assets/bricks/bricks2_normal.jpg");
+    Texture2D disp = Mge_LoadTexture("../assets/bricks/bricks2_disp.jpg");
+
+    Material boxMat = Mge_DefaultMaterial();
+    Mge_SetMaterialTexture(&boxMat, MATERIAL_MAP_DIFFUSE, t);
+    if (nrm.id != 0)
+        Mge_SetMaterialTexture(&boxMat, MATERIAL_MAP_NORMAL, nrm);
+    if (disp.id != 0)
+        Mge_SetMaterialTexture(&boxMat, MATERIAL_MAP_HEIGHT, disp);
+    boxMat.triplanar = true;       // diffuse + normal + height all project from world XYZ
+    boxMat.triplanarScale = 1.0f;  // 1 world unit per tile -> square texels on a 1x1x3 box
+    boxMat.maps[MATERIAL_MAP_HEIGHT].value = 0.06f;
+
+    Object floorObj = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, -1.6f, 0 }, (Vector3){ 12, 0.2f, 12 }, WHITE);
+    Object box = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 3 }, WHITE); // non-uniform scale
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 14, 15, 20, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    floorObj.material = floorMat;
+    box.material = boxMat;
+    Mge_DrawObject(floorObj);
+    Mge_DrawObject(box);
+    Mge_EndLighting3D();
+    Mge_EndMode3D();
+    check("tiling");
+    Mge_EndDrawing();
+
+    Mge_UnloadTexture(t);
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -410,6 +507,8 @@ int main(void)
     scene_skybox();
     scene_normal_map();
     scene_parallax();
+    scene_texwrap();
+    scene_tiling();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

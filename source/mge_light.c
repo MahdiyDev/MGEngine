@@ -123,6 +123,10 @@ static const char* lightFragCode =
     "uniform sampler2D heightMap;\n"
     "uniform int useParallax;\n"
     "uniform float heightScale;\n"      // MATERIAL_MAP_HEIGHT.value
+    "uniform vec2 uvTiling;\n"          // Material.tiling  (uv' = uv*tiling + offset)
+    "uniform vec2 uvOffset;\n"          // Material.offset
+    "uniform int  triplanar;\n"         // Material.triplanar (diffuse projected from world XYZ)
+    "uniform float triplanarScale;\n"   // Material.triplanarScale (world units per tile)
     // TBN from screen-space derivatives (no tangent vertex attribute needed).
     // Columns are tangent / bitangent / normal, so transpose() maps world->tangent.
     "mat3 CotangentFrame(vec3 N)\n"
@@ -172,21 +176,76 @@ static const char* lightFragCode =
     "    float w = after / (after - before);\n"
     "    return mix(curTex, prevTex, clamp(w, 0.0, 1.0));\n"
     "}\n"
+    // --- triplanar: project from world XYZ, blend the 3 axis planes by |normal| ---
+    "vec3 TriBlend(vec3 n)\n"
+    "{\n"
+    "    vec3 b = pow(abs(n), vec3(4.0));\n"
+    "    return b / (b.x + b.y + b.z + 1e-5);\n"
+    "}\n"
+    // Per-plane parallax-occlusion march (offset-limiting -- no /viewDir.z, which
+    // keeps the displacement stable and aligned at grazing angles). vt = the view
+    // dir in this plane's (u, v, out) frame; the height map is a DEPTH map sampled
+    // directly (0 = surface, 1 = deep groove -- same as ParallaxMapping).
+    "vec2 TriPOM(vec2 uv, vec3 vt)\n"
+    "{\n"
+    "    if (useParallax == 0) return uv;\n"
+    "    float grazing = clamp(abs(vt.z), 0.0, 1.0);\n"     // 1 = head-on
+    "    float nl = mix(24.0, 8.0, grazing);\n"
+    "    float ld = 1.0 / nl;\n"
+    "    vec2 dUV = vt.xy * (heightScale / nl);\n"           // offset limiting
+    "    float cur = 0.0;\n"
+    "    float dep = texture(heightMap, uv).r;\n"
+    "    for (int i = 0; i < 32; i++) {\n"
+    "        if (cur >= dep) break;\n"
+    "        uv -= dUV;\n"
+    "        dep = texture(heightMap, uv).r;\n"
+    "        cur += ld;\n"
+    "    }\n"
+    "    vec2 prev = uv + dUV;\n"
+    "    float a = dep - cur;\n"
+    "    float b = texture(heightMap, prev).r - cur + ld;\n"
+    "    return mix(uv, prev, clamp(a / (a - b), 0.0, 1.0));\n"
+    "}\n"
+    // whiteout-blend triplanar normal mapping (Ben Golus). Per-plane tangent
+    // normals are swizzled into world orientation and blended.
+    "vec3 TriplanarNormal(vec2 uvX, vec2 uvY, vec2 uvZ, vec3 bw, vec3 N)\n"
+    "{\n"
+    "    vec3 nx = texture(normalMap, uvX).xyz * 2.0 - 1.0; nx.xy *= normalStrength;\n"
+    "    vec3 ny = texture(normalMap, uvY).xyz * 2.0 - 1.0; ny.xy *= normalStrength;\n"
+    "    vec3 nz = texture(normalMap, uvZ).xyz * 2.0 - 1.0; nz.xy *= normalStrength;\n"
+    "    vec3 s = sign(N);\n"
+    "    nx.z *= s.x; ny.z *= s.y; nz.z *= s.z;\n"
+    "    return normalize(nx.zyx * bw.x + ny.xzy * bw.y + nz.xyz * bw.z);\n"
+    "}\n"
     "void main()\n"
     "{\n"
     "    vec3 N = normalize(vNormal);\n"
     "    vec3 V = normalize(viewPos - vFragPos);\n"
-    "    vec2 uv = vTexCoord;\n"
-    "    if (useNormalMap == 1 || useParallax == 1) {\n"
-    "        mat3 TBN = CotangentFrame(N);\n"
-    "        if (useParallax == 1) {\n"
-    "            vec3 viewTS = normalize(transpose(TBN) * V);\n"
-    "            uv = ParallaxMapping(vTexCoord, viewTS);\n"
-    "            uv = clamp(uv, vec2(0.0009), vec2(0.9991));\n"
+    "    vec2 uv = vTexCoord * uvTiling + uvOffset;\n"
+    "    vec4 base;\n"
+    "    if (triplanar == 1) {\n"
+    "        vec3 bw = TriBlend(N);\n"
+    "        vec3 s = sign(N);\n"                            // face direction per axis
+    "        vec3 wp = vFragPos / triplanarScale;\n"
+    // per-plane view frame: (u-axis, v-axis, out) world components. The `out`
+    // component carries the face sign so it is > 0 for the visible side.
+    "        vec2 uvX = TriPOM(wp.zy + uvOffset, vec3(V.z, V.y, V.x * s.x));\n"
+    "        vec2 uvY = TriPOM(wp.xz + uvOffset, vec3(V.x, V.z, V.y * s.y));\n"
+    "        vec2 uvZ = TriPOM(wp.xy + uvOffset, vec3(V.x, V.y, V.z * s.z));\n"
+    "        base = (texture(sampleTex, uvX) * bw.x + texture(sampleTex, uvY) * bw.y\n"
+    "              + texture(sampleTex, uvZ) * bw.z) * vColor;\n"
+    "        if (useNormalMap == 1) N = TriplanarNormal(uvX, uvY, uvZ, bw, N);\n"
+    "    } else {\n"
+    "        if (useNormalMap == 1 || useParallax == 1) {\n"
+    "            mat3 TBN = CotangentFrame(N);\n"
+    "            if (useParallax == 1) {\n"
+    "                vec3 viewTS = normalize(transpose(TBN) * V);\n"
+    "                uv = ParallaxMapping(uv, viewTS);\n"
+    "            }\n"
+    "            if (useNormalMap == 1) N = ApplyNormalMap(TBN, uv);\n"
     "        }\n"
-    "        if (useNormalMap == 1) N = ApplyNormalMap(TBN, uv);\n"
+    "        base = texture(sampleTex, uv) * vColor;\n"
     "    }\n"
-    "    vec4 base = texture(sampleTex, uv) * vColor;\n"          // MATERIAL_MAP_DIFFUSE: texture * colour
     "    base.rgb *= matDiffuse;\n"                               // ...times the diffuse-map gain
     "    vec3 lit = vec3(0.0);\n"
     "    for (int i = 0; i < lightCount && i < MAX_LIGHTS; i++) {\n"
@@ -349,6 +408,10 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
     MgeGL_Uniform1i("heightMap", 4);      // parallax height map -> unit 4
     MgeGL_Uniform1i("useParallax", 0);    // Mge_SetMaterial turns this on
     MgeGL_Uniform1f("heightScale", 0.08f);
+    MgeGL_Uniform2fv("uvTiling", (Vector2){ 1.0f, 1.0f });
+    MgeGL_Uniform2fv("uvOffset", (Vector2){ 0.0f, 0.0f });
+    MgeGL_Uniform1i("triplanar", 0);
+    MgeGL_Uniform1f("triplanarScale", 1.0f);
     MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform3fv("matSpecularColor", (Vector3){ 1.0f, 1.0f, 1.0f });
     MgeGL_Uniform1f("matDiffuse", 1.0f);
@@ -389,6 +452,17 @@ void Mge_SetMaterial(Material material)
     MgeGL_SetTextureSlot(4, heightId);
     MgeGL_Uniform1i("useParallax", (heightId != 0) ? 1 : 0);
     MgeGL_Uniform1f("heightScale", material.maps[MATERIAL_MAP_HEIGHT].value);
+
+    // UV transform + triplanar projection. A raw (Material){...} literal leaves
+    // tiling {0,0}; treat a zero axis as 1 so the texture doesn't collapse.
+    Vector2 tiling = {
+        (material.tiling.x != 0.0f) ? material.tiling.x : 1.0f,
+        (material.tiling.y != 0.0f) ? material.tiling.y : 1.0f,
+    };
+    MgeGL_Uniform2fv("uvTiling", tiling);
+    MgeGL_Uniform2fv("uvOffset", material.offset);
+    MgeGL_Uniform1i("triplanar", material.triplanar ? 1 : 0);
+    MgeGL_Uniform1f("triplanarScale", (material.triplanarScale > 1e-4f) ? material.triplanarScale : 1.0f);
 
     Color sc = material.maps[MATERIAL_MAP_SPECULAR].color;
     MgeGL_Uniform1f("matSpecular", material.maps[MATERIAL_MAP_SPECULAR].value);

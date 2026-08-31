@@ -128,6 +128,7 @@ void MgeGL_UnloadMesh(unsigned int vao, unsigned int vbo, unsigned int ebo);
 int MgeGL_GetAttribLoc(const char* name);
 void MgeGL_Uniform1i(const char* name, const int value);
 void MgeGL_Uniform1f(const char* name, float value);
+void MgeGL_Uniform2fv(const char* name, Vector2 value);
 void MgeGL_Uniform3fv(const char* name, Vector3 value);
 void MgeGL_Uniform4fv(const char* name, Vector4 value);
 void MgeGL_UniformMatrix4fv(const char* name, Matrix value);
@@ -151,6 +152,7 @@ void MgeGL_TexCoord2f(float x, float y);
 void MgeGL_Normal3f(float x, float y, float z);
 int MgeGL_LoadTexture(const void *data, int width, int height, int format, int mipmapCount, int sRGB);
 void MgeGL_UnloadTexture(unsigned int id); // glDeleteTextures; ignores 0 and the shared white texture
+void MgeGL_SetTextureWrap(unsigned int id, int wrapS, int wrapT); // GL_TEXTURE_WRAP_S/T from a TextureWrap
 
 #ifdef __cplusplus
 }

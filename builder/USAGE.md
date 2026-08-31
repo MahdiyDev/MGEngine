@@ -57,8 +57,14 @@ up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when f
   | **Object** | primitive label, position, **rotation** (euler °), size; `shininess`; then one **group per material map** — diffuse / specular / normal |
   | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 
+  Above the groups: **shininess**, **tiling** / **offset** (the per-material UV
+  transform `uv' = uv*tiling + offset` — raise tiling to repeat a texture without
+  stretching it), and a **triplanar** toggle (+ **triplanar scale**) that
+  projects the diffuse, normal and height maps from world XYZ so a stretched
+  object keeps square texels.
+
   Each **material-map group** is a square thumbnail (`Mge_GuiImageButton`) plus
-  that slot's `color` and `value`:
+  that slot's `color`, `value` and `wrap`:
 
   | group | thumbnail | color | value |
   | --- | --- | --- | --- |
@@ -70,6 +76,10 @@ up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when f
   Click a thumbnail to open the OS file picker (`Mge_OpenImageDialog`); an `x`
   beside a filled slot clears it (`Mge_UnloadTexture`). There is no separate
   object colour. If a normal map looks flat, raise its `strength`.
+
+  **wrap** — `Repeat` / `Clamp` / `Mirror` / `Mirror Once` (`Mge_SetTextureWrap`),
+  how the texture samples past the UV edges. Both axes at once; per-axis is
+  API-only (`Mge_SetTextureWrapEx`).
 
 ## Extending it
 

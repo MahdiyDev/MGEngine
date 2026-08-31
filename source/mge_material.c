@@ -19,6 +19,10 @@ Material Mge_DefaultMaterial(void)
     m.maps[MATERIAL_MAP_HEIGHT].color = WHITE;   // unused
     m.maps[MATERIAL_MAP_HEIGHT].value = 0.08f;   // parallax height scale (only active with a height map)
     m.shininess = 32.0f;
+    m.tiling = (Vector2){ 1.0f, 1.0f };          // no UV scaling
+    m.offset = (Vector2){ 0.0f, 0.0f };
+    m.triplanar = false;
+    m.triplanarScale = 1.0f;                     // 1 world unit per tile
     return m;
 }
 

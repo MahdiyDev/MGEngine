@@ -308,6 +308,23 @@ TEST(set_texture_slot_targets_the_unit_then_restores)
     CHECK(glstub.activeTexture == GL_TEXTURE0); // left on unit 0 for the batcher
 }
 
+TEST(set_texture_wrap_maps_the_enum)
+{
+    glstub_reset();
+    MgeGL_SetTextureWrap(0, TEXTURE_WRAP_CLAMP, TEXTURE_WRAP_CLAMP); // id 0 -> no-op
+    CHECK(glstub.texWrap.s == 0);
+
+    MgeGL_SetTextureWrap(5, TEXTURE_WRAP_REPEAT, TEXTURE_WRAP_REPEAT);
+    CHECK(glstub.texWrap.s == GL_REPEAT && glstub.texWrap.t == GL_REPEAT);
+
+    MgeGL_SetTextureWrap(5, TEXTURE_WRAP_CLAMP, TEXTURE_WRAP_MIRROR_REPEAT);
+    CHECK(glstub.texWrap.s == GL_CLAMP_TO_EDGE);
+    CHECK(glstub.texWrap.t == GL_MIRRORED_REPEAT);
+
+    MgeGL_SetTextureWrap(5, TEXTURE_WRAP_MIRROR_CLAMP, TEXTURE_WRAP_MIRROR_CLAMP);
+    CHECK(glstub.texWrap.s == GL_MIRROR_CLAMP_TO_EDGE);
+}
+
 TEST(unload_texture_deletes_real_ids_only)
 {
     glstub_reset();
@@ -369,6 +386,7 @@ int main(void)
     RUN(srgb_and_sample_count);
     RUN(load_texture_picks_the_sRGB_internal_format);
     RUN(set_texture_slot_targets_the_unit_then_restores);
+    RUN(set_texture_wrap_maps_the_enum);
     RUN(unload_texture_deletes_real_ids_only);
     RUN(shader_and_program_creation);
     return test_summary();

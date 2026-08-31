@@ -37,6 +37,7 @@ typedef struct {
     GLenum activeTexture;         // last glActiveTexture
     GLuint slotTexture[8];        // texture id bound while unit N was active
     struct { GLint internalFormat, format; GLsizei w, h; } texImage; // last glTexImage2D
+    struct { GLint s, t; } texWrap; // last GL_TEXTURE_WRAP_S / _T set via glTexParameteri
 
     GLint sampleCount;            // what glGetIntegerv(GL_SAMPLES) returns
 

@@ -298,6 +298,28 @@ void MgeGL_UnloadTexture(unsigned int id)
         glDeleteTextures(1, &id);
 }
 
+static GLint wrap_to_gl(int wrap)
+{
+    switch (wrap) {
+    case TEXTURE_WRAP_CLAMP:         return GL_CLAMP_TO_EDGE;
+    case TEXTURE_WRAP_MIRROR_REPEAT: return GL_MIRRORED_REPEAT;
+    case TEXTURE_WRAP_MIRROR_CLAMP:  return GL_MIRROR_CLAMP_TO_EDGE;
+    case TEXTURE_WRAP_REPEAT:
+    default:                         return GL_REPEAT;
+    }
+}
+
+void MgeGL_SetTextureWrap(unsigned int id, int wrapS, int wrapT)
+{
+    if (id == 0)
+        return;
+
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_to_gl(wrapS));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_to_gl(wrapT));
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void MgeGL_Close(void)
 {
     glDisableVertexAttribArray(VERTICE_LOCATION);
@@ -723,6 +745,12 @@ void MgeGL_Uniform4fv(const char* name, Vector4 value)
     glUniform4fv(glGetUniformLocation(MGEGL.State.currentShaderID, name), 1, vectorValue);
 }
 
+void MgeGL_Uniform2fv(const char* name, Vector2 value)
+{
+    float vectorValue[2] = { value.x, value.y };
+    glUniform2fv(glGetUniformLocation(MGEGL.State.currentShaderID, name), 1, vectorValue);
+}
+
 void MgeGL_UniformMatrix4fv(const char* name, Matrix value)
 {
     float matValue[16] = {
@@ -1112,6 +1140,9 @@ void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId, un
     MgeGL_Uniform1i("normalMap", 3);
     MgeGL_Uniform1i("useNormalMap", (normalTextureId != 0) ? 1 : 0);
     MgeGL_Uniform1i("useParallax", 0); // meshes don't carry a height map
+    MgeGL_Uniform1i("triplanar", 0);
+    MgeGL_Uniform2fv("uvTiling", (Vector2){ 1.0f, 1.0f });
+    MgeGL_Uniform2fv("uvOffset", (Vector2){ 0.0f, 0.0f });
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, (textureId != 0) ? textureId : MGEGL.State.whiteTexture);

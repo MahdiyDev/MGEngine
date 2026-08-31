@@ -12,6 +12,7 @@ enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT };
 typedef struct Scene {
     Object objects[SCENE_MAX_OBJECTS];
     char objectNames[SCENE_MAX_OBJECTS][24]; // mutable: the explorer names spawned shapes
+    unsigned char texWrap[SCENE_MAX_OBJECTS][MATERIAL_MAP_COUNT]; // TextureWrap per map slot (0 = REPEAT)
     int objectCount;
 
     Light lights[SCENE_MAX_LIGHTS]; // [0] = sun (directional, casts shadow), [1] = lamp (point)

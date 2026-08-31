@@ -74,6 +74,7 @@ GLint glGetAttribLocation(GLuint p, const GLchar* n) { (void)p; (void)n; return 
 
 void glUniform1f(GLint l, GLfloat v) { (void)l; (void)v; }
 void glUniform1i(GLint l, GLint v) { (void)l; (void)v; }
+void glUniform2fv(GLint l, GLsizei c, const GLfloat* v) { (void)l; (void)c; (void)v; }
 void glUniform3fv(GLint l, GLsizei c, const GLfloat* v) { (void)l; (void)c; (void)v; }
 void glUniform4fv(GLint l, GLsizei c, const GLfloat* v) { (void)l; (void)c; (void)v; }
 void glUniformMatrix4fv(GLint l, GLsizei c, GLboolean t, const GLfloat* v) { (void)l; (void)c; (void)t; (void)v; }
@@ -128,7 +129,12 @@ void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei w, G
     glstub.texImage.w = w;
     glstub.texImage.h = h;
 }
-void glTexParameteri(GLenum a, GLenum b, GLint c) { (void)a; (void)b; (void)c; }
+void glTexParameteri(GLenum a, GLenum b, GLint c)
+{
+    (void)a;
+    if (b == GL_TEXTURE_WRAP_S) glstub.texWrap.s = c;
+    else if (b == GL_TEXTURE_WRAP_T) glstub.texWrap.t = c;
+}
 void glTexParameteriv(GLenum a, GLenum b, const GLint* c) { (void)a; (void)b; (void)c; }
 void glGenerateMipmap(GLenum t) { (void)t; }
 void glPixelStorei(GLenum p, GLint v) { (void)p; (void)v; }

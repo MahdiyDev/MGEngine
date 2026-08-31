@@ -31,6 +31,12 @@ TEST(default_material)
     CHECK(m.maps[MATERIAL_MAP_HEIGHT].texture.id == 0);
 
     CHECK(m.shininess == 32.0f);
+
+    // UV transform: identity by default, triplanar off
+    CHECK(m.tiling.x == 1.0f && m.tiling.y == 1.0f);
+    CHECK(m.offset.x == 0.0f && m.offset.y == 0.0f);
+    CHECK(!m.triplanar);
+    CHECK(m.triplanarScale == 1.0f);
 }
 
 TEST(map_slots)

@@ -185,6 +185,16 @@ typedef enum {
 	PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA    // 2 bpp
 } PixelFormat;
 
+// How a texture is sampled outside the 0..1 UV range. Set per texture (and
+// optionally per axis: U = horizontal, V = vertical) with Mge_SetTextureWrap /
+// Mge_SetTextureWrapEx. New textures default to REPEAT.
+typedef enum {
+	TEXTURE_WRAP_REPEAT = 0,     // tile -- for seamless surfaces (brick, grass, terrain)
+	TEXTURE_WRAP_CLAMP,          // stretch the edge texel outward -- decals, UI, spotlight cookies
+	TEXTURE_WRAP_MIRROR_REPEAT,  // mirror at every integer boundary -- alternating continuous pattern
+	TEXTURE_WRAP_MIRROR_CLAMP    // mirror once, then clamp the outer edges ("mirror once")
+} TextureWrap;
+
 // Camera projection
 typedef enum {
 	CAMERA_PERSPECTIVE = 0,  // Perspective projection
@@ -447,6 +457,21 @@ typedef struct MaterialMap {
 typedef struct Material {
 	MaterialMap maps[MATERIAL_MAP_COUNT]; // indexed by MaterialMapIndex
 	float shininess;                      // Phong specular exponent (higher = tighter highlight)
+
+	// UV transform applied to every map: uv' = uv * tiling + offset. `tiling`
+	// {2,2} repeats the texture 4x (needs a REPEAT / MIRROR wrap mode to show).
+	// Mge_DefaultMaterial sets {1,1} / {0,0}.
+	Vector2 tiling;
+	Vector2 offset;
+
+	// Triplanar projection: sample the maps from world-space XYZ (blending the
+	// three axis planes by the surface normal) instead of the mesh UVs, so
+	// scaling an object tiles the texture rather than stretching it. The normal
+	// map (whiteout blend) and height map (per-plane parallax-occlusion march)
+	// follow; `tiling` does not (use `triplanarScale`). `triplanarScale` = world
+	// units per texture tile.
+	bool  triplanar;
+	float triplanarScale;
 } Material;
 
 // Light kinds:
@@ -649,6 +674,11 @@ Texture2D Mge_LoadTexture(const char *fileName);
 Texture2D Mge_LoadTextureFromImageEx(Image image, bool sRGB);
 Texture2D Mge_LoadTextureEx(const char *fileName, bool sRGB);
 void Mge_UnloadTexture(Texture2D texture); // free the GPU texture (no-op when id == 0)
+
+// Texture wrap mode (see TextureWrap). Mge_SetTextureWrap sets both axes;
+// Mge_SetTextureWrapEx sets U (horizontal) and V (vertical) independently.
+void Mge_SetTextureWrap(Texture2D texture, int wrap);
+void Mge_SetTextureWrapEx(Texture2D texture, int wrapU, int wrapV);
 
 // Native "open file" dialog (Windows: comdlg32; Linux: zenity/kdialog). Returns a
 // malloc'd absolute path the caller must free(), or NULL if cancelled / no dialog

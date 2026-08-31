@@ -62,9 +62,9 @@ int main(void)
     Mge_InitWindow(width, height, "MGEngine builder");
     Mge_SetTargetFPS(60);
 
-    bool editMode = false; // start in fly / VIEW mode
+    bool editMode = true;  // start in EDIT mode (cursor free, sidebar clickable)
     bool looking = false;   // holding RIGHT mouse in edit mode
-    DisableCursor();
+    EnableCursor();
 
     Camera3D camera = {
         .position = { 0.0f, 3.5f, 13.0f },

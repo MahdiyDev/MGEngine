@@ -111,3 +111,13 @@ void Mge_UnloadTexture(Texture2D texture)
 {
     MgeGL_UnloadTexture(texture.id);
 }
+
+void Mge_SetTextureWrap(Texture2D texture, int wrap)
+{
+    MgeGL_SetTextureWrap(texture.id, wrap, wrap);
+}
+
+void Mge_SetTextureWrapEx(Texture2D texture, int wrapU, int wrapV)
+{
+    MgeGL_SetTextureWrap(texture.id, wrapU, wrapV);
+}

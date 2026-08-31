@@ -39,7 +39,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
   mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
-  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / Mge_UnloadTexture (stb_image)
+  mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 builder/               THE APP -- scene editor (fly-camera + TAB edit mode + gizmo + panels)
@@ -60,7 +60,7 @@ test/                  unit tests (no window/GL); test/glstub/ = a fake glad so 
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
 examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
-examples/materials/    textured_cube
+examples/materials/    textured_cube, tiling_triplanar
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
 examples/depth/        depth_buffer
@@ -167,8 +167,9 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~14 engine features (2D shapes, a lit cube, a shadow map,
-a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, the
+GLFW window, renders ~16 engine features (2D shapes, a lit cube, a shadow map,
+a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
+mirror-repeat wrapped quad, a tiled plane + a triplanar box, the
 cube/sphere/plane primitives, a rotated cube with each gizmo mode, the rotate
 gizmo head-on, a scripted rotate drag) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
@@ -697,6 +698,52 @@ the old one.
 Demo: `examples/materials/textured_cube.c` — textured/tinted/matte/plain cubes
 side by side under a moving light.
 
+#### Wrap mode
+
+How a texture samples outside `0..1` UV. New textures are `TEXTURE_WRAP_REPEAT`;
+change it once after loading:
+
+```c
+Mge_SetTextureWrap(tex, TEXTURE_WRAP_CLAMP);              // both axes
+Mge_SetTextureWrapEx(tex, TEXTURE_WRAP_REPEAT, TEXTURE_WRAP_CLAMP); // U repeats, V clamps
+```
+
+| `TextureWrap` | GL | use |
+| --- | --- | --- |
+| `TEXTURE_WRAP_REPEAT` | `GL_REPEAT` | tiling — brick, grass, terrain (the default) |
+| `TEXTURE_WRAP_CLAMP` | `GL_CLAMP_TO_EDGE` | decals, UI, spotlight cookies — no pattern loop |
+| `TEXTURE_WRAP_MIRROR_REPEAT` | `GL_MIRRORED_REPEAT` | seamless-by-mirroring; flips at every integer boundary |
+| `TEXTURE_WRAP_MIRROR_CLAMP` | `GL_MIRROR_CLAMP_TO_EDGE` | "mirror once" — mirror across one boundary, then clamp |
+
+The state lives on the GL texture object, so set it once (it isn't stored in
+`Material`). The builder's inspector has a per-slot **wrap** dropdown.
+
+#### Tiling, offset & triplanar
+
+Changing the wrap mode to `REPEAT` does **not** repeat a texture on its own — you
+also have to scale the UVs. That's a per-material transform applied to every map:
+
+```c
+mat.tiling = (Vector2){ 4.0f, 4.0f }; // uv' = uv*tiling + offset -> 16 copies, no stretch
+mat.offset = (Vector2){ 0.25f, 0.0f };
+```
+
+To keep texels **square when an object is scaled non-uniformly**, turn on
+triplanar projection — it samples the maps from world-space XYZ (blending the
+three axis planes by the normal) instead of the mesh UVs, so stretching the
+geometry tiles the texture rather than smearing it:
+
+```c
+mat.triplanar = true;
+mat.triplanarScale = 1.0f;            // world units per texture tile
+```
+
+The **normal map** (whiteout blend) and **height map** (a per-plane
+parallax-occlusion march, offset-limiting) both follow the projection. `tiling`
+does **not** apply under triplanar — scale it with `triplanarScale`.
+`Mge_DefaultMaterial()` sets `tiling {1,1}`, `offset {0,0}`, `triplanar false`.
+Demo: `examples/materials/tiling_triplanar.c`.
+
 #### Picking a texture at runtime
 
 `Mge_OpenImageDialog()` pops the OS "open file" dialog (Windows: comdlg32;
@@ -1103,7 +1150,7 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | frame | `Mge_GuiBeginFrame` / `Mge_GuiEndFrame`, `Mge_GuiShutdown` |
 | boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (edge dock) + matching `End*` |
 | widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiImageButton` (square texture thumbnail; id `0` → a "+" placeholder) |
-| inputs | `Mge_GuiCheckbox`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
+| inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
 
 Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
 `Mge_GuiButton` return `true` on click. Gate your own picking and camera on
@@ -1138,3 +1185,26 @@ directly.
   Dear ImGui (`vendor/imgui/`, v1.90.5) is vendored as source and compiled into
   the DLL — no separate build step, and header/binary versions can't drift.
 - `glm` is gone; `vendor/glm/` was deleted.
+
+## References
+
+External material this engine's design and shaders are based on.
+
+| Source | Used for |
+| --- | --- |
+| [LearnOpenGL](https://learnopengl.com/) — Getting Started / Lighting | core renderer, camera, the Phong → Blinn-Phong lighting model (`mge_light.c`), material maps |
+| LearnOpenGL — [Depth testing](https://learnopengl.com/Advanced-OpenGL/Depth-testing) / [Stencil testing](https://learnopengl.com/Advanced-OpenGL/Stencil-testing) / [Face culling](https://learnopengl.com/Advanced-OpenGL/Face-culling) | `mge_depth.c`, `mge_stencil.c` + object outlining, `mge_cull.c` |
+| LearnOpenGL — [Framebuffers](https://learnopengl.com/Advanced-OpenGL/Framebuffers) / [Cubemaps](https://learnopengl.com/Advanced-OpenGL/Cubemaps) | `RenderTexture` + post-processing kernels, skybox + environment mapping (`mge_cubemap.c`) |
+| LearnOpenGL — [Instancing](https://learnopengl.com/Advanced-OpenGL/Instancing) / [Anti-Aliasing](https://learnopengl.com/Advanced-OpenGL/Anti-Aliasing) / [Geometry Shader](https://learnopengl.com/Advanced-OpenGL/Geometry-Shader) | `mge_instancing.c` (`ModelBatch`), MSAA (`mge_msaa.c`), explode / normal-viz (`mge_geometry.c`) |
+| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`) |
+| LearnOpenGL — [Shadow Mapping](https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping) / [Point Shadows](https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows) | `ShadowMap` / `PointShadowMap`, the depth pass + PCF (`mge_shadow.c`) |
+| LearnOpenGL — [Normal Mapping](https://learnopengl.com/Advanced-Lighting/Normal-Mapping) / [Parallax Mapping](https://learnopengl.com/Advanced-Lighting/Parallax-Mapping) | derivative-TBN normal maps, parallax-occlusion mapping (`MATERIAL_MAP_NORMAL` / `MATERIAL_MAP_HEIGHT`); `assets/bricks/` is LearnOpenGL's `bricks2` set |
+| LearnOpenGL — [Advanced Data](https://learnopengl.com/Advanced-OpenGL/Advanced-Data) | batched vertex attributes (`Mge_MakeMeshFromArrays` — one VBO, block per attribute) |
+| raylib / [rlgl](https://github.com/raysan5/raylib/blob/master/src/rlgl.h) | the immediate-mode batched renderer design (`mge_gl.c` — `MgeGL_Begin` / `Vertex` / `End` → merged draw calls, matrix stack) and the public API shape (`Draw_*`, `Color`, `Rectangle`, `Camera3D`, `Texture2D`, wrap modes) |
+| [Ben Golus — "Normal Mapping for a Triplanar Shader"](https://bgolus.medium.com/normal-mapping-for-a-triplanar-shader-10bf39dca05a) | the whiteout-blend triplanar normal mapping in `mge_light.c` |
+| [landow.dev — "Triplanar Mapping with Deep Parallax"](https://www.landow.dev/posts/triplanar/) | per-plane parallax-occlusion under triplanar (offset-limiting march) |
+| Unreal Engine editor | the rotate gizmo — full-circle rings with only the camera-facing arc drawn (`mge_gizmo.c`) |
+| [Dear ImGui](https://github.com/ocornut/imgui) | the `Mge_Gui*` UI backend (`mge_gui.cpp`) |
+| [MahdiyDev/mlib](https://github.com/MahdiyDev/mlib) | the `test/` harness and small container helpers |
+
+Vendored libraries: [GLFW](https://www.glfw.org/) (windowing/input), [glad](https://gen.glad.sh/) (GL loader), [Assimp](https://github.com/assimp/assimp) (model import), [stb_image](https://github.com/nothings/stb) (image decode).

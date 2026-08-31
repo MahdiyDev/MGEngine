@@ -99,6 +99,9 @@ void glDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei 
 #define GL_LINEAR               0x2601
 #define GL_LINEAR_MIPMAP_LINEAR 0x2703
 #define GL_REPEAT               0x2901
+#define GL_CLAMP_TO_EDGE        0x812F
+#define GL_MIRRORED_REPEAT      0x8370
+#define GL_MIRROR_CLAMP_TO_EDGE 0x8743
 #define GL_UNPACK_ALIGNMENT     0x0CF5
 
 #define GL_RED  0x1903
@@ -191,6 +194,7 @@ void glTexParameteri(GLenum target, GLenum pname, GLint param);
 void glTexParameteriv(GLenum target, GLenum pname, const GLint* params);
 void glUniform1f(GLint location, GLfloat v0);
 void glUniform1i(GLint location, GLint v0);
+void glUniform2fv(GLint location, GLsizei count, const GLfloat* value);
 void glUniform3fv(GLint location, GLsizei count, const GLfloat* value);
 void glUniform4fv(GLint location, GLsizei count, const GLfloat* value);
 void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);

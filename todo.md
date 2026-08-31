@@ -40,3 +40,7 @@
 - [x] per-map color + value in the inspector, one group per slot; wired to shader: matDiffuse (gain), matSpecularColor (tint), normalStrength (fixes flat normal maps -- MATERIAL_MAP_NORMAL.value now defaults to 1)
 - [x] parallax mapping: MATERIAL_MAP_HEIGHT + parallax-occlusion in the lighting shader (LearnOpenGL Advanced-Lighting/Parallax); builder height-map slot; examples/lighting/parallax_mapping.c
 - [x] Makefile: -MMD -MP header deps so editing mge.h rebuilds dependent objects (was: stale cache -> ABI mismatch -> segfault)
+- [x] texture wrap modes: TextureWrap (Repeat/Clamp/MirrorRepeat/MirrorClamp), Mge_SetTextureWrap / ...Ex (per-axis U/V); builder per-slot wrap dropdown (Mge_GuiCombo)
+- [x] material tiling/offset (uv' = uv*tiling + offset) + triplanar projection (world-XYZ diffuse, no stretch on scale); builder inspector fields; examples/materials/tiling_triplanar.c
+- [x] triplanar normal map (whiteout blend) + height map (per-plane parallax-occlusion march, offset-limiting; view frame carries the face sign so it aligns on every face)
+- [x] builder starts in EDIT mode (was VIEW/fly)
