@@ -56,6 +56,7 @@ static void inspect_object(Object* o)
     material_slot(&o->material, MATERIAL_MAP_DIFFUSE, "diffuse map", "diffuse", true, 2.0f, "gain");
     material_slot(&o->material, MATERIAL_MAP_SPECULAR, "specular map", "specular", true, 1.0f, "strength");
     material_slot(&o->material, MATERIAL_MAP_NORMAL, "normal map", "normal", false, 4.0f, "strength");
+    material_slot(&o->material, MATERIAL_MAP_HEIGHT, "height map (parallax)", "height", false, 0.2f, "scale");
 }
 
 static void inspect_light(Light* l)

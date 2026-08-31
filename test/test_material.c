@@ -26,6 +26,10 @@ TEST(default_material)
     CHECK(m.maps[MATERIAL_MAP_NORMAL].value == 1.0f);
     CHECK(m.maps[MATERIAL_MAP_NORMAL].texture.id == 0);
 
+    // height slot: a small default parallax scale, only active with a texture
+    CHECK(m.maps[MATERIAL_MAP_HEIGHT].value > 0.0f && m.maps[MATERIAL_MAP_HEIGHT].value < 0.5f);
+    CHECK(m.maps[MATERIAL_MAP_HEIGHT].texture.id == 0);
+
     CHECK(m.shininess == 32.0f);
 }
 
@@ -35,7 +39,8 @@ TEST(map_slots)
     CHECK(MATERIAL_MAP_DIFFUSE == 0);
     CHECK(MATERIAL_MAP_SPECULAR == 1);
     CHECK(MATERIAL_MAP_NORMAL == 2);
-    CHECK(MATERIAL_MAP_COUNT == 3);
+    CHECK(MATERIAL_MAP_HEIGHT == 3);
+    CHECK(MATERIAL_MAP_COUNT == 4);
 }
 
 TEST(set_material_texture)

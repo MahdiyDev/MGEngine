@@ -59,7 +59,7 @@ vendor/
 test/                  unit tests (no window/GL); test/glstub/ = a fake glad so mge_gl.c itself is testable
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows, normal_mapping
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
 examples/materials/    textured_cube
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -102,6 +102,11 @@ real (typically several times the frame rate of the debug build, ~40 % smaller
 binaries). The object cache doesn't track flags, so `make release` wipes
 `build/obj` first; a plain `make` afterwards puts the debug objects back.
 Override per-invocation instead with e.g. `make CFLAGS="-O3 -march=native"`.
+
+The compiler writes `.d` dep files (`-MMD -MP`), so editing a header —
+`source/mge.h` especially, since it fixes struct sizes — rebuilds every
+dependent object. `make -C test render` / `make -C examples` still link the
+objects the **root** `make` produced, so run `make` at the root first.
 
 `make vendor-glfw` / `make vendor-assimp` build just one; `make vendor-clean`
 deletes everything they produced (the committed source trees stay). The Assimp build
@@ -162,10 +167,10 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~13 engine features (2D shapes, a lit cube, a shadow map,
-a post-fx pass, the skybox, a normal-mapped wall, the cube/sphere/plane
-primitives, a rotated cube with each gizmo mode, the rotate gizmo head-on, a
-scripted rotate drag) one frame each, reads the
+GLFW window, renders ~14 engine features (2D shapes, a lit cube, a shadow map,
+a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, the
+cube/sphere/plane primitives, a rotated cube with each gizmo mode, the rotate
+gizmo head-on, a scripted rotate drag) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
@@ -597,6 +602,34 @@ automatically, so imported models are normal-mapped without extra code.
 Demo: `examples/lighting/normal_mapping.c` — `assets/brickwall/` on a flat quad,
 SPACE toggles the map.
 
+### Parallax mapping
+
+Add a grayscale **depth map** to `MATERIAL_MAP_HEIGHT` and the lighting shader
+does parallax-occlusion mapping: it marches the depth field in tangent space
+along the view ray and shifts the sampled texture coordinates to the hit, so a
+flat quad looks genuinely displaced — grooves hide behind ridges at grazing
+angles, with a stepped silhouette. Same derivative-based tangent frame as the
+normal map (no tangent attribute); binds to texture unit 4.
+
+The map follows LearnOpenGL's convention: **black = surface, white = deep groove**
+(their `bricks2_disp.jpg`). If you have a *height* map (white = high), invert it
+first.
+
+```c
+Material wall = Mge_DefaultMaterial();
+Mge_SetMaterialTexture(&wall, MATERIAL_MAP_DIFFUSE, albedo);
+Mge_SetMaterialTexture(&wall, MATERIAL_MAP_NORMAL, normal);   // pair them
+Mge_SetMaterialTexture(&wall, MATERIAL_MAP_HEIGHT, depth);    // black = surface, white = deep
+wall.maps[MATERIAL_MAP_HEIGHT].value = 0.1f;                  // displacement scale
+// ... Mge_SetMaterial(wall); Draw_Cube(...);
+```
+
+Load the depth map **linear**. Keep `.value` small (`0.05`–`0.15`) — large scales
+smear at oblique angles. Meshes (`Mge_DrawMesh`) don't do parallax.
+
+Demo: `examples/lighting/parallax_mapping.c` — LearnOpenGL's `assets/bricks/`
+set; SPACE toggles parallax, UP/DOWN the scale, N the normal map.
+
 ### Materials & material maps
 
 A `Material` is a fixed set of `MaterialMap` slots (indexed by
@@ -608,9 +641,12 @@ A `Material` is a fixed set of `MaterialMap` slots (indexed by
 | `MATERIAL_MAP_DIFFUSE` | albedo image sampled across the surface (id `0` → a white 1×1, i.e. "untextured") | tint multiplied over the texture | base-colour gain (`1` = as-is, `>1` brighter) |
 | `MATERIAL_MAP_SPECULAR` | unused | tints the highlight (`WHITE` = untinted) | highlight strength multiplier: `1` = as the light sets it, `0` = matte |
 | `MATERIAL_MAP_NORMAL` | tangent-space normal map (RGB = XYZ); load it linear. Unset → the vertex normal is used | unused | strength: `0` = flat, `1` = as authored, `>1` = exaggerated relief |
+| `MATERIAL_MAP_HEIGHT` | grayscale depth map (black = surface, white = groove — `bricks2_disp.jpg`); load it linear. Set → parallax-occlusion mapping displaces the sampled UVs along the view ray | unused | height scale (`~0.05` subtle … `0.15` strong; `0` = off) |
 
-Every `.value` defaults to `1` via `Mge_DefaultMaterial()` — a **raw `(Material){…}`
-literal** must set the ones it uses (`0` = black diffuse / flat normal).
+`MATERIAL_MAP_DIFFUSE.value` defaults to `1` and `MATERIAL_MAP_HEIGHT.value` to
+`~0.08` via `Mge_DefaultMaterial()` — a **raw `(Material){…}` literal** must set
+the ones it uses (`0` = black diffuse / flat normal). Parallax and the normal map
+share the shader's derivative-based tangent frame; pair them for the best result.
 
 ```c
 typedef struct MaterialMap {

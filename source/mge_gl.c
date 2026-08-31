@@ -1111,6 +1111,7 @@ void MgeGL_DrawMesh(unsigned int vao, int indexCount, unsigned int textureId, un
     MgeGL_SetTextureSlot(3, normalTextureId);
     MgeGL_Uniform1i("normalMap", 3);
     MgeGL_Uniform1i("useNormalMap", (normalTextureId != 0) ? 1 : 0);
+    MgeGL_Uniform1i("useParallax", 0); // meshes don't carry a height map
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, (textureId != 0) ? textureId : MGEGL.State.whiteTexture);

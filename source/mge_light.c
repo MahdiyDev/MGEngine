@@ -120,9 +120,13 @@ static const char* lightFragCode =
     "uniform sampler2D normalMap;\n"
     "uniform int useNormalMap;\n"
     "uniform float normalStrength;\n"   // MATERIAL_MAP_NORMAL.value (0 = flat, 1 = as-authored, >1 = exaggerated)
-    "vec3 ApplyNormalMap(vec3 N)\n"
+    "uniform sampler2D heightMap;\n"
+    "uniform int useParallax;\n"
+    "uniform float heightScale;\n"      // MATERIAL_MAP_HEIGHT.value
+    // TBN from screen-space derivatives (no tangent vertex attribute needed).
+    // Columns are tangent / bitangent / normal, so transpose() maps world->tangent.
+    "mat3 CotangentFrame(vec3 N)\n"
     "{\n"
-    // TBN from screen-space derivatives (no tangent attribute needed)
     "    vec3 dp1 = dFdx(vFragPos);\n"
     "    vec3 dp2 = dFdy(vFragPos);\n"
     "    vec2 duv1 = dFdx(vTexCoord);\n"
@@ -132,18 +136,57 @@ static const char* lightFragCode =
     "    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;\n"
     "    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;\n"
     "    float invmax = inversesqrt(max(dot(T, T), dot(B, B)));\n"
-    "    mat3 TBN = mat3(T * invmax, B * invmax, N);\n"
-    "    vec3 m = texture(normalMap, vTexCoord).xyz * 2.0 - 1.0;\n"
+    "    return mat3(T * invmax, B * invmax, N);\n"
+    "}\n"
+    "vec3 ApplyNormalMap(mat3 TBN, vec2 uv)\n"
+    "{\n"
+    "    vec3 m = texture(normalMap, uv).xyz * 2.0 - 1.0;\n"
     "    m.xy *= normalStrength;\n"          // scale the tangent-space tilt
     "    m = normalize(m);\n"
     "    return normalize(TBN * m);\n"
     "}\n"
+    // Parallax-occlusion mapping (LearnOpenGL Advanced-Lighting/Parallax-Mapping).
+    // viewTS is the fragment->eye direction in tangent space. The map is a DEPTH
+    // map -- sampled directly: black (0) = surface, white (1) = deep groove
+    // (e.g. bricks2_disp.jpg). Invert a height map before use.
+    "vec2 ParallaxMapping(vec2 texCoords, vec3 viewTS)\n"
+    "{\n"
+    "    const float minLayers = 8.0;\n"
+    "    const float maxLayers = 32.0;\n"
+    "    float numLayers = mix(maxLayers, minLayers, clamp(abs(viewTS.z), 0.0, 1.0));\n"
+    "    float layerDepth = 1.0 / numLayers;\n"
+    "    float curLayerDepth = 0.0;\n"
+    "    vec2 P = viewTS.xy / max(viewTS.z, 1e-3) * heightScale;\n"
+    "    vec2 dTex = P / numLayers;\n"
+    "    vec2 curTex = texCoords;\n"
+    "    float curDepth = texture(heightMap, curTex).r;\n"
+    "    for (int i = 0; i < 64; i++) {\n"
+    "        if (curLayerDepth >= curDepth) break;\n"
+    "        curTex -= dTex;\n"
+    "        curDepth = texture(heightMap, curTex).r;\n"
+    "        curLayerDepth += layerDepth;\n"
+    "    }\n"
+    "    vec2 prevTex = curTex + dTex;\n"
+    "    float after  = curDepth - curLayerDepth;\n"
+    "    float before = texture(heightMap, prevTex).r - curLayerDepth + layerDepth;\n"
+    "    float w = after / (after - before);\n"
+    "    return mix(curTex, prevTex, clamp(w, 0.0, 1.0));\n"
+    "}\n"
     "void main()\n"
     "{\n"
     "    vec3 N = normalize(vNormal);\n"
-    "    if (useNormalMap == 1) N = ApplyNormalMap(N);\n"
     "    vec3 V = normalize(viewPos - vFragPos);\n"
-    "    vec4 base = texture(sampleTex, vTexCoord) * vColor;\n"   // MATERIAL_MAP_DIFFUSE: texture * colour
+    "    vec2 uv = vTexCoord;\n"
+    "    if (useNormalMap == 1 || useParallax == 1) {\n"
+    "        mat3 TBN = CotangentFrame(N);\n"
+    "        if (useParallax == 1) {\n"
+    "            vec3 viewTS = normalize(transpose(TBN) * V);\n"
+    "            uv = ParallaxMapping(vTexCoord, viewTS);\n"
+    "            uv = clamp(uv, vec2(0.0009), vec2(0.9991));\n"
+    "        }\n"
+    "        if (useNormalMap == 1) N = ApplyNormalMap(TBN, uv);\n"
+    "    }\n"
+    "    vec4 base = texture(sampleTex, uv) * vColor;\n"          // MATERIAL_MAP_DIFFUSE: texture * colour
     "    base.rgb *= matDiffuse;\n"                               // ...times the diffuse-map gain
     "    vec3 lit = vec3(0.0);\n"
     "    for (int i = 0; i < lightCount && i < MAX_LIGHTS; i++) {\n"
@@ -303,6 +346,9 @@ void Mge_BeginLighting3DEx(const Light* lights, int count, Camera3D camera)
     MgeGL_Uniform1i("normalMap", 3);      // tangent-space normal map
     MgeGL_Uniform1i("useNormalMap", 0);   // Mge_SetMaterial / Mge_DrawMesh turn this on
     MgeGL_Uniform1f("normalStrength", 1.0f);
+    MgeGL_Uniform1i("heightMap", 4);      // parallax height map -> unit 4
+    MgeGL_Uniform1i("useParallax", 0);    // Mge_SetMaterial turns this on
+    MgeGL_Uniform1f("heightScale", 0.08f);
     MgeGL_Uniform1f("matSpecular", 1.0f);
     MgeGL_Uniform3fv("matSpecularColor", (Vector3){ 1.0f, 1.0f, 1.0f });
     MgeGL_Uniform1f("matDiffuse", 1.0f);
@@ -338,6 +384,12 @@ void Mge_SetMaterial(Material material)
     MgeGL_Uniform1i("useNormalMap", (normalId != 0) ? 1 : 0);
     MgeGL_Uniform1f("normalStrength", material.maps[MATERIAL_MAP_NORMAL].value);
 
+    // MATERIAL_MAP_HEIGHT: parallax-occlusion mapping on unit 4 when the slot is set
+    unsigned int heightId = material.maps[MATERIAL_MAP_HEIGHT].texture.id;
+    MgeGL_SetTextureSlot(4, heightId);
+    MgeGL_Uniform1i("useParallax", (heightId != 0) ? 1 : 0);
+    MgeGL_Uniform1f("heightScale", material.maps[MATERIAL_MAP_HEIGHT].value);
+
     Color sc = material.maps[MATERIAL_MAP_SPECULAR].color;
     MgeGL_Uniform1f("matSpecular", material.maps[MATERIAL_MAP_SPECULAR].value);
     MgeGL_Uniform3fv("matSpecularColor",
@@ -354,5 +406,6 @@ void Mge_EndLighting3D(void)
     s_active = false;
     MgeGL_SetTexture(MgeGL_GetWhiteTexture()); // don't leak a material texture into unlit draws
     MgeGL_SetTextureSlot(3, 0);                // ...or a normal map
+    MgeGL_SetTextureSlot(4, 0);                // ...or a height map
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
 }

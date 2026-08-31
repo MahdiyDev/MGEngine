@@ -65,6 +65,7 @@ up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when f
   | diffuse | albedo texture (loaded sRGB) | tint over the texture — *this is the object's colour* | `gain` 0–2 |
   | specular | *(unused)* | tints the highlight | `strength` 0–1 |
   | normal | tangent-space normal map (loaded linear) | *(hidden — a tint is meaningless)* | `strength` 0–4 (0 = flat) |
+  | height (parallax) | grayscale depth map, black = surface / white = groove (loaded linear) | *(hidden)* | `scale` 0–0.2 (0 = off); pair with a normal map |
 
   Click a thumbnail to open the OS file picker (`Mge_OpenImageDialog`); an `x`
   beside a filled slot clears it (`Mge_UnloadTexture`). There is no separate

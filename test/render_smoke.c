@@ -354,6 +354,42 @@ static void scene_normal_map(void)
     Mge_EndDrawing();
 }
 
+// parallax-occlusion mapping: LearnOpenGL's bricks2 set on an angled wall
+static void scene_parallax(void)
+{
+    Texture2D d = Mge_LoadTexture("../assets/bricks/bricks2.jpg");
+    if (d.id == 0) {
+        printf("  %-16s  (skipped -- assets/bricks not present)\n", "parallax");
+        return;
+    }
+    Texture2D nrm = Mge_LoadTexture("../assets/bricks/bricks2_normal.jpg");
+    Texture2D disp = Mge_LoadTexture("../assets/bricks/bricks2_disp.jpg"); // depth map
+
+    Material wall = Mge_DefaultMaterial();
+    Mge_SetMaterialTexture(&wall, MATERIAL_MAP_DIFFUSE, d);
+    if (nrm.id != 0)
+        Mge_SetMaterialTexture(&wall, MATERIAL_MAP_NORMAL, nrm);
+    Mge_SetMaterialTexture(&wall, MATERIAL_MAP_HEIGHT, disp);
+    wall.maps[MATERIAL_MAP_HEIGHT].value = 0.1f;
+
+    Light lamp = Mge_MakePointLight((Vector3){ 1.4f, 0.6f, 2.0f }, (Vector3){ 1, 1, 1 });
+    lamp.ambient = 0.12f;
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 45.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 2.6f, 0.4f, 3.4f }; // off to the side -> grazing angle
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 12, 12, 16, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(lamp, cam);
+    Mge_SetMaterial(wall);
+    Draw_Cube((Vector3){ 0, 0, 0 }, (Vector3){ 4, 4, 0.2f }, WHITE);
+    Mge_EndLighting3D();
+    Mge_EndMode3D();
+    check("parallax");
+    Mge_EndDrawing();
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -373,6 +409,7 @@ int main(void)
     scene_postfx();
     scene_skybox();
     scene_normal_map();
+    scene_parallax();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

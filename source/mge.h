@@ -418,10 +418,23 @@ typedef enum {
 //                          .color    unused
 //                          .value    normal-map strength (0 = flat, 1 = as
 //                                    authored, >1 = exaggerated relief)
+//   MATERIAL_MAP_HEIGHT    .texture  grayscale DEPTH map: black = surface, white =
+//                                    deep groove (LearnOpenGL's bricks2_disp.jpg
+//                                    convention; invert a height map first). When
+//                                    set, the shader does parallax-occlusion
+//                                    mapping -- the texture coordinates are
+//                                    displaced along the view ray so the surface
+//                                    looks embossed. Load it LINEAR. Best paired
+//                                    with a normal map. (LearnOpenGL
+//                                    Advanced-Lighting/Parallax-Mapping.)
+//                          .color    unused
+//                          .value    height scale (~0.05 subtle .. 0.15 strong;
+//                                    0 disables the displacement)
 typedef enum {
 	MATERIAL_MAP_DIFFUSE = 0,   // base colour / albedo
 	MATERIAL_MAP_SPECULAR,      // specular highlight strength
 	MATERIAL_MAP_NORMAL,        // tangent-space normal map
+	MATERIAL_MAP_HEIGHT,        // height map -> parallax-occlusion mapping
 	MATERIAL_MAP_COUNT
 } MaterialMapIndex;
 

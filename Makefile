@@ -124,25 +124,32 @@ $(ENGINE_LIB): $(COBJECTS)
 $(BUILD_OBJ_DIR):
 	$(call MKDIR,$(BUILD_OBJ_DIR))
 
+# -MMD -MP writes a .d beside each .o listing the headers it #included, so editing
+# a header (e.g. mge.h, which changes struct sizes) rebuilds every dependent .o.
+# Without this a stale object cache silently mixes ABIs -> memory corruption.
+DEPFLAGS = -MMD -MP
+
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_OBJ_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp | $(BUILD_OBJ_DIR)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 $(BUILD_OBJ_DIR)/glad.o: $(GLAD_SRC) | $(BUILD_OBJ_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+
+-include $(COBJECTS:.o=.d)
 
 # vendored Dear ImGui -- warnings silenced, own object subdir
 $(BUILD_OBJ_DIR)/imgui:
 	$(call MKDIR,$(BUILD_OBJ_DIR)/imgui)
 
 $(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
-	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(PICFLAG) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 # --- builder app: a plain-C consumer of the library + its headers ---
 BUILDER_SRC = $(wildcard builder/*.c)
-$(APP): $(BUILDER_SRC) $(wildcard builder/*.h) $(ENGINE_LIB)
+$(APP): $(BUILDER_SRC) $(wildcard builder/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $(BUILDER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp

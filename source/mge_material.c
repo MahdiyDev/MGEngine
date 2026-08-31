@@ -16,6 +16,8 @@ Material Mge_DefaultMaterial(void)
     m.maps[MATERIAL_MAP_SPECULAR].value = 1.0f;  // specular strength as the light sets it
     m.maps[MATERIAL_MAP_NORMAL].color = WHITE;   // unused; kept sane for the inspector
     m.maps[MATERIAL_MAP_NORMAL].value = 1.0f;    // normal-map strength (0 = flat)
+    m.maps[MATERIAL_MAP_HEIGHT].color = WHITE;   // unused
+    m.maps[MATERIAL_MAP_HEIGHT].value = 0.08f;   // parallax height scale (only active with a height map)
     m.shininess = 32.0f;
     return m;
 }
