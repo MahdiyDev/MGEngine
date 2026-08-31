@@ -1,4 +1,6 @@
 #include "inspector.h"
+#include "pathutil.h"
+#include "scene_build.h" // SceneBuild_FindSDK -- locate the bundled skybox
 
 #include <mge_gui.h>
 #include <stdlib.h>
@@ -62,9 +64,37 @@ static bool material_slot(Material* mat, int mapIndex, unsigned char* wrap, char
     return changed;
 }
 
-static void inspect_object(Scene* s)
+// A camera object: transform only. Position + rotation drive the game view when
+// this camera is the scene's main camera (Environment > main camera).
+static void inspect_camera(Scene* s, Project* proj)
 {
     Object* o = &s->objects[s->selIndex];
+    bool ch = false;
+
+    Mge_GuiLabel("camera");
+    ch |= Mge_GuiCheckbox("active", &o->active);
+    ch |= Mge_GuiInputVec3("position", &o->transform.position);
+    ch |= Mge_GuiInputVec3("rotation (pitch, yaw, roll)", &o->transform.rotation);
+    Mge_GuiSeparator();
+
+    bool isMain = (s->mainCamera == s->selIndex);
+    if (Mge_GuiCheckbox("main camera (runs the game view)", &isMain)) {
+        s->mainCamera = isMain ? s->selIndex : -1;
+        ch = true;
+    }
+    Mge_GuiLabel("the editor always uses its own fly-camera.");
+    (void)proj;
+    if (ch)
+        s->dirty = true;
+}
+
+static void inspect_object(Scene* s, Project* proj)
+{
+    Object* o = &s->objects[s->selIndex];
+    if (o->kind == OBJECT_CAMERA) {
+        inspect_camera(s, proj);
+        return;
+    }
     unsigned char* wrap = s->texWrap[s->selIndex];
     char (*tex)[SCENE_TEXPATH_LEN] = s->texPath[s->selIndex];
     bool ch = false;
@@ -128,7 +158,141 @@ static void inspect_light(Scene* s)
         s->dirty = true;
 }
 
-void Inspector_Draw(Rectangle rect, Scene* s)
+static const char* const SKY_FACES[6] = { "right", "left", "top", "bottom", "front", "back" };
+static char s_skyStatus[160];
+
+static long file_size(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if (f == NULL)
+        return -1;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fclose(f);
+    return n;
+}
+
+// Copy the 6 skybox faces from `srcDir` into <root>/res/skybox/ and point the
+// scene at them. `srcDir` is a folder the user picked; it must hold
+// right/left/top/bottom/front/back.jpg. A no-op copy when it already IS the
+// project's skybox folder.
+static void import_skybox(Scene* s, Project* proj, const char* srcDir)
+{
+    char root[512];
+    Project_Root(proj, root, sizeof(root));
+    if (root[0] == '\0') {
+        snprintf(s_skyStatus, sizeof(s_skyStatus), "save the project first");
+        return;
+    }
+
+    char dstDir[600];
+    Path_Join(root, "res/skybox", dstDir, sizeof(dstDir));
+
+    if (!Path_Equal(srcDir, dstDir)) {
+        Path_MakeDirs(dstDir);
+        int ok = 0;
+        char missing[96] = { 0 };
+        for (int i = 0; i < 6; i++) {
+            char leaf[16], src[600], dst[700];
+            snprintf(leaf, sizeof(leaf), "%s.jpg", SKY_FACES[i]);
+            Path_Join(srcDir, leaf, src, sizeof(src));
+            Path_Join(dstDir, leaf, dst, sizeof(dst));
+            if (Path_CopyFile(src, dst) && file_size(dst) > 0)
+                ok++;
+            else
+                snprintf(missing + strlen(missing), sizeof(missing) - strlen(missing), " %s", leaf);
+        }
+        if (ok == 6)
+            snprintf(s_skyStatus, sizeof(s_skyStatus), "copied 6/6 faces into res/skybox/");
+        else
+            snprintf(s_skyStatus, sizeof(s_skyStatus), "copied %d/6 -- folder is missing:%s", ok, missing);
+    } else {
+        snprintf(s_skyStatus, sizeof(s_skyStatus), "using res/skybox/ in place");
+    }
+
+    snprintf(s->skyDir, SCENE_TEXPATH_LEN, "res/skybox");
+    Scene_LoadSkybox(s, root);
+    s->dirty = true;
+}
+
+// The Environment pseudo-entity: the sun (lights[0]), the skybox, and which
+// camera object drives the built game's view.
+static void inspect_environment(Scene* s, Project* proj)
+{
+    bool ch = false;
+
+    Mge_GuiLabel("SUN (directional light)");
+    Light* sun = &s->lights[0];
+    ch |= Mge_GuiInputVec3("direction", &sun->direction);
+    ch |= Mge_GuiInputColorRGB("color", &sun->color);
+    ch |= Mge_GuiSliderFloat("ambient", &sun->ambient, 0.0f, 1.0f);
+    ch |= Mge_GuiSliderFloat("diffuse", &sun->diffuse, 0.0f, 2.0f);
+    ch |= Mge_GuiSliderFloat("specular", &sun->specular, 0.0f, 2.0f);
+
+    Mge_GuiSeparator();
+    Mge_GuiLabel("SKYBOX");
+    Mge_GuiLabel(s->skyDir[0] ? s->skyDir : "(none)");
+    if (Mge_GuiButton("choose folder...")) {
+        char* dir = Mge_OpenFolderDialog("Pick a folder with right/left/top/bottom/front/back.jpg");
+        if (dir != NULL) {
+            import_skybox(s, proj, dir);
+            free(dir);
+        }
+    }
+    Mge_GuiSameLine();
+    if (Mge_GuiButton("use engine default")) {
+        char sdk[1024];
+        if (SceneBuild_FindSDK(sdk, sizeof(sdk))) {
+            char dir[1100];
+            snprintf(dir, sizeof(dir), "%s/assets/skybox", sdk);
+            import_skybox(s, proj, dir);
+        } else {
+            snprintf(s_skyStatus, sizeof(s_skyStatus), "engine SDK not found (set MGE_ENGINE)");
+        }
+    }
+    Mge_GuiSameLine();
+    if (Mge_GuiButton("reload")) {
+        char root[512];
+        Project_Root(proj, root, sizeof(root));
+        Scene_LoadSkybox(s, root);
+    }
+    if (s_skyStatus[0])
+        Mge_GuiLabel(s_skyStatus);
+
+    Mge_GuiSeparator();
+    Mge_GuiLabel("MAIN CAMERA (game view)");
+
+    char names[SCENE_MAX_OBJECTS + 1][32];
+    const char* ptrs[SCENE_MAX_OBJECTS + 1];
+    int camObj[SCENE_MAX_OBJECTS + 1]; // combo row -> object index (-1 for "(none)")
+    int count = 0, cur = 0;
+    snprintf(names[count], sizeof(names[0]), "(none)");
+    ptrs[count] = names[count];
+    camObj[count] = -1;
+    count++;
+    for (int i = 0; i < s->objectCount; i++) {
+        if (s->objects[i].kind != OBJECT_CAMERA)
+            continue;
+        snprintf(names[count], sizeof(names[0]), "%s", s->objectNames[i]);
+        ptrs[count] = names[count];
+        camObj[count] = i;
+        if (i == s->mainCamera)
+            cur = count;
+        count++;
+    }
+
+    if (Mge_GuiCombo("camera", &cur, ptrs, count)) {
+        s->mainCamera = camObj[cur];
+        ch = true;
+    }
+    if (count == 1)
+        Mge_GuiLabel("add a Camera in the hierarchy (+ add > Camera)");
+
+    if (ch)
+        s->dirty = true;
+}
+
+void Inspector_Draw(Rectangle rect, Scene* s, Project* proj)
 {
     if (!Mge_GuiBeginPanel("Inspector", rect.x, rect.y, rect.width, rect.height)) {
         Mge_GuiEndPanel();
@@ -138,8 +302,10 @@ void Inspector_Draw(Rectangle rect, Scene* s)
     Mge_GuiLabel("INSPECTOR");
     Mge_GuiSeparator();
 
-    if (s->selKind == SEL_OBJECT)
-        inspect_object(s);
+    if (s->selKind == SEL_ENV)
+        inspect_environment(s, proj);
+    else if (s->selKind == SEL_OBJECT)
+        inspect_object(s, proj);
     else if (s->selKind == SEL_LIGHT)
         inspect_light(s);
     else

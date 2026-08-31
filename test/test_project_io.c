@@ -65,6 +65,12 @@ TEST(path_helpers)
     Project_Root(&p, out, sizeof(out));
     CHECK(out[0] == '\0'); // in-memory
 
+    // no path -> the player runs with cwd AT the project root, so paths are relative
+    Project_SceneFile(&p, "level1", out, sizeof(out));
+    CHECK(strcmp(out, "scenes/level1/scene.mgscene") == 0);
+    Project_ResDir(&p, out, sizeof(out));
+    CHECK(strcmp(out, "res") == 0);
+
     snprintf(p.path, sizeof(p.path), "C:/games/mygame/project.mgproject");
     Project_Root(&p, out, sizeof(out));
     CHECK(strcmp(out, "C:/games/mygame") == 0);

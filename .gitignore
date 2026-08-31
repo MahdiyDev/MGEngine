@@ -34,11 +34,17 @@ test/render_out/
 test/render_smoke
 test/scene_io_tmp/
 test/project_io_tmp/
+test/pak_tmp/
+test/pu_tmp/
 test/test_scene_io
 test/test_project_io
+test/test_dylib
+test/test_pak
 
-# editor projects: generated per-scene build output + hot-reload artefacts + paks
+# editor projects: generated per-scene build output + hot-reload artefacts,
+# the Build Release staging dir, and pak archives
 **/build/
+**/dist/
 *_live_*.dll
 *.pak
 *.pak.*

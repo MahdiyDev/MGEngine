@@ -52,3 +52,8 @@ bool Path_Rename(const char* from, const char* to);
 // Delete `path` -- a file, or a directory and everything under it. Returns true
 // on success (or if it was already gone).
 bool Path_Remove(const char* path);
+
+// Pull the next '\n'-terminated line from `*cur` into `out` (advancing `*cur`).
+// Returns false at end of buffer. Lets a parser run the same over a loose file
+// or a whole file loaded from a pak.
+bool Path_NextLine(char** cur, char* out, int outSize);

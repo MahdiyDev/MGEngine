@@ -154,6 +154,17 @@ TEST(fs_list_rename_remove)
     CHECK(Path_Rename("pu_tmp/a/one.txt", "pu_tmp/a/renamed.txt"));
     CHECK(Path_MTime("pu_tmp/a/renamed.txt") > 0 && Path_MTime("pu_tmp/a/one.txt") == 0);
 
+    // copying a file onto itself must not truncate it to 0 bytes
+    CHECK(Path_CopyFile("pu_tmp/a/renamed.txt", "pu_tmp/a/renamed.txt"));
+    CHECK(Path_CopyFile("pu_tmp/a/renamed.txt", "pu_tmp\\a\\renamed.txt")); // same path, other sep
+    f = fopen("pu_tmp/a/renamed.txt", "rb");
+    CHECK(f != NULL);
+    fseek(f, 0, SEEK_END);
+    CHECK(ftell(f) == 1); // still "x"
+    fclose(f);
+    CHECK(Path_CopyFile("pu_tmp/a/renamed.txt", "pu_tmp/a/copy.txt")); // real copy still works
+    CHECK(Path_MTime("pu_tmp/a/copy.txt") > 0);
+
     CHECK(Path_Remove("pu_tmp"));       // recursive
     CHECK(!Path_IsDir("pu_tmp"));
     CHECK(Path_Remove("pu_tmp"));       // already gone -> still true
@@ -177,7 +188,15 @@ static void build_scene(Scene* s)
     strcpy(s->objectNames[1], "Ball");
     strcpy(s->texPath[1][MATERIAL_MAP_DIFFUSE], "res/ball_albedo.png");
     s->texWrap[1][MATERIAL_MAP_DIFFUSE] = 2;
-    s->objectCount = 2;
+
+    s->objects[2] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 1, 2, 3 }, (Vector3){ 1, 1, 1 }, (Color){ 255, 255, 255, 255 });
+    s->objects[2].kind = OBJECT_CAMERA;
+    s->objects[2].transform.rotation = (Vector3){ -5, -90, 15 };
+    strcpy(s->objectNames[2], "GameCam");
+    s->objectCount = 3;
+
+    strcpy(s->skyDir, "res/sky_night");
+    s->mainCamera = 2;
 
     s->lights[0] = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
     s->lights[0].ambient = 0.22f;
@@ -215,11 +234,19 @@ TEST(scene_mge_round_trip)
     Camera3D camB = { 0 };
     CHECK(Scene_Load(&b, path, &camB));
 
-    CHECK(b.objectCount == 2);
+    CHECK(b.objectCount == 3);
     CHECK(strcmp(b.objectNames[0], "Floor") == 0);
     CHECK(strcmp(b.objectNames[1], "Ball") == 0);
     CHECK(b.objects[0].primitive == PRIM_PLANE);
     CHECK(b.objects[1].primitive == PRIM_SPHERE);
+
+    CHECK(b.objects[0].kind == OBJECT_3D);
+    CHECK(b.objects[2].kind == OBJECT_CAMERA);
+    CHECK(strcmp(b.objectNames[2], "GameCam") == 0);
+    CHECK_F(b.objects[2].transform.rotation.y, -90.0f);
+    CHECK_F(b.objects[2].transform.rotation.z, 15.0f);
+    CHECK(b.mainCamera == 2);
+    CHECK(strcmp(b.skyDir, "res/sky_night") == 0);
     CHECK(b.objects[1].active == false);
     CHECK_F(b.objects[1].transform.position.x, 2.5f);
     CHECK_F(b.objects[1].transform.rotation.y, 20.0f);

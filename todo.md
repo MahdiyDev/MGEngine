@@ -103,9 +103,10 @@ phases so the app keeps working the whole way.
       when `!active`. Inspector has an **active** checkbox.
 - [x] Inspector writes `obj->primitive` directly (a **primitive** dropdown);
       sphere / plane draw + outline already switch on it. No setter needed.
-- [ ] (moved to Phase 6) File API: `Mge_MountPak(path)` + make `Mge_LoadFileData`
-      / `Mge_LoadImage` / `Mge_LoadModel` pak-aware -- doesn't ripple through
-      examples/tests, so it belongs with the release bundle work.
+- [x] (done in Phase 6) File API: `Mge_MountPak` + `Mge_LoadFileData` / `Text`
+      pak-aware, so `Mge_LoadImage` / `Mge_LoadTexture` follow. `Mge_LoadModel`
+      (Assimp opens the file itself) is still loose-file only -- a scene that
+      needs a packed model would extract it; noted for later.
 
 ## Phase 1 -- rename + panel layout   [DONE]
 
@@ -239,17 +240,63 @@ phases so the app keeps working the whole way.
 - Deferred to **Phase 7**: drag-and-drop (move / reparent / assign) and copy --
       our `Mge_Gui*` layer doesn't expose ImGui drag/drop yet.
 
-## Phase 6 -- build project (release bundle)
+## Phase 6 -- build project (release bundle)   [DONE]
 
-- [ ] `.pak` writer: TOC header (name, offset, size, crc) + concatenated blobs;
-      split at ~1 GB into `<name>.pak.001`, `.002`, ... A reader that maps a
-      logical path across the split files.
-- [ ] Editor **Build Release**: for the whole project -- compile every scene
-      module `-O2 -DNDEBUG -s`, pack the project `res/`
-      into paks, and stage a runnable folder: a slim runtime host +
-      `libmgengine.dll` + the scene modules + paks + `project.mgproject`.
-- [ ] Debug build stays loose-file (fast iteration); release mounts the pak
-      (`Mge_MountPak`, moved here from Phase 0).
+- [x] `source/mge_pak.c`: `Mge_PakWrite(stem, root, splitBytes)` -- header + TOC
+      (path[256], offset, size, crc32) + concatenated blobs, physically split into
+      `<stem>.pak.001`, `.002`, ... at `splitBytes`. `Mge_PakOpen` / `Mge_PakRead`
+      (crc-checked, spans split files) / `Mge_PakClose`. Skips `.dll` / `.exe` /
+      `.c` / `.o` and `build/` / `dist/`. `test/test_pak.c`.
+- [x] `Mge_MountPak` / `Mge_UnmountPaks` (mount stack) + `Mge_LoadFileText` /
+      `Mge_LoadFileData` fall back to a mounted pak -- so `Mge_LoadImage` /
+      `Mge_LoadTexture` and the `.mgscene` / `.mgproject` parsers (refactored to
+      read via `Mge_LoadFileText`, line iterator `Path_NextLine`) all work
+      unchanged. Loose file always wins.
+- [x] `runtime/player.c` -- standalone runner. Reuses the editor data layer
+      (`scene.c` / `scene_io.c` / `project*.c` / `editor_camera.c` /
+      `scene_runtime.c`), no GUI. Loads the project, mounts `<name>.pak`, opens
+      the startup scene from the pak + its `.dll` module, runs
+      `MgeScene_Init` / `_Update` with a fly-cam. `make` builds `build/mgeplayer`.
+      `Project_SceneDir` / `ResDir` now yield relative paths when the project has
+      no path (the player runs with cwd at the project root).
+- [x] `editor/release.c` + **Project ▸ Build Release**: compile every scene
+      `-O2 -DNDEBUG -s`, `Mge_PakWrite` the project data, stage `<root>/dist/`
+      (`<name>.exe` = the player, `libmgengine.dll`, `<scene>.dll`s, the pak,
+      loose `project.mgproject`). Output to the build console.
+- Verified end to end: Build Release -> run `dist/<name>.exe` -> renders the
+      scene (data + textures from the pak) with its module running.
+
+## Phase 6b -- environment, camera objects, async build   [DONE]
+
+- [x] **Skybox is project data.** `Scene.skyDir` (project-root-relative folder of
+      6 faces, default `res/skybox`), serialised in the scene's `render` block.
+      `Scene_LoadSkybox(s, root)` loads it pak-aware, falling back to the engine's
+      bundled `assets/skybox` so the editor viewport is never blank.
+      **New Project** seeds `<root>/res/skybox/` from the engine (tries the located
+      SDK, then a cwd-staged `assets/skybox`), so a built game ships its own skybox
+      in the pak. Environment ▸ **choose folder...** / **use engine default**
+      re-import the 6 faces; `Mge_OpenFolderDialog` is new
+      (`SHBrowseForFolder` / `zenity --directory`). `Path_CopyFile` now no-ops on a
+      src==dst copy (was truncating faces to 0 bytes when re-picking `res/skybox/`).
+      The scaffolded scene script only spins `OBJECT_3D`, never the camera.
+- [x] **`OBJECT_CAMERA`** -- a transform-only object (position + XYZ-euler look
+      direction, fov fixed 60). Draws as a wireframe box + forward arrow in the
+      editor (never lit, never in the built game). Add via *hierarchy ▸ + add ▸
+      Camera* or `Scene_AddCamera`. `Mge_CameraObjectForward()` in `mge.h`.
+- [x] **Environment pseudo-entity** -- a fixed "Environment" row at the top of the
+      hierarchy (`SEL_ENV`). Its inspector edits the sun (`lights[0]` direction /
+      colour / ambient / diffuse / specular), the skybox (`choose skybox...`
+      copies the 6 faces into `res/skybox/`), and the **main camera** combo
+      (`Scene.mainCamera` = index of an `OBJECT_CAMERA`, or -1).
+- [x] **Player views through the main camera.** `Scene_MainCamera()` -> the built
+      game renders from that camera object every frame (a scene module can move it
+      to move the view). No fly-cam / cursor grab in the shipped game; the debug
+      fly-cam only kicks in when a scene has no main camera.
+- [x] **Interactive build runs as a separate process.** `SceneBuild_Start` /
+      `_Poll` / `_Clear` (`SceneBuildJob`) spawn the compiler detached, streaming
+      its output to a temp file the editor tails each frame -- **Build** / **Play**
+      and hot-reload no longer freeze the window. Build Release stays synchronous
+      (it ships every scene at once). `test_scene_io` covers the new scene fields.
 
 ## Phase 7 -- editor polish
 

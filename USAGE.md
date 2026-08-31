@@ -22,7 +22,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
   mge_object.c          Object struct (primitive + Transform + material, active flag) + 3D picking
   mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
-  mge_dialog.c          native file dialogs (Mge_OpenFileDialog / Mge_OpenImageDialog / Mge_SaveFileDialog)
+  mge_dialog.c          native dialogs (Mge_OpenFileDialog / Image / Save / Folder)
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
   mge_pbr.c            physically-based rendering -- Cook-Torrance BRDF + material
   mge_ibl.c            image-based lighting precompute (irradiance / prefilter / BRDF LUT)
@@ -47,22 +47,29 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / ...HDR (float) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
   mge_screenshot.c     Mge_TakeScreenshot / MgeGL_SaveScreenshot -- framebuffer -> PNG (stb_image_write)
   mge_dylib.c          Mge_LoadLibrary / GetSymbol / FreeLibrary -- host side of the hot-reload scene-module contract
+  mge_pak.c mge_pak.h  .pak archives (Mge_PakWrite / Open / Read) + Mge_MountPak; Mge_LoadFileData falls back to a mounted pak
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 editor/                THE APP -- project / scene editor (docked panel shell around a viewport)
   main.c               window, loop, panel-rectangle layout, close guard; owns the Project + Scene
   editor_camera.c/.h   the yaw/pitch fly-cam (VIEW = always fly, EDIT = fly on RIGHT mouse)
   project.c/.h         Project struct: global config + scene list + path helpers
-  project_io.c/.h      project.mgproject read/write -- flat text, data only
+  project_io.c/.h      project.mgproject read/write -- flat text, data only (reads via Mge_LoadFileText, so a pak works)
   scene.c/.h           entities, selection, picking, add/delete/new, the render passes
   scene_io.c/.h        .mgscene read/write (Scene_Save / Scene_Load) -- flat text, data only
-  pathutil.c/.h        path + fs helpers (dir/base/join/isabsolute/mkdirs/copyfile)
-  fileops.c/.h         Project + Scene menu actions + the unsaved-changes / new-scene modals
-  topbar.c/.h          top strip: Project menu, Scene dropdown, mode, gizmo, Render menu
+  pathutil.c/.h        path + fs helpers (dir/base/join/equal/mkdirs/copyfile/list/remove/nextline)
+  scene_build.c/.h     compile a scene's *.c -> hot-reloadable .dll; BuildLog
+  scene_runtime.c/.h   load / hot-reload a compiled scene module (SceneRuntime)
+  play.c/.h            Play / Stop / Build + the build console
+  release.c/.h         "Build Release": compile every scene + pak + stage dist/
+  fileops.c/.h         Project + Scene menu actions + the unsaved-changes / name modals
+  topbar.c/.h          top strip: Project menu, Scene dropdown, Play/Build/Console, mode, gizmo, Render
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
   inspector.c/.h       right panel: the type-aware inspector (+ texture slots)
-  resources.c/.h       bottom panel: per-scene resource explorer (stub until Phase 5)
+  resources.c/.h       bottom panel: project res/ browser (import / rename / delete / assign)
   USAGE.md             editor docs
+runtime/
+  player.c             standalone project runner -- reuses the editor data layer; what Build Release ships
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h
@@ -170,6 +177,7 @@ contract and the `Matrix_Scale` / composition math behind the transforms;
 `PointShadowMap` struct contract; `test_debug` covers the `Mge_SetDebugOutput`
 toggle and callback registration; `test_dylib` compiles a tiny shared library
 with the C compiler and loads / calls / frees it through `Mge_LoadLibrary`;
+`test_pak` writes + reads a `.pak` (crc, split-file spanning, mount stack);
 `test_scene_io` / `test_project_io` round-trip the editor's `.mgscene` /
 `.mgproject` text formats.
 
@@ -521,8 +529,11 @@ if (IsKeyPressed(KEY_F12))
 
 ### Objects & the manipulation gizmo
 
-An `Object` is a movable rectangle (`OBJECT_2D`) or a 3D primitive (`OBJECT_3D`:
-`PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`). Its placement
+An `Object` is a movable rectangle (`OBJECT_2D`), a 3D primitive (`OBJECT_3D`:
+`PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`), or a camera
+marker (`OBJECT_CAMERA` — a transform only, drawn as a wireframe box + forward
+arrow, never lit; `Mge_CameraObjectForward(rotationDeg)` gives its look vector).
+Its placement
 lives in `obj.transform` — a `Transform { Vector3 position, rotation (XYZ euler
 degrees), scale; int parent; }` where `scale` is the full extents (a cube of
 scale `{2,2,2}` is 2 units across; a sphere's diameter is `scale.x`); `parent`
@@ -969,7 +980,9 @@ Linux: `zenity`, then `kdialog`) filtered to image extensions and returns a
 `Mge_OpenFileDialog(title, filterName, filterExts)` is the general form
 (`filterExts` is `;`-separated, e.g. `"*.png;*.jpg"`), and
 `Mge_SaveFileDialog(title, filterName, filterExts, defaultName)` is the save
-counterpart (overwrite prompt, pre-filled name). The dialogs never change the
+counterpart (overwrite prompt, pre-filled name), and
+`Mge_OpenFolderDialog(title)` picks an existing directory (Windows:
+`SHBrowseForFolder`; Linux: `zenity --directory`). The dialogs never change the
 process working directory. The editor's inspector uses the open dialog for the
 material-map thumbnails; the editor's Project / Scene menus use both for
 `project.mgproject` and `scene.mgscene` open / save.
@@ -1419,6 +1432,24 @@ Windows locks a loaded DLL, so copy it to a fresh name before loading (the edito
 uses `<name>_live_<n>.dll`). The editor (`editor/scene_build.c` +
 `scene_runtime.c` + `play.c`) is the worked example — see
 [editor/USAGE.md](editor/USAGE.md).
+
+### `.pak` archives (`mge_pak.c`)
+
+`Mge_PakWrite(stem, rootDir, splitBytes)` packs a directory tree into a single
+logical stream (header + TOC + concatenated, CRC-32'd blobs), physically split
+into `<stem>.pak.001`, `.002`, … at `splitBytes` (native code and build inputs —
+`.dll` / `.exe` / `.c` / `.o` — plus `build/` and `dist/` dirs are excluded).
+
+```c
+Mge_MountPak("game/mygame");              // opens mygame.pak.001, reads the TOC
+// ... now Mge_LoadFileData / Mge_LoadImage / Mge_LoadTexture / Scene_Load resolve
+//     a missing loose file from the most-recently-mounted pak (loose always wins)
+Mge_UnmountPaks();
+```
+
+`Mge_PakOpen` / `Mge_PakRead` / `Mge_PakClose` are the direct API (read returns a
+malloc'd buffer, NUL-terminated past its size, crc-checked). The editor's **Build
+Release** writes one and `runtime/player.c` mounts it.
 
 ## Notes / limitations
 

@@ -10,16 +10,17 @@ A scene editor built on top of the engine library — see
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |
 | `project.c` / `project.h` | `Project`: global config (window / build settings) + the scene list. `Project_Default` / `Project_AddScene` / `Project_RemoveScene`, and `Project_Root` / `Project_SceneDir` / `Project_SceneFile` path helpers |
 | `project_io.c` / `.h` | `project.mgproject` read / write (`Project_Save` / `Project_Load`) — flat text, **data only** |
-| `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures`, and the render passes (shadow + lit + gizmo + skybox) |
+| `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects (incl. `OBJECT_CAMERA`), lights, selection (`SEL_OBJECT` / `SEL_LIGHT` / `SEL_ENV`), `skyDir` + `mainCamera`, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_AddCamera` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures` / `Scene_LoadSkybox` / `Scene_MainCamera`, and the render passes (shadow + lit + skybox + editor markers + gizmo) |
 | `scene_io.c` / `.h` | `.mgscene` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
 | `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `Equal` / `MakeDirs` / `CopyFile` / `List` / `MTime` — small path + fs helpers |
 | `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; New Script; Quit) with the unsaved-changes confirm modal + the name-entry modal |
-| `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog` |
+| `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog`. `SceneBuild_Compile` blocks; `SceneBuild_Start` / `_Poll` / `_Clear` (`SceneBuildJob`) run the compiler as a detached process the editor polls each frame |
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
 | `play.c` / `.h` | Play / Stop / Build: snapshot the scene, compile + load, run `MgeScene_Update` each frame, hot-reload on change, restore on Stop; draws the console panel |
+| `release.c` / `.h` | **Build Release**: compile every scene `-O2 -DNDEBUG -s`, `Mge_PakWrite` the data, stage `<root>/dist/` with a copy of the standalone player |
 | `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
-| `hierarchy.c` / `.h` | the **left** panel: objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
-| `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection (Object: active, primitive, transform, material slots. Light: type, colour, attenuation / direction) |
+| `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light / Camera), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
+| `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection — Environment (sun + skybox + main camera), Object (active, primitive, transform, material slots), Camera (transform + main-camera toggle), Light (type, colour, attenuation / direction) |
 | `resources.c` / `.h` | the **bottom** panel: the project resource explorer — a tree of `<root>/res/` with import / new folder / rename / delete, image thumbnails, and one-click assign to the selected object's material slots |
 
 ```sh
@@ -55,7 +56,7 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 | EDIT — select | **left-click** an object or a light; click empty space to deselect |
 | EDIT — gizmo | drag a handle to **move / rotate / scale** the selection (switch mode in the top bar). Translate has axis arrows + a centre ball; rotate shows the camera-facing part of each ring; scale has cube tips. The hovered handle highlights white |
 | **Ctrl+S** (EDIT mode) | save the active scene (same as Scene ▸ Save Scene; prompts for a project location if the project is new) |
-| **Play** / **Stop** | build + run the active scene's code; editing is paused while playing and the scene is restored on Stop |
+| **Play** / **Stop** / **Build** | build + run the active scene's code. The compile runs as a **separate process** — the editor keeps drawing while it works; the result lands in the Console. Editing is paused while playing and the scene is restored on Stop |
 | **F12** | save `editor_screenshot.png` next to the executable (`Mge_TakeScreenshot`) |
 
 Panels are only clickable in EDIT mode. Engine input is suppressed while a widget
@@ -78,6 +79,8 @@ myproject/
       scene.mgscene     editor-authored objects / lights / camera
       level1.c          scene logic (every .c here compiles into the module)
       build/            generated .dll + _live_ copies (gitignored)
+  res/
+    skybox/             6 cubemap faces, seeded from the engine on New Project
 ```
 
 **Project** menu:
@@ -87,6 +90,7 @@ myproject/
 | **New Project...** | native save dialog → choose a location + name; creates a folder `<name>/` and writes `project.mgproject` + `res/` + `scenes/untitled/` inside it |
 | **Open Project...** | pick a `project.mgproject`; loads it and opens its `startupScene` |
 | **Save Project** | write `project.mgproject` + the active scene's `scene.mgscene` |
+| **Build Release...** | compile every scene with the project's release cflags, pack the data, stage a runnable `<projectRoot>/dist/` — see below |
 
 **Scene** dropdown (labelled `Scene: <active> *`):
 
@@ -136,6 +140,27 @@ The compiler is `$CC` (default `gcc`) and must be on `PATH`. The editor finds th
 engine SDK via `$MGE_ENGINE`, else by searching upward from the working directory
 for a folder with `source/mge.h` + `build/libmgengine`.
 
+### Build Release
+
+**Project ▸ Build Release** stages `<projectRoot>/dist/`:
+
+```
+dist/
+  <project>.exe        a copy of the standalone player (runtime/player.c)
+  libmgengine.dll
+  <scene>.dll ...      each scene's module, compiled -O2 -DNDEBUG -s
+  <project>.pak.001…   project.mgproject + scenes/*.mgscene + res/, one archive
+  project.mgproject    also loose (the player reads it to learn the pak name)
+```
+
+Run `dist/<project>.exe`: it `chdir`s to its own folder, loads the project,
+mounts the pak, opens the `startupScene` (data + textures from the pak), loads
+that scene's `.dll`, and runs `MgeScene_Init` + `MgeScene_Update` each frame. The
+view comes from the scene's **main camera** object (`Scene.mainCamera`) — a scene
+module moves that object to move the camera. There is no fly-camera or cursor
+grab in the shipped game; the debug fly-cam only appears when a scene has no main
+camera. Debug iteration stays loose-file; the pak is a release concern.
+
 A `.mgscene` file is a flat, indentation-cosmetic, line-based text format —
 diffable, no JSON dependency. One `object` / `light` block per entity, plus
 `camera` and `render` sections (the leading `mgescene 1` line is the format id):
@@ -157,6 +182,13 @@ render
   exposure 1
   bloom 0
   msaa 1
+  skybox "res/skybox"      # project-root-relative folder of 6 faces
+  mainCamera 4             # index of the OBJECT_CAMERA that runs the game, or -1
+
+object "GameCam"
+  kind camera               # transform-only view camera (omit for a normal 3d object)
+  position 0 3.5 13
+  rotation -8 -90 0         # pitch, yaw, roll -> look direction
 
 object "Floor"
   primitive plane          # cube | sphere | plane
@@ -220,9 +252,22 @@ Single-click a row to select it (drives the inspector + gizmo); **double-click**
 the name to rename it in place (`ok` commits). `x` deletes — except the
 directional **Sun** (light 0), which the shadow pass depends on.
 
-`+ add` opens a menu: **Cube / Sphere / Plane** (`Scene_AddShape`) or **Light**
-(`Scene_AddLight`), spawned at the origin, named, and selected. The scene holds
-up to `SCENE_MAX_OBJECTS` (8) and `SCENE_MAX_LIGHTS` (4).
+`+ add` opens a menu: **Cube / Sphere / Plane** (`Scene_AddShape`), **Light**
+(`Scene_AddLight`), or **Camera** (`Scene_AddCamera`) — spawned, named, and
+selected. Objects (shapes *and* cameras) share `SCENE_MAX_OBJECTS` (8); lights
+`SCENE_MAX_LIGHTS` (4).
+
+The fixed **Environment** row at the top can't be deleted. Selecting it shows the
+scene's sun (`lights[0]`), the **skybox**, and the **main camera** — which
+`OBJECT_CAMERA` the built game views the scene through. A camera object draws as a
+wireframe box + forward arrow; its gizmo is hidden while it sits exactly where the
+editor fly-cam is.
+
+Skybox buttons: **choose folder...** (pick a folder holding
+`right/left/top/bottom/front/back.jpg`), **use engine default** (copy the engine's
+bundled skybox), **reload**. Either import copies the 6 faces into
+`<root>/res/skybox/` so they go in the pak; a status line reports how many landed.
+New Project seeds `res/skybox/` from the engine automatically.
 
 ## The Inspector (right panel)
 
@@ -230,7 +275,9 @@ The current selection's fields, live:
 
 | selection | fields |
 | --- | --- |
+| **Environment** | sun (`lights[0]`) direction / colour / ambient / diffuse / specular; skybox (`choose folder...` / `use engine default` / `reload`); **main camera** combo |
 | **Object** | **active** toggle, **primitive** dropdown (cube / sphere / plane), the `Transform` — position, **rotation** (euler °), size (= `transform.scale`); `shininess`; **tiling** / **offset** (`uv' = uv*tiling + offset`); a **triplanar** toggle (+ scale); then one **group per material map** |
+| **Camera** | active, position, rotation (pitch / yaw / roll); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
 | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 
 Each **material-map group** is a square thumbnail (`Mge_GuiImageButton`) plus that

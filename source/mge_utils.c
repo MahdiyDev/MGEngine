@@ -92,8 +92,14 @@ char* Mge_LoadFileText(const char* fileName)
 
     string_builder sb = { 0 };
     if (!sb_read_file(&sb, fileName)) {
-        TRACE_LOG(LOG_WARNING, "FILEIO: [%s] Failed to read text file", fileName);
         sb_free(&sb);
+        size_t n = 0;
+        void* fromPak = Mge_MountedRead(fileName, &n); // pak entries are NUL-terminated past n
+        if (fromPak != NULL) {
+            TRACE_LOG(LOG_INFO, "FILEIO: [%s] loaded from pak", fileName);
+            return (char*)fromPak;
+        }
+        TRACE_LOG(LOG_WARNING, "FILEIO: [%s] Failed to read text file", fileName);
         return NULL;
     }
 
@@ -119,8 +125,15 @@ unsigned char* Mge_LoadFileData(const char* fileName, size_t* dataSize)
 
     string_builder sb = { 0 };
     if (!sb_read_file(&sb, fileName)) {
-        TRACE_LOG(LOG_WARNING, "FILEIO: [%s] Failed to read file", fileName);
         sb_free(&sb);
+        size_t n = 0;
+        unsigned char* fromPak = Mge_MountedRead(fileName, &n);
+        if (fromPak != NULL) {
+            *dataSize = n;
+            TRACE_LOG(LOG_INFO, "FILEIO: [%s] loaded from pak (%zu bytes)", fileName, n);
+            return fromPak;
+        }
+        TRACE_LOG(LOG_WARNING, "FILEIO: [%s] Failed to read file", fileName);
         return NULL;
     }
 

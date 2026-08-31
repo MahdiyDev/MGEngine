@@ -4,7 +4,7 @@
 #include <mge.h>
 #include <stdbool.h>
 
-enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT };
+enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT, SEL_ENV };
 
 #define SCENE_MAX_OBJECTS 8
 #define SCENE_MAX_LIGHTS  4
@@ -31,6 +31,11 @@ typedef struct Scene {
 
     int selKind;  // SEL_*
     int selIndex;
+
+    // --- Environment: the sun is lights[0]; here the skybox + which camera drives
+    //     the view when the project is run (the editor always uses its fly-cam).
+    char skyDir[SCENE_TEXPATH_LEN]; // project-root-relative folder of 6 faces ("" = none)
+    int mainCamera;                // index of an OBJECT_CAMERA object, or -1
 
     ShadowMap shadow;
     bool shadowsOn;
@@ -66,6 +71,18 @@ void Scene_AddShape(Scene* s, PrimitiveKind primitive);
 // Add a point light above the origin, name it, and select it. No-op when full.
 void Scene_AddLight(Scene* s);
 
+// Add an OBJECT_CAMERA (position + look direction), name it, select it. If the
+// scene has no main camera yet, this one becomes it.
+void Scene_AddCamera(Scene* s);
+
+// (Re)load the skybox cubemap from `<projectRoot>/skyDir` (pak-aware). Falls back
+// to the bundled `assets/skybox` when `skyDir` is empty.
+void Scene_LoadSkybox(Scene* s, const char* projectRoot);
+
+// The Camera3D that `mainCamera` describes (position + rotation -> look-at,
+// fovy 60). Returns false when there is no valid main camera.
+bool Scene_MainCamera(const Scene* s, Camera3D* out);
+
 // Remove an entity and re-pack the arrays. Deleting the directional sun (light 0)
 // is a no-op -- the shadow pass depends on it. Selection falls back sensibly.
 void Scene_DeleteObject(Scene* s, int index);
@@ -81,6 +98,7 @@ Vector3* Scene_SelPosition(Scene* s);
 Vector3* Scene_SelRotation(Scene* s);
 Vector3* Scene_SelScale(Scene* s);
 
-// Shadow pass + lit pass + lamp marker + gizmo + skybox. When `interact` is true
-// the gizmo also handles the mouse. Returns true while a gizmo handle is dragged.
-bool Scene_Draw(Scene* s, Camera3D camera, bool interact);
+// Shadow pass + lit pass + skybox + (when `markers`) the editor-only lamp / camera
+// icons + (when `interact`) the mouse-driven gizmo. The built player passes
+// markers=false. Returns true while a gizmo handle is dragged.
+bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers);

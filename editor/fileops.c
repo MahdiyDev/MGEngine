@@ -1,6 +1,7 @@
 #include "fileops.h"
 #include "scene_io.h"
 #include "project_io.h"
+#include "scene_build.h"
 #include "pathutil.h"
 
 #include <mge.h>
@@ -54,7 +55,57 @@ static void load_active_scene(Project* p, Scene* s, EditorCamera* cam, int index
         Scene_New(s); // listed but never saved yet -> a blank scene
         snprintf(s->path, sizeof(s->path), "%s", file);
     }
+    Scene_LoadSkybox(s, root);
     s->dirty = false;
+}
+
+static long file_bytes(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if (f == NULL)
+        return -1;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fclose(f);
+    return n;
+}
+
+// Seed <root>/res/skybox/ with the engine's bundled 6-face skybox so a new
+// project ships its own copy (the player loads it from the project pak).
+static void copy_default_skybox(const char* root)
+{
+    static const char* faces[6] = { "right", "left", "top", "bottom", "front", "back" };
+
+    // where the bundled skybox might be: the located SDK, then the cwd-staged copy
+    char sdk[1024];
+    char srcBase[3][1100];
+    int nbases = 0;
+    if (SceneBuild_FindSDK(sdk, sizeof(sdk)))
+        snprintf(srcBase[nbases++], sizeof(srcBase[0]), "%s/assets/skybox", sdk);
+    snprintf(srcBase[nbases++], sizeof(srcBase[0]), "assets/skybox");
+    snprintf(srcBase[nbases++], sizeof(srcBase[0]), "../assets/skybox");
+
+    char dstDir[600];
+    Path_Join(root, "res/skybox", dstDir, sizeof(dstDir));
+    Path_MakeDirs(dstDir);
+
+    int copied = 0;
+    for (int i = 0; i < 6; i++) {
+        char leaf[16], dst[700];
+        snprintf(leaf, sizeof(leaf), "%s.jpg", faces[i]);
+        Path_Join(dstDir, leaf, dst, sizeof(dst));
+        for (int b = 0; b < nbases; b++) {
+            char src[1200];
+            snprintf(src, sizeof(src), "%.1100s/%.15s", srcBase[b], leaf);
+            if (file_bytes(src) > 0 && Path_CopyFile(src, dst) && file_bytes(dst) > 0) {
+                copied++;
+                break;
+            }
+        }
+    }
+    if (copied != 6)
+        fprintf(stderr, "[editor] couldn't seed the default skybox (%d/6 faces). "
+                        "Set one with Environment > choose folder.\n", copied);
 }
 
 // ---- the actions ----
@@ -93,6 +144,7 @@ static void do_new_project(Project* p, Scene* s, EditorCamera* cam)
     char resDir[512];
     Project_ResDir(p, resDir, sizeof(resDir));
     Path_MakeDirs(resDir); // the project's single shared resource root
+    copy_default_skybox(root); // <root>/res/skybox/*.jpg
 
     Scene_New(s);
     save_active_scene(p, s, cam->cam); // writes scenes/untitled/{scene.mgscene,untitled.c}

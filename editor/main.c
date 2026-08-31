@@ -102,7 +102,7 @@ int main(void)
 
         Mge_BeginDrawing();
 
-        bool gizmoBusy = Scene_Draw(&scene, camera.cam, interact);
+        bool gizmoBusy = Scene_Draw(&scene, camera.cam, interact, true);
         if (gizmoBusy)
             scene.dirty = true;
         if (interact && !gizmoBusy)
@@ -126,7 +126,7 @@ int main(void)
 
         TopbarResult tr = Topbar_Draw(rTop, &project, &scene, &editMode, play.playing, &play.showConsole);
         Hierarchy_Draw(rLeft, &scene);
-        Inspector_Draw(rRight, &scene);
+        Inspector_Draw(rRight, &scene, &project);
         if (play.showConsole)
             Play_DrawConsole(&play, rBottom);
         else

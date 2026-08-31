@@ -78,6 +78,8 @@ static void add_menu(Scene* s)
         Scene_AddShape(s, PRIM_PLANE);
     if (Mge_GuiMenuItem("Light"))
         Scene_AddLight(s);
+    if (Mge_GuiMenuItem("Camera"))
+        Scene_AddCamera(s);
     Mge_GuiEndMenu();
 }
 
@@ -94,6 +96,13 @@ void Hierarchy_Draw(Rectangle rect, Scene* s)
     Mge_GuiSeparator();
 
     int delObj = -1, delLight = -1;
+
+    // fixed pseudo-entity: the scene's sun + skybox + game camera live here
+    if (Mge_GuiSelectable("Environment", s->selKind == SEL_ENV)) {
+        s->selKind = SEL_ENV;
+        s->selIndex = 0;
+    }
+    Mge_GuiSeparator();
 
     Mge_GuiLabel("OBJECTS");
     for (int i = 0; i < s->objectCount; i++)

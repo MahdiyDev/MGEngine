@@ -139,11 +139,15 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
     wf(f, "bloomThreshold", s->bloom.threshold);
     wf(f, "bloomIntensity", s->bloom.intensity);
     wi(f, "msaa", Mge_IsMSAAEnabled() ? 1 : 0);
+    fprintf(f, "  skybox \"%s\"\n", s->skyDir);      // project-root-relative folder of 6 faces
+    wi(f, "mainCamera", s->mainCamera);              // index of the OBJECT_CAMERA that runs the game, or -1
     fprintf(f, "\n");
 
     for (int i = 0; i < s->objectCount; i++) {
         const Object* o = &s->objects[i];
         fprintf(f, "object \"%s\"\n", s->objectNames[i]);
+        if (o->kind == OBJECT_CAMERA)
+            fprintf(f, "  kind camera\n"); // a transform-only view camera (no primitive / material)
         fprintf(f, "  primitive %s\n", PRIM_NAMES[o->primitive % 3]);
         wi(f, "active", o->active ? 1 : 0);
         wv3(f, "position", o->transform.position);
@@ -209,9 +213,11 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
                 "void MgeScene_Init(MgeSceneCtx* ctx) { (void)ctx; }\n\n"
                 "void MgeScene_Update(MgeSceneCtx* ctx, float dt)\n"
                 "{\n"
-                "    // example: spin every object\n"
+                "    // example: spin every solid object (leave cameras alone -- one of\n"
+                "    // them is the view)\n"
                 "    for (int i = 0; i < *ctx->objectCount; i++)\n"
-                "        ctx->objects[i].transform.rotation.y += 40.0f * dt;\n"
+                "        if (ctx->objects[i].kind == OBJECT_3D)\n"
+                "            ctx->objects[i].transform.rotation.y += 40.0f * dt;\n"
                 "}\n\n"
                 "void MgeScene_Shutdown(MgeSceneCtx* ctx) { (void)ctx; }\n",
                 s->name);
@@ -236,19 +242,22 @@ static void clear_entities(Scene* s)
     s->lightCount = 0;
     s->selKind = SEL_NONE;
     s->selIndex = 0;
+    s->mainCamera = -1;
+    strcpy(s->skyDir, "res/skybox"); // default; a `skybox` line in the file overrides it
 }
 
 enum { SEC_TOP, SEC_CAMERA, SEC_RENDER, SEC_OBJECT, SEC_LIGHT };
 
 bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
 {
-    FILE* f = fopen(path, "rb");
-    if (f == NULL)
+    char* text = Mge_LoadFileText(path); // loose file, then any mounted pak
+    if (text == NULL)
         return false;
+    char* cur = text;
 
     char line[1024];
-    if (fgets(line, sizeof(line), f) == NULL || strncmp(line, "mgescene", 8) != 0) {
-        fclose(f);
+    if (!Path_NextLine(&cur, line, sizeof(line)) || strncmp(line, "mgescene", 8) != 0) {
+        Mge_UnLoadFileText(text);
         return false;
     }
 
@@ -260,7 +269,7 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
     Light* lit = NULL;    // current light
     int objIdx = -1;
 
-    while (fgets(line, sizeof(line), f) != NULL) {
+    while (Path_NextLine(&cur, line, sizeof(line))) {
         char* p = strchr(line, '#'); // strip comments
         if (p != NULL)
             *p = '\0';
@@ -334,10 +343,14 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
             else if (strcmp(key, "bloomThreshold") == 0) s->bloom.threshold = (float)atof(rest);
             else if (strcmp(key, "bloomIntensity") == 0) s->bloom.intensity = (float)atof(rest);
             else if (strcmp(key, "msaa") == 0) Mge_SetMSAAEnabled(atoi(rest) != 0);
+            else if (strcmp(key, "skybox") == 0) quoted(a, s->skyDir, SCENE_TEXPATH_LEN);
+            else if (strcmp(key, "mainCamera") == 0) s->mainCamera = atoi(rest);
             continue;
         }
         if (sec == SEC_OBJECT && obj != NULL) {
-            if (strcmp(key, "primitive") == 0)
+            if (strcmp(key, "kind") == 0)
+                obj->kind = (strcmp(rest, "camera") == 0) ? OBJECT_CAMERA : OBJECT_3D;
+            else if (strcmp(key, "primitive") == 0)
                 obj->primitive = (PrimitiveKind)name_index(rest, PRIM_NAMES, 3, PRIM_CUBE);
             else if (strcmp(key, "active") == 0)
                 obj->active = atoi(rest) != 0;
@@ -394,7 +407,11 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
         }
     }
 
-    fclose(f);
+    Mge_UnLoadFileText(text);
+
+    if (s->mainCamera >= 0 &&
+        (s->mainCamera >= s->objectCount || s->objects[s->mainCamera].kind != OBJECT_CAMERA))
+        s->mainCamera = -1; // stale index -> no game camera
 
     if (s->lightCount == 0) { // a scene must keep a sun for the shadow pass
         s->lights[0] = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });

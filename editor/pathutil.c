@@ -119,6 +119,9 @@ bool Path_MakeDirs(const char* dir)
 
 bool Path_CopyFile(const char* src, const char* dst)
 {
+    if (Path_Equal(src, dst))
+        return true; // same file -> opening dst "wb" would truncate src to 0 bytes
+
     FILE* in = fopen(src, "rb");
     if (in == NULL)
         return false;
@@ -212,6 +215,24 @@ long Path_MTime(const char* path)
 {
     struct stat st;
     return (stat(path, &st) == 0) ? (long)st.st_mtime : 0;
+}
+
+bool Path_NextLine(char** cur, char* out, int outSize)
+{
+    char* p = *cur;
+    if (*p == '\0')
+        return false;
+    int i = 0;
+    while (*p != '\0' && *p != '\n') {
+        if (i < outSize - 1)
+            out[i++] = *p;
+        p++;
+    }
+    out[i] = '\0';
+    if (*p == '\n')
+        p++;
+    *cur = p;
+    return true;
 }
 
 bool Path_IsDir(const char* path)

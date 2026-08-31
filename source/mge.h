@@ -2,6 +2,7 @@
 
 #include "mge_config.h"
 #include "mge_math.h"
+#include "mge_pak.h"   // .pak archives + Mge_MountPak (used by Mge_Load* to resolve paths)
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -397,10 +398,14 @@ typedef enum {
 	MOUSE_BUTTON_MIDDLE = 2
 } MouseButton;
 
-// A movable scene object -- a rectangle in 2D, a primitive solid in 3D.
+// A movable scene object -- a rectangle in 2D, a primitive solid in 3D, or a
+// camera marker (OBJECT_CAMERA: a transform only -- position + XYZ-euler look
+// direction. It draws as a small wireframe box + forward arrow in the editor and
+// is never lit; a scene can nominate one as the view camera for the built game).
 typedef enum {
 	OBJECT_2D = 0,
-	OBJECT_3D
+	OBJECT_3D,
+	OBJECT_CAMERA
 } ObjectKind;
 
 // 3D object shape (ignored for OBJECT_2D). `size` is the full extents: for a
@@ -781,6 +786,8 @@ char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* 
 char* Mge_OpenImageDialog(void);
 char* Mge_SaveFileDialog(const char* title, const char* filterName, const char* filterExts,
     const char* defaultName);
+// Pick an existing directory (Windows: SHBrowseForFolder; Linux: zenity/kdialog).
+char* Mge_OpenFolderDialog(const char* title);
 
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing(void);
@@ -1103,6 +1110,10 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
 Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color);
 void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.transform.rotation; skips !obj.active
 void   Mge_DrawPrimitive(Object obj, Color color); // just the 3D primitive geometry, one colour
+
+// Unit forward vector for an OBJECT_CAMERA from its XYZ-euler rotation (degrees):
+// rotation.y is yaw about +Y, rotation.x is pitch. {0,0,0} looks toward +X.
+Vector3 Mge_CameraObjectForward(Vector3 rotationDeg);
 
 // Mesh -- copies the arrays you pass, then owns them. Upload once, draw many.
 Mesh Mge_MakeMesh(const Vertex* vertices, int vertexCount,

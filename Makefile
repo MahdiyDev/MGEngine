@@ -50,7 +50,7 @@ BUILD_OBJ_DIR = $(BUILD_DIR)/obj
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
     .SHELLFLAGS := /c
-    LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32
+    LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32 -lshell32 -lole32
     EXE  := .exe
     PICFLAG :=
     LIB_NAME := libmgengine.dll
@@ -98,10 +98,11 @@ COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) \
 
 ENGINE_LIB = $(BUILD_DIR)/$(LIB_NAME)
 APP        = $(BUILD_DIR)/editor$(EXE)
+PLAYER     = $(BUILD_DIR)/mgeplayer$(EXE)
 
 .PHONY: all lib release clean clean-obj vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
 
-all: make_build_dir $(APP)
+all: make_build_dir $(APP) $(PLAYER)
 lib: make_build_dir $(ENGINE_LIB)
 
 # production build: rebuild every object with -O2 -DNDEBUG and strip the result.
@@ -151,6 +152,13 @@ $(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
 EDITOR_SRC = $(wildcard editor/*.c)
 $(APP): $(EDITOR_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $(EDITOR_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
+
+# --- standalone player: runs a built project. Reuses the editor's data layer
+#     (no GUI); what `Build Release` ships as <name>.exe.
+PLAYER_SRC = runtime/player.c editor/scene.c editor/scene_io.c editor/project.c \
+             editor/project_io.c editor/pathutil.c editor/editor_camera.c editor/scene_runtime.c
+$(PLAYER): $(PLAYER_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor $(PLAYER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp
 

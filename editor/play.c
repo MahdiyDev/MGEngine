@@ -1,4 +1,5 @@
 #include "play.h"
+#include "release.h"
 
 #include <mge_gui.h>
 #include <stdio.h>
@@ -46,17 +47,39 @@ static void restore(Scene* s, const Scene* snap)
     s->bloom = bl;
 }
 
-// compile the active scene; on success `dll` (>= 600) gets its path. Requires a
-// saved project.
-static bool build(Play* p, const Project* proj, char* dll, int dllSize)
+// Kick off a background compile of the active scene. `purpose` is what Play_Frame
+// should do once it finishes (JOB_BUILD / JOB_PLAY / JOB_RELOAD). Needs a saved
+// project.
+static void start_job(Play* p, const Project* proj, int purpose)
 {
     const char* name = active_name(proj);
-    BuildLog_Reset(&p->log);
     if (proj->path[0] == '\0' || name == NULL) {
+        BuildLog_Reset(&p->log);
         BuildLog_Line(&p->log, "save the project first (Project > Save Project)");
-        return false;
+        p->showConsole = true;
+        return;
     }
-    return SceneBuild_Compile(proj, name, false, &p->log, dll, dllSize);
+    if (p->jobPurpose != JOB_NONE) {
+        BuildLog_Line(&p->log, "-- a build is already running --");
+        p->showConsole = true;
+        return;
+    }
+    BuildLog_Reset(&p->log);
+    if (!SceneBuild_Start(&p->job, proj, name, false, &p->log)) {
+        SceneBuild_Clear(&p->job);
+        p->showConsole = true;
+        return;
+    }
+    p->jobPurpose = purpose;
+    p->showConsole = true;
+}
+
+static void cancel_job(Play* p)
+{
+    if (p->jobPurpose == JOB_NONE)
+        return;
+    SceneBuild_Clear(&p->job);
+    p->jobPurpose = JOB_NONE;
 }
 
 static void reload(Play* p, const Project* proj, Scene* s, EditorCamera* cam, const char* dll)
@@ -79,48 +102,78 @@ static void reload(Play* p, const Project* proj, Scene* s, EditorCamera* cam, co
     p->rt.sourceDigest = SceneRuntime_SourceDigest(dir);
 }
 
+// A background compile just finished: act on p->job.ok / p->job.outDll.
+static void finish_job(Play* p, Project* proj, Scene* s, EditorCamera* cam)
+{
+    bool ok = p->job.ok;
+    char dll[768];
+    snprintf(dll, sizeof(dll), "%s", p->job.outDll);
+    int purpose = p->jobPurpose;
+    long digest = p->jobDigest;
+
+    SceneBuild_Clear(&p->job);
+    p->jobPurpose = JOB_NONE;
+    p->showConsole = true;
+
+    if (purpose == JOB_PLAY) {
+        if (!ok)
+            return;
+        char err[256];
+        if (!SceneRuntime_Load(&p->rt, dll, err, sizeof(err))) {
+            BuildLog_Line(&p->log, "load error: %s", err);
+            return;
+        }
+        p->snapshot = *s;
+        MgeSceneCtx ctx = make_ctx(s, cam);
+        SceneRuntime_Init(&p->rt, &ctx);
+        char dir[700];
+        Project_SceneDir(proj, active_name(proj), dir, sizeof(dir));
+        p->rt.sourceDigest = SceneRuntime_SourceDigest(dir);
+        p->playing = true;
+        return;
+    }
+
+    if (purpose == JOB_BUILD) {
+        if (ok && p->playing)
+            reload(p, proj, s, cam, dll);
+        return;
+    }
+
+    if (purpose == JOB_RELOAD) {
+        if (ok)
+            reload(p, proj, s, cam, dll);
+        else
+            p->rt.sourceDigest = digest; // failed build: don't respin on the same source
+        return;
+    }
+}
+
 // ---- public ----
 
 bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s, EditorCamera* cam)
 {
-    char dll[600];
-
     switch (a) {
     case TOPBAR_BUILD:
-        if (build(p, proj, dll, sizeof(dll)) && p->playing)
-            reload(p, proj, s, cam, dll);
+        start_job(p, proj, JOB_BUILD);
+        return true;
+
+    case TOPBAR_BUILD_RELEASE:
+        if (p->playing)
+            Play_Action(p, TOPBAR_STOP, proj, s, cam);
+        cancel_job(p);
+        Release_Build(proj, &p->log); // synchronous: ships every scene at once
         p->showConsole = true;
         return true;
 
     case TOPBAR_PLAY:
-        if (p->playing)
+        if (p->playing || p->jobPurpose == JOB_PLAY)
             return true;
-        if (!build(p, proj, dll, sizeof(dll))) {
-            p->showConsole = true;
-            return true;
-        }
-        {
-            char err[256];
-            if (!SceneRuntime_Load(&p->rt, dll, err, sizeof(err))) {
-                BuildLog_Line(&p->log, "load error: %s", err);
-                p->showConsole = true;
-                return true;
-            }
-        }
-        p->snapshot = *s;
-        {
-            MgeSceneCtx ctx = make_ctx(s, cam);
-            SceneRuntime_Init(&p->rt, &ctx);
-        }
-        {
-            char dir[700];
-            Project_SceneDir(proj, active_name(proj), dir, sizeof(dir));
-            p->rt.sourceDigest = SceneRuntime_SourceDigest(dir);
-        }
-        p->playing = true;
+        start_job(p, proj, JOB_PLAY);
         return true;
 
     case TOPBAR_STOP:
+        if (p->jobPurpose == JOB_PLAY)
+            cancel_job(p); // abort a pending start
         if (!p->playing)
             return true;
         {
@@ -139,6 +192,10 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s, EditorCamera*
 
 void Play_Frame(Play* p, Project* proj, Scene* s, EditorCamera* cam)
 {
+    // advance an in-flight compile (started by Build / Play / a hot-reload)
+    if (p->jobPurpose != JOB_NONE && SceneBuild_Poll(&p->job))
+        finish_job(p, proj, s, cam);
+
     if (!p->playing)
         return;
 
@@ -149,16 +206,21 @@ void Play_Frame(Play* p, Project* proj, Scene* s, EditorCamera* cam)
     char dir[700];
     Project_SceneDir(proj, name, dir, sizeof(dir));
 
-    long d = SceneRuntime_SourceDigest(dir);
-    if (d != p->rt.sourceDigest) {
-        char dll[600];
-        BuildLog_Reset(&p->log);
-        BuildLog_Line(&p->log, "-- source changed, rebuilding --");
-        if (SceneBuild_Compile(proj, name, false, &p->log, dll, sizeof(dll)))
-            reload(p, proj, s, cam, dll);
-        else
-            p->rt.sourceDigest = d; // failed build: don't respin on the same source
-        p->showConsole = true;
+    // hot-reload: on a source change, kick one background rebuild
+    if (p->jobPurpose == JOB_NONE) {
+        long d = SceneRuntime_SourceDigest(dir);
+        if (d != p->rt.sourceDigest) {
+            BuildLog_Reset(&p->log);
+            BuildLog_Line(&p->log, "-- source changed, rebuilding --");
+            if (SceneBuild_Start(&p->job, proj, name, false, &p->log)) {
+                p->jobPurpose = JOB_RELOAD;
+                p->jobDigest = d;
+                p->showConsole = true;
+            } else {
+                SceneBuild_Clear(&p->job);
+                p->rt.sourceDigest = d;
+            }
+        }
     }
 
     MgeSceneCtx ctx = make_ctx(s, cam);
@@ -185,6 +247,8 @@ void Play_DrawConsole(Play* p, Rectangle rect)
 
 void Play_Shutdown(Play* p, Scene* s, EditorCamera* cam)
 {
+    if (p->jobPurpose != JOB_NONE)
+        SceneBuild_Clear(&p->job);
     if (p->playing) {
         MgeSceneCtx ctx = make_ctx(s, cam);
         SceneRuntime_Shutdown(&p->rt, &ctx);

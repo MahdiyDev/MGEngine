@@ -15,7 +15,7 @@
 bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* projectRoot);
 
 // Parse `path` into `s` (entities + render settings) and, if `outCamera` is not
-// NULL, the editor camera. Resets `s`'s entity arrays first; leaves the GL
-// resources (shadow map, HDR target, bloom, sky) untouched. Sets `s->path` /
-// `s->name`, clears `s->dirty`. Returns true on success.
+// NULL, the editor camera. Reads via Mge_LoadFileText so a mounted pak works.
+// Resets `s`'s entity arrays first; leaves the GL resources untouched. Sets
+// `s->path` / `s->name`, clears `s->dirty`. Returns true on success.
 bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera);

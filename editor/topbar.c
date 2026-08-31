@@ -49,6 +49,10 @@ static TopbarResult project_menu(const Project* proj)
     if (Mge_GuiMenuItem("New Project..."))  r.action = TOPBAR_PROJECT_NEW;
     if (Mge_GuiMenuItem("Open Project...")) r.action = TOPBAR_PROJECT_OPEN;
     if (Mge_GuiMenuItem(proj->path[0] ? "Save Project" : "Save Project...")) r.action = TOPBAR_PROJECT_SAVE;
+    if (proj->path[0]) {
+        Mge_GuiSeparator();
+        if (Mge_GuiMenuItem("Build Release...")) r.action = TOPBAR_BUILD_RELEASE;
+    }
     Mge_GuiEndMenu();
     return r;
 }

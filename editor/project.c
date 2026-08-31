@@ -90,24 +90,22 @@ void Project_Root(const Project* p, char* out, size_t outSize)
         Path_Dir(p->path, out, outSize);
 }
 
+// When the project has a path these are absolute; when it doesn't (the player
+// runs with its working directory AT the project root) they come out relative to
+// the cwd, which is what Mge_Load* + a mounted pak want. The editor guards its
+// own scene-file ops on `proj->path[0]`, so a relative form is never used there.
+
 void Project_ResDir(const Project* p, char* out, size_t outSize)
 {
     char root[512];
     Project_Root(p, root, sizeof(root));
-    if (root[0] == '\0')
-        out[0] = '\0';
-    else
-        Path_Join(root, "res", out, outSize);
+    Path_Join(root, "res", out, outSize);
 }
 
 void Project_SceneDir(const Project* p, const char* sceneName, char* out, size_t outSize)
 {
     char root[512];
     Project_Root(p, root, sizeof(root));
-    if (root[0] == '\0') {
-        out[0] = '\0';
-        return;
-    }
     char scenes[600];
     Path_Join(root, "scenes", scenes, sizeof(scenes));
     Path_Join(scenes, sceneName, out, outSize);
@@ -117,9 +115,5 @@ void Project_SceneFile(const Project* p, const char* sceneName, char* out, size_
 {
     char dir[600];
     Project_SceneDir(p, sceneName, dir, sizeof(dir));
-    if (dir[0] == '\0') {
-        out[0] = '\0';
-        return;
-    }
     Path_Join(dir, "scene.mgscene", out, outSize);
 }

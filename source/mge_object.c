@@ -65,6 +65,8 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
 // lit draw and (via Mge_DrawObjectOutline) the stencil outline.
 void Mge_DrawPrimitive(Object obj, Color color)
 {
+    if (obj.kind == OBJECT_CAMERA)
+        return; // a camera marker has no solid geometry (no shadow, no lit pass)
     const Vector3 p = obj.transform.position, s = obj.transform.scale;
     switch (obj.primitive) {
     case PRIM_SPHERE:
@@ -80,10 +82,33 @@ void Mge_DrawPrimitive(Object obj, Color color)
     }
 }
 
+// Unit forward vector for an OBJECT_CAMERA from its XYZ-euler rotation (degrees).
+// rotation.y is yaw about +Y, rotation.x is pitch. Matches editor_camera's
+// FrontFromYawPitch so a camera object and the fly-cam agree on "look".
+Vector3 Mge_CameraObjectForward(Vector3 rotationDeg)
+{
+    float yaw = rotationDeg.y * DEG2RAD, pitch = rotationDeg.x * DEG2RAD;
+    Vector3 f = { cosf(yaw) * cosf(pitch), sinf(pitch), sinf(yaw) * cosf(pitch) };
+    float len = sqrtf(f.x * f.x + f.y * f.y + f.z * f.z);
+    if (len > 1e-6f) { f.x /= len; f.y /= len; f.z /= len; }
+    return f;
+}
+
 void Mge_DrawObject(Object obj)
 {
     if (!obj.active)
         return;
+
+    if (obj.kind == OBJECT_CAMERA) {
+        const Vector3 p = obj.transform.position;
+        Vector3 fwd = Mge_CameraObjectForward(obj.transform.rotation);
+        Color body = obj.selected ? MGE_SELECT_OUTLINE_COLOR : CLITERAL(Color){ 150, 200, 255, 255 };
+        Draw_CubeWires(p, (Vector3){ 0.7f, 0.5f, 0.5f }, body);
+        Draw_CubeWires((Vector3){ p.x + fwd.x * 0.45f, p.y + fwd.y * 0.45f, p.z + fwd.z * 0.45f },
+            (Vector3){ 0.35f, 0.35f, 0.2f }, body);
+        Draw_Arrow3D(p, (Vector3){ p.x + fwd.x * 1.6f, p.y + fwd.y * 1.6f, p.z + fwd.z * 1.6f }, body);
+        return;
+    }
 
     const Vector3 p = obj.transform.position, s = obj.transform.scale;
     if (obj.kind == OBJECT_2D) {

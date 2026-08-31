@@ -12,6 +12,7 @@
 // / `ShowCursor` names. These prototypes are the whole public surface.
 char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* filterExts);
 char* Mge_OpenImageDialog(void);
+char* Mge_OpenFolderDialog(const char* title);
 char* Mge_SaveFileDialog(const char* title, const char* filterName, const char* filterExts,
     const char* defaultName);
 
@@ -24,6 +25,7 @@ char* Mge_SaveFileDialog(const char* title, const char* filterName, const char* 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commdlg.h>
+#include <shlobj.h>
 
 char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* filterExts)
 {
@@ -50,6 +52,27 @@ char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* 
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_EXPLORER;
 
     if (!GetOpenFileNameA(&ofn) || path[0] == '\0')
+        return NULL;
+
+    return _strdup(path);
+}
+
+char* Mge_OpenFolderDialog(const char* title)
+{
+    char path[MAX_PATH] = { 0 };
+
+    BROWSEINFOA bi = { 0 };
+    bi.hwndOwner = GetActiveWindow();
+    bi.lpszTitle = (title != NULL) ? title : "Select a folder";
+    bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_EDITBOX;
+
+    LPITEMIDLIST idl = SHBrowseForFolderA(&bi);
+    if (idl == NULL)
+        return NULL;
+
+    BOOL got = SHGetPathFromIDListA(idl, path);
+    CoTaskMemFree(idl);
+    if (!got || path[0] == '\0')
         return NULL;
 
     return _strdup(path);
@@ -144,6 +167,25 @@ char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* 
     }
 
     (void)filterName;
+    return NULL;
+}
+
+char* Mge_OpenFolderDialog(const char* title)
+{
+    char cmd[512];
+    const char* t = (title != NULL) ? title : "Select a folder";
+
+    if (system("command -v zenity >/dev/null 2>&1") == 0) {
+        snprintf(cmd, sizeof(cmd),
+            "zenity --file-selection --directory --title=\"%s\" 2>/dev/null", t);
+        char* r = run_picker(cmd);
+        if (r != NULL)
+            return r;
+    }
+    if (system("command -v kdialog >/dev/null 2>&1") == 0) {
+        snprintf(cmd, sizeof(cmd), "kdialog --getexistingdirectory . --title \"%s\" 2>/dev/null", t);
+        return run_picker(cmd);
+    }
     return NULL;
 }
 

@@ -4,7 +4,49 @@
 #include <mge_math.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+// A bare OBJECT_CAMERA: a transform (position + XYZ-euler look direction), no
+// geometry or material. `rotDeg` {pitch, yaw, roll}; yaw -90 looks toward -Z.
+static Object make_camera(Vector3 pos, Vector3 rotDeg)
+{
+    Object o = { 0 };
+    o.kind = OBJECT_CAMERA;
+    o.active = true;
+    o.transform.position = pos;
+    o.transform.rotation = rotDeg;
+    o.transform.scale = (Vector3){ 1.0f, 1.0f, 1.0f };
+    o.transform.parent = -1;
+    return o;
+}
+
+// Load the 6-face cubemap in `dir`, or {0} if it isn't there. Peeks at
+// `<dir>/right.jpg` first so a missing skybox doesn't spew FILEIO warnings while
+// Scene_LoadSkybox walks its fallback chain. (Mge_LoadCubemapDir always hands
+// back a live texture id; `.size` stays 0 when every face failed to decode.)
+static Cubemap try_cubemap(const char* dir)
+{
+    char probe[1024];
+    snprintf(probe, sizeof(probe), "%s/right.jpg", dir);
+    FILE* pf = fopen(probe, "rb");
+    if (pf != NULL) {
+        fclose(pf);
+    } else { // not loose -- maybe in a mounted pak (the built game)
+        size_t n = 0;
+        void* d = Mge_MountedRead(probe, &n);
+        if (d == NULL)
+            return (Cubemap){ 0 };
+        free(d);
+    }
+
+    Cubemap c = Mge_LoadCubemapDir(dir);
+    if (c.size == 0) {
+        Mge_UnloadCubemap(c);
+        return (Cubemap){ 0 };
+    }
+    return c;
+}
 
 // Reset the entity + settings fields to a fresh default scene, without touching
 // the GL resources (shadow map / HDR target / bloom / sky). Shared by
@@ -26,11 +68,13 @@ static void reset_data(Scene* s)
     s->objects[1] = Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
     s->objects[2] = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 190, 110, 255 });
     s->objects[3] = Mge_MakeObject3D((Vector3){ 3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 130, 210, 255 });
+    s->objects[4] = make_camera((Vector3){ 2.5f, 3.0f, 13.5f }, (Vector3){ -8.0f, -90.0f, 0.0f });
     strcpy(s->objectNames[0], "Floor");
     strcpy(s->objectNames[1], "Cube 1");
     strcpy(s->objectNames[2], "Sphere 1");
     strcpy(s->objectNames[3], "Cube 2");
-    s->objectCount = 4;
+    strcpy(s->objectNames[4], "Camera");
+    s->objectCount = 5;
 
     s->lights[0] = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
     s->lights[0].ambient = 0.22f; // fill so shadowed faces aren't pitch black
@@ -41,6 +85,9 @@ static void reset_data(Scene* s)
 
     s->selKind = SEL_NONE;
     s->selIndex = 0;
+
+    strcpy(s->skyDir, "res/skybox"); // project-relative; the editor falls back to assets/skybox
+    s->mainCamera = 4;               // the "Camera" object above drives the built game's view
 
     strcpy(s->name, "untitled");
     s->path[0] = '\0';
@@ -60,15 +107,54 @@ void Scene_Init(Scene* s, int width, int height)
     *s = (Scene){ 0 };
 
     s->shadow = Mge_LoadShadowMap(2048);
-
-    s->sky = Mge_LoadCubemapDir("assets/skybox");
-    if (s->sky.id == 0)
-        s->sky = Mge_LoadCubemapDir("../assets/skybox");
-
     s->hdrRT = Mge_LoadRenderTextureHDR(width, height);
     s->bloom = Mge_LoadBloom(width, height);
 
     reset_data(s);
+    Scene_LoadSkybox(s, ""); // no project yet -> bundled assets/skybox
+}
+
+// (Re)load the skybox cubemap. Tries `<projectRoot>/<skyDir>`, then a cwd-relative
+// `skyDir`, then the engine's bundled `assets/skybox` so the viewport is never
+// blank. Safe to call every time the scene or the active project changes.
+void Scene_LoadSkybox(Scene* s, const char* projectRoot)
+{
+    const char* root = (projectRoot != NULL) ? projectRoot : "";
+
+    Mge_UnloadCubemap(s->sky);
+    s->sky = (Cubemap){ 0 };
+
+    if (s->skyDir[0] != '\0') {
+        char full[1024];
+        if (Path_IsAbsolute(s->skyDir) || root[0] == '\0')
+            snprintf(full, sizeof(full), "%s", s->skyDir);
+        else
+            Path_Join(root, s->skyDir, full, sizeof(full));
+        s->sky = try_cubemap(full);
+        if (s->sky.size == 0 && !Path_IsAbsolute(s->skyDir))
+            s->sky = try_cubemap(s->skyDir); // cwd-relative
+    }
+    if (s->sky.size == 0)
+        s->sky = try_cubemap("assets/skybox");
+    if (s->sky.size == 0)
+        s->sky = try_cubemap("../assets/skybox");
+}
+
+// The Camera3D described by the `mainCamera` object, or false when there is none.
+bool Scene_MainCamera(const Scene* s, Camera3D* out)
+{
+    int i = s->mainCamera;
+    if (i < 0 || i >= s->objectCount || s->objects[i].kind != OBJECT_CAMERA)
+        return false;
+    if (out != NULL) {
+        const Object* o = &s->objects[i];
+        out->position = o->transform.position;
+        out->target = Mge_CameraObjectForward(o->transform.rotation); // engine cams store a direction
+        out->up = (Vector3){ 0.0f, 1.0f, 0.0f };
+        out->fovy = 60.0f;
+        out->projection = CAMERA_PERSPECTIVE;
+    }
+    return true;
 }
 
 void Scene_New(Scene* s)
@@ -132,9 +218,34 @@ void Scene_AddShape(Scene* s, PrimitiveKind primitive)
     // number it after the existing shapes of the same kind
     int n = 1;
     for (int k = 0; k < i; k++)
-        if (s->objects[k].primitive == primitive)
+        if (s->objects[k].kind == OBJECT_3D && s->objects[k].primitive == primitive)
             n++;
     snprintf(s->objectNames[i], sizeof(s->objectNames[i]), "%s %d", nouns[primitive], n);
+
+    s->selKind = SEL_OBJECT;
+    s->selIndex = i;
+    s->dirty = true;
+}
+
+void Scene_AddCamera(Scene* s)
+{
+    if (s->objectCount >= SCENE_MAX_OBJECTS)
+        return;
+
+    int i = s->objectCount++;
+    s->objects[i] = make_camera((Vector3){ 0.0f, 2.0f, 6.0f }, (Vector3){ -10.0f, -90.0f, 0.0f });
+
+    int n = 1;
+    for (int k = 0; k < i; k++)
+        if (s->objects[k].kind == OBJECT_CAMERA)
+            n++;
+    if (n == 1)
+        snprintf(s->objectNames[i], sizeof(s->objectNames[i]), "Camera");
+    else
+        snprintf(s->objectNames[i], sizeof(s->objectNames[i]), "Camera %d", n);
+
+    if (s->mainCamera < 0)
+        s->mainCamera = i; // first camera in the scene becomes the game view
 
     s->selKind = SEL_OBJECT;
     s->selIndex = i;
@@ -171,6 +282,11 @@ void Scene_DeleteObject(Scene* s, int index)
     }
     s->objectCount--;
     s->dirty = true;
+
+    if (s->mainCamera == index)
+        s->mainCamera = -1;
+    else if (s->mainCamera > index)
+        s->mainCamera--;
 
     if (s->selKind == SEL_OBJECT) {
         if (s->selIndex == index)
@@ -244,13 +360,15 @@ Vector3* Scene_SelRotation(Scene* s)
 
 Vector3* Scene_SelScale(Scene* s)
 {
-    return (s->selKind == SEL_OBJECT) ? &s->objects[s->selIndex].transform.scale : NULL;
+    if (s->selKind != SEL_OBJECT || s->objects[s->selIndex].kind == OBJECT_CAMERA)
+        return NULL; // a camera has no size -- only move / rotate it
+    return &s->objects[s->selIndex].transform.scale;
 }
 
 // fixed -- the gizmo is a constant on-screen tool, it does not track object size
 #define GIZMO_SIZE 1.7f
 
-bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
+bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers)
 {
     // reflect selection into Object.selected so Mge_DrawObject outlines it
     for (int i = 0; i < s->objectCount; i++)
@@ -277,23 +395,38 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
     else
         Mge_BeginLighting3DEx(s->lights, s->lightCount, camera);
     for (int i = 0; i < s->objectCount; i++)
-        Mge_DrawObject(s->objects[i]);
+        if (s->objects[i].kind != OBJECT_CAMERA)
+            Mge_DrawObject(s->objects[i]);
     Mge_EndLighting3D();
 
-    // lamp position marker
-    for (int i = 0; i < s->lightCount; i++)
-        if (s->lights[i].type != LIGHT_DIRECTIONAL)
-            Draw_Cube(s->lights[i].position, (Vector3){ 0.3f, 0.3f, 0.3f }, (Color){ 255, 235, 180, 255 });
+    // unlit editor markers, drawn after the lit pass: lamp positions + camera icons.
+    // The built player passes markers=false so a game never shows its own gizmos.
+    if (markers) {
+        for (int i = 0; i < s->lightCount; i++)
+            if (s->lights[i].type != LIGHT_DIRECTIONAL)
+                Draw_Cube(s->lights[i].position, (Vector3){ 0.3f, 0.3f, 0.3f }, (Color){ 255, 235, 180, 255 });
+        for (int i = 0; i < s->objectCount; i++)
+            if (s->objects[i].kind == OBJECT_CAMERA)
+                Mge_DrawObject(s->objects[i]);
+    }
 
-    if (s->sky.id != 0)
+    if (s->sky.size != 0)
         Mge_DrawSkybox(s->sky, camera); // fills whatever the scene didn't
 
     // gizmo last so its depth-disabled draw sits on top of the skybox too;
     // only in edit mode (in fly mode the cursor is locked, nothing to grab)
     bool busy = false;
     Vector3* pos = Scene_SelPosition(s);
-    if (interact && pos != NULL)
-        busy = Mge_Gizmo3D(pos, Scene_SelRotation(s), Scene_SelScale(s), camera, GIZMO_SIZE);
+    if (interact && pos != NULL) {
+        // skip it when the selection sits on / behind the eye (e.g. a camera
+        // object where the fly-cam is) -- a depth-disabled gizmo at ~0 distance
+        // smears across the whole viewport.
+        Vector3 d = { pos->x - camera.position.x, pos->y - camera.position.y, pos->z - camera.position.z };
+        float dist2 = d.x * d.x + d.y * d.y + d.z * d.z;
+        float facing = d.x * camera.target.x + d.y * camera.target.y + d.z * camera.target.z;
+        if (dist2 > 0.5f && facing > 0.0f)
+            busy = Mge_Gizmo3D(pos, Scene_SelRotation(s), Scene_SelScale(s), camera, GIZMO_SIZE);
+    }
 
     Mge_EndMode3D();
 

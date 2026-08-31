@@ -5,5 +5,6 @@
 
 #include <mge.h>
 #include "scene.h"
+#include "project.h"
 
-void Inspector_Draw(Rectangle rect, Scene* s);
+void Inspector_Draw(Rectangle rect, Scene* s, Project* proj);

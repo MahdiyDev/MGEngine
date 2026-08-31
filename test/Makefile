@@ -16,7 +16,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib test_pak
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -28,7 +28,7 @@ ifeq ($(OS),Windows_NT)
     # link the runtime in: some Windows app-control (Device Guard / WDAC)
     # policies block freshly built, dynamically linked exes
     LDFLAGS ?= -static
-    RENDER_SYSLIBS := -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32
+    RENDER_SYSLIBS := -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32 -lshell32 -lole32
 else
     EXE    :=
     RM     := rm -f
@@ -64,8 +64,11 @@ render_smoke$(EXE): render_smoke.c $(RENDER_OBJS)
 test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_math.c ../source/mge_math.c -lm
 
-test_utils$(EXE): test_utils.c ../source/mge_utils.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_utils.c ../source/mge_utils.c
+test_utils$(EXE): test_utils.c ../source/mge_utils.c ../source/mge_pak.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_utils.c ../source/mge_utils.c ../source/mge_pak.c
+
+test_pak$(EXE): test_pak.c ../source/mge_pak.c ../source/mge_pak.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_pak.c ../source/mge_pak.c
 
 test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c -lm
@@ -73,13 +76,14 @@ test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../
 test_gizmo$(EXE): test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c -lm
 
-# editor .mgscene (de)serialiser + path helpers; scene_io.c's engine deps are stubbed in the test
-test_scene_io$(EXE): test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c ../editor/scene.h ../editor/scene_io.h $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c -lm
+# editor .mgscene (de)serialiser + path helpers; the parser reads via Mge_LoadFileText (pak-aware)
+IO_ENGINE = ../source/mge_utils.c ../source/mge_pak.c
+test_scene_io$(EXE): test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c $(IO_ENGINE) ../editor/scene.h ../editor/scene_io.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c $(IO_ENGINE) -lm
 
-# editor project.mgproject (de)serialiser + Project helpers; no engine deps at all
-test_project_io$(EXE): test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c ../editor/project.h ../editor/project_io.h $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c
+# editor project.mgproject (de)serialiser + Project helpers
+test_project_io$(EXE): test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c $(IO_ENGINE) ../editor/project.h ../editor/project_io.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c $(IO_ENGINE)
 
 # dynamic library loading (mge_dylib.c) -- compiles + loads a tiny .dll/.so at runtime
 test_dylib$(EXE): test_dylib.c ../source/mge_dylib.c $(MLIB)/test.h

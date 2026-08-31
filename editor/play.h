@@ -11,12 +11,18 @@
 #include "scene_build.h"
 #include "scene_runtime.h"
 
+enum { JOB_NONE = 0, JOB_BUILD, JOB_PLAY, JOB_RELOAD };
+
 typedef struct Play {
     SceneRuntime rt;
     BuildLog log;
     bool playing;
     bool showConsole;
     Scene snapshot; // whole-Scene copy taken on Play; restored (minus GPU handles) on Stop
+
+    SceneBuildJob job;   // in-flight compile (runs as a separate process)
+    int  jobPurpose;     // JOB_* -- what to do when the compile finishes
+    long jobDigest;      // source digest captured when a hot-reload build started
 } Play;
 
 void Play_Init(Play* p);

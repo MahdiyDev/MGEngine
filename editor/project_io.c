@@ -1,6 +1,8 @@
 #include "project_io.h"
 #include "pathutil.h"
 
+#include <mge.h> // Mge_LoadFileText -- so a mounted pak resolves the path
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,13 +67,14 @@ bool Project_Save(Project* p, const char* path)
 
 bool Project_Load(Project* p, const char* path)
 {
-    FILE* f = fopen(path, "rb");
-    if (f == NULL)
+    char* text = Mge_LoadFileText(path); // loose file, then any mounted pak
+    if (text == NULL)
         return false;
+    char* cur = text;
 
     char line[1024];
-    if (fgets(line, sizeof(line), f) == NULL || strncmp(line, "mgeproject", 10) != 0) {
-        fclose(f);
+    if (!Path_NextLine(&cur, line, sizeof(line)) || strncmp(line, "mgeproject", 10) != 0) {
+        Mge_UnLoadFileText(text);
         return false;
     }
 
@@ -81,7 +84,7 @@ bool Project_Load(Project* p, const char* path)
 
     int sec = 0; // 0 top, 1 settings
 
-    while (fgets(line, sizeof(line), f) != NULL) {
+    while (Path_NextLine(&cur, line, sizeof(line))) {
         char* hash = strchr(line, '#');
         if (hash != NULL)
             *hash = '\0';
@@ -136,7 +139,7 @@ bool Project_Load(Project* p, const char* path)
         }
     }
 
-    fclose(f);
+    Mge_UnLoadFileText(text);
 
     if (p->sceneCount == 0) {
         strcpy(p->scenes[0], "untitled");
