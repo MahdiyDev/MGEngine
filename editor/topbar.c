@@ -74,9 +74,10 @@ static TopbarResult scene_menu(const Project* proj, const Scene* s)
 
     bool haveProject = proj->path[0] != '\0';
     if (haveProject) {
-        if (Mge_GuiMenuItem("New Scene..."))  r.action = TOPBAR_SCENE_NEW;
-        if (Mge_GuiMenuItem("Add Scene..."))  r.action = TOPBAR_SCENE_ADD;
-        if (Mge_GuiMenuItem("Save Scene"))    r.action = TOPBAR_SCENE_SAVE;
+        if (Mge_GuiMenuItem("New Scene..."))   r.action = TOPBAR_SCENE_NEW;
+        if (Mge_GuiMenuItem("Add Scene..."))   r.action = TOPBAR_SCENE_ADD;
+        if (Mge_GuiMenuItem("Save Scene"))     r.action = TOPBAR_SCENE_SAVE;
+        if (Mge_GuiMenuItem("New Script..."))  r.action = TOPBAR_SCENE_NEWSCRIPT;
     } else {
         Mge_GuiLabel("(save the project to add scenes)");
     }
@@ -84,7 +85,8 @@ static TopbarResult scene_menu(const Project* proj, const Scene* s)
     return r;
 }
 
-TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s, bool* editMode)
+TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s,
+    bool* editMode, bool playing, bool* showConsole)
 {
     if (!Mge_GuiBeginPanel("##topbar", rect.x, rect.y, rect.width, rect.height)) {
         Mge_GuiEndPanel();
@@ -104,10 +106,15 @@ TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s, bool* editMode
         r = sr;
     Mge_GuiSameLine();
 
-    if (Mge_GuiButton("Build")) {
+    // build / run the scene code
+    if (Mge_GuiButton(playing ? "[Stop]" : "Play"))
+        r.action = playing ? TOPBAR_STOP : TOPBAR_PLAY;
+    Mge_GuiSameLine();
+    if (Mge_GuiButton("Build"))
         r.action = TOPBAR_BUILD;
-        r.arg = 0;
-    }
+    Mge_GuiSameLine();
+    if (Mge_GuiButton(*showConsole ? "[Console]" : "Console"))
+        *showConsole = !*showConsole;
     Mge_GuiSameLine();
     Mge_GuiSeparator();
     Mge_GuiSameLine();

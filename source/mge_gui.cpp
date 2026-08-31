@@ -192,6 +192,27 @@ bool Mge_GuiInputText(const char* label, char* buf, int bufSize)
     return ImGui::InputText(label, buf, (size_t)bufSize);
 }
 
+void Mge_GuiLogBox(const char* id, const char* text)
+{
+    if (!s_inFrame)
+        return;
+    if (text == nullptr)
+        text = "";
+
+    ImGui::PushID(id);
+    if (ImGui::BeginChild("##logbox", ImVec2(0, 0), true,
+            ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 1));
+        ImGui::TextUnformatted(text);
+        ImGui::PopStyleVar();
+        // stick to the bottom while new output arrives
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f)
+            ImGui::SetScrollHereY(1.0f);
+    }
+    ImGui::EndChild();
+    ImGui::PopID();
+}
+
 bool Mge_GuiBeginMenu(const char* label)
 {
     if (!s_inFrame)

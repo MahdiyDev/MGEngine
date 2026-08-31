@@ -193,22 +193,31 @@ phases so the app keeps working the whole way.
 - Deferred to Phase 4: the **New Script** action (it's about code, and Phase 4
       owns the per-scene build + `.c` discovery).
 
-## Phase 4 -- scene as code + hot reload
+## Phase 4 -- scene as code + hot reload   [DONE]
 
-- [ ] `MgeSceneCtx` (the callback struct scene code gets): add/remove/find
-      object, get selection, spawn primitive, plus `dt`, input passthrough.
-- [ ] `editor/scene_build.c`: from `project.mgproject` + the scene's globbed `*.c`,
-      generate + run the compile (a generated command or a small Makefile) for
-      one scene in **debug** or **release**, using the project's cflags; capture
-      stdout/stderr into a build-log console panel.
-- [ ] Per-scene DLL: compile the scene's `*.c` -> `<name>.dll` linking
-      `libmgengine`. `LoadLibrary` a copy (`<name>_live_<n>.dll`, since Windows
-      locks a loaded DLL).
-- [ ] Hot reload: watch the scene dir's `*.c` + headers mtime (and new files);
-      on change -> rebuild -> on success `FreeLibrary` old, load new, re-run
-      `MgeScene_Init` against the editor-owned `Scene` (still holding live edits).
-- [ ] "Build" in the File menu builds the whole **project** (every scene) in
-      debug; a separate "Build Release" (Phase 6) does the bundle.
+- [x] `MgeSceneCtx` in `mge.h` (objects / objectCount / maxObjects, lights, camera,
+      selected) + `MgeScene_Init/Update/Shutdown` fn typedefs. `source/mge_dylib.c`
+      -- `Mge_LoadLibrary` / `Mge_GetSymbol` / `Mge_FreeLibrary` / `Mge_GetDylibError`
+      (Windows `LoadLibrary` / POSIX `dlopen`). Unit test `test/test_dylib.c`
+      (compiles + loads a tiny .dll). `pathutil`: `Path_List`, `Path_MTime`.
+- [x] `editor/scene_build.c`: finds the engine SDK (`$MGE_ENGINE` / search up for
+      `source/mge.h` + `build/libmgengine`), globs the scene's `*.c`, runs
+      `$CC -shared` with the project's debug/release cflags -> `scenes/<name>/build/
+      <name>_debug.dll`, captures the command + all output in a `BuildLog`.
+- [x] `editor/scene_runtime.c`: copies the dll to `<name>_live_<n>` (Windows locks
+      a loaded one), `Mge_LoadLibrary`, resolves the three symbols; `SourceDigest`
+      = sum of `*.c` mtimes + file count for the hot-reload watch.
+- [x] `editor/play.c` + top-bar **Play / Stop / Build / Console**: Play snapshots
+      the `Scene`, builds, loads, `MgeScene_Init`, then `MgeScene_Update(ctx, dt)`
+      each frame (gizmo + picking paused). While playing, a `.c` save triggers
+      rebuild + `Shutdown`/`Init` reload; a compile error just shows in the
+      console. Stop restores the snapshot (Play-mode edits discarded).
+- [x] Console panel (`Mge_GuiLogBox`) replaces Resources at the bottom while open;
+      auto-scrolls, auto-opens on build.
+- [x] **New Script** (Scene menu, from Phase 3): name modal -> extra `.c` in the
+      scene folder. `<name>.c` template updated to `MgeSceneCtx*` with a spin demo.
+- Deferred: "Build whole project" (every scene at once) is a Phase 6 concern
+      (release bundle); Build here compiles the active scene.
 
 ## Phase 5 -- resource explorer (bottom panel)
 

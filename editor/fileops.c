@@ -11,8 +11,10 @@
 #include <string.h>
 
 #define CONFIRM_ID "Unsaved changes"
-#define NAME_ID "New scene"
+#define NAME_ID "Name"
 #define PROJECT_EXT ".mgproject"
+
+enum { PROMPT_SCENE = 0, PROMPT_SCRIPT = 1 };
 
 static bool dirty(const Project* p, const Scene* s) { return s->dirty || p->dirty; }
 
@@ -172,6 +174,39 @@ static void do_new_scene(Project* p, Scene* s, EditorCamera* cam, const char* na
     Project_Save(p, p->path);
 }
 
+// Scaffold `<activeSceneDir>/<name>.c` -- an extra source file that compiles into
+// the scene's module alongside its main `.c`.
+static void do_new_script(Project* p, const char* name)
+{
+    if (p->path[0] == '\0' || p->activeScene < 0) {
+        fprintf(stderr, "[editor] save the project first\n");
+        return;
+    }
+    char dir[600], file[700];
+    Project_SceneDir(p, p->scenes[p->activeScene], dir, sizeof(dir));
+    char leaf[80];
+    snprintf(leaf, sizeof(leaf), "%s.c", name);
+    Path_Join(dir, leaf, file, sizeof(file));
+
+    FILE* f = fopen(file, "rb");
+    if (f != NULL) {
+        fclose(f);
+        fprintf(stderr, "[editor] %s already exists\n", file);
+        return;
+    }
+    f = fopen(file, "wb");
+    if (f == NULL) {
+        fprintf(stderr, "[editor] can't write %s\n", file);
+        return;
+    }
+    fprintf(f,
+        "// %s -- part of the \"%s\" scene module. Add helpers here; the editor\n"
+        "// recompiles the whole folder and hot-reloads on save.\n"
+        "#include <mge.h>\n",
+        leaf, p->scenes[p->activeScene]);
+    fclose(f);
+}
+
 // Run an action whose guard (if any) has already been cleared.
 static void run(FileOps* ops, TopbarAction a, int arg, Project* p, Scene* s, EditorCamera* cam)
 {
@@ -192,11 +227,15 @@ static void run(FileOps* ops, TopbarAction a, int arg, Project* p, Scene* s, Edi
         break;
     case TOPBAR_SCENE_NEW:
         ops->namePrompt = true;
+        ops->promptKind = PROMPT_SCENE;
         ops->nameBuf[0] = '\0';
         Mge_GuiOpenPopup(NAME_ID);
         break;
-    case TOPBAR_BUILD:
-        printf("[editor] Build: whole-project compile + hot reload lands in Phase 4\n");
+    case TOPBAR_SCENE_NEWSCRIPT:
+        ops->namePrompt = true;
+        ops->promptKind = PROMPT_SCRIPT;
+        ops->nameBuf[0] = '\0';
+        Mge_GuiOpenPopup(NAME_ID);
         break;
     case TOPBAR_QUIT:
         ops->quit = true;
@@ -255,14 +294,15 @@ void FileOps_Draw(FileOps* ops, Project* proj, Scene* s, EditorCamera* cam)
         Mge_GuiEndPopup();
     }
 
-    // --- new-scene name entry ---
+    // --- name entry (new scene / new script) ---
     if (Mge_GuiBeginPopup(NAME_ID)) {
-        Mge_GuiLabel("Scene name (letters, digits, _ - ):");
+        bool script = ops->promptKind == PROMPT_SCRIPT;
+        Mge_GuiLabel(script ? "Script file name (no extension):" : "Scene name (letters, digits, _ - ):");
         Mge_GuiSetNextItemWidth(220.0f);
-        Mge_GuiInputText("##scenename", ops->nameBuf, (int)sizeof(ops->nameBuf));
+        Mge_GuiInputText("##name", ops->nameBuf, (int)sizeof(ops->nameBuf));
 
-        bool nameOk = Project_ValidSceneName(ops->nameBuf);
-        bool unique = Project_FindScene(proj, ops->nameBuf) < 0;
+        bool nameOk = Project_ValidSceneName(ops->nameBuf); // same charset rules
+        bool unique = script ? true : (Project_FindScene(proj, ops->nameBuf) < 0);
         bool valid = nameOk && unique;
         if (ops->nameBuf[0] && !valid)
             Mge_GuiLabel(!nameOk ? "(bad or reserved name)" : "(already a scene)");
@@ -273,7 +313,10 @@ void FileOps_Draw(FileOps* ops, Project* proj, Scene* s, EditorCamera* cam)
             snprintf(name, sizeof(name), "%s", ops->nameBuf);
             ops->namePrompt = false;
             Mge_GuiClosePopup();
-            do_new_scene(proj, s, cam, name);
+            if (script)
+                do_new_script(proj, name);
+            else
+                do_new_scene(proj, s, cam, name);
         }
         Mge_GuiSameLine();
         if (Mge_GuiButton("Cancel")) {

@@ -61,6 +61,11 @@ bool Mge_GuiSelectableEx(const char* label, bool selected, bool* doubleClicked);
 // Returns true the frame the text changes.
 bool Mge_GuiInputText(const char* label, char* buf, int bufSize);
 
+// A read-only, scrollable multi-line text box that fills the remaining space of
+// the current panel. `id` must be unique. Auto-scrolls to the bottom as `text`
+// grows (a build log).
+void Mge_GuiLogBox(const char* id, const char* text);
+
 // A button that opens a popup menu. Wrap the items between Begin/End; BeginMenu
 // returns true only while the popup is open. Mge_GuiMenuItem is a clickable row.
 //   if (Mge_GuiBeginMenu("+ add")) {

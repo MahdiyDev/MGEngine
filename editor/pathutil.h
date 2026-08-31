@@ -33,3 +33,12 @@ bool Path_MakeDirs(const char* dir);
 
 // Copy the file at `src` to `dst` (binary). Returns true on success.
 bool Path_CopyFile(const char* src, const char* dst);
+
+// List entries of `dir` into `out` (each <= 128 chars, name only). `ext` filters
+// files by extension (e.g. ".c"); pass NULL for "all files". `wantDirs` lists
+// subdirectories instead of files (`ext` ignored). "." / ".." are skipped.
+// Returns the count written (capped at `maxOut`), or -1 if `dir` can't be read.
+int Path_List(const char* dir, const char* ext, bool wantDirs, char (*out)[128], int maxOut);
+
+// Last-modified time of `path` as a Unix timestamp, or 0 if it can't be stat'd.
+long Path_MTime(const char* path);

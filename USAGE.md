@@ -46,6 +46,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / ...HDR (float) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
   mge_screenshot.c     Mge_TakeScreenshot / MgeGL_SaveScreenshot -- framebuffer -> PNG (stb_image_write)
+  mge_dylib.c          Mge_LoadLibrary / GetSymbol / FreeLibrary -- host side of the hot-reload scene-module contract
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 editor/                THE APP -- project / scene editor (docked panel shell around a viewport)
@@ -167,7 +168,10 @@ contract and the `Matrix_Scale` / composition math behind the transforms;
 `test_msaa` covers the `Mge_SetMSAA` request clamping; `test_gamma` covers the
 `Mge_SetGammaCorrection` state + forwarding; `test_shadow` covers the `ShadowMap` /
 `PointShadowMap` struct contract; `test_debug` covers the `Mge_SetDebugOutput`
-toggle and callback registration.
+toggle and callback registration; `test_dylib` compiles a tiny shared library
+with the C compiler and loads / calls / frees it through `Mge_LoadLibrary`;
+`test_scene_io` / `test_project_io` round-trip the editor's `.mgscene` /
+`.mgproject` text formats.
 
 `test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
 `<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
@@ -1396,6 +1400,25 @@ right inspector + bottom resources) built from `Mge_GuiBeginPanel`, all in one
 
 Matrices are stored column-major so `MatrixToFloat(m)` feeds `glUniformMatrix4fv`
 directly.
+
+### Hot-reloadable scene modules (`mge_dylib.c`)
+
+A *scene module* is a shared library exporting `MgeScene_Init(MgeSceneCtx*)`,
+`MgeScene_Update(MgeSceneCtx*, float dt)` and `MgeScene_Shutdown(MgeSceneCtx*)`.
+The host compiles it, loads it, and calls it each frame with a pointer to its own
+object / light storage (`MgeSceneCtx`), so recompiling + reloading keeps state.
+
+```c
+void* h = Mge_LoadLibrary("scene_live_3.dll");   // NULL -> Mge_GetDylibError()
+MgeSceneUpdateFn up = (MgeSceneUpdateFn)Mge_GetSymbol(h, "MgeScene_Update");
+up(&ctx, dt);
+Mge_FreeLibrary(h);
+```
+
+Windows locks a loaded DLL, so copy it to a fresh name before loading (the editor
+uses `<name>_live_<n>.dll`). The editor (`editor/scene_build.c` +
+`scene_runtime.c` + `play.c`) is the worked example — see
+[editor/USAGE.md](editor/USAGE.md).
 
 ## Notes / limitations
 

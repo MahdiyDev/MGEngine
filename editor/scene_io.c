@@ -202,12 +202,18 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
         if (cf != NULL) {
             fprintf(cf,
                 "// %s -- scene logic. Every .c in this folder is compiled into the scene's\n"
-                "// module and hot-reloaded by the editor (Phase 4). The editor owns object /\n"
-                "// light storage; this only reads / writes it through the passed context.\n"
-                "#include <mge.h>\n\n"
-                "void MgeScene_Init(void* ctx) { (void)ctx; }\n"
-                "void MgeScene_Update(void* ctx, float dt) { (void)ctx; (void)dt; }\n"
-                "void MgeScene_Shutdown(void* ctx) { (void)ctx; }\n",
+                "// module, which the editor hot-reloads when you edit it. The editor owns\n"
+                "// object / light storage; reach it through the MgeSceneCtx.\n"
+                "#include <mge.h>\n"
+                "#include <mge_math.h>\n\n"
+                "void MgeScene_Init(MgeSceneCtx* ctx) { (void)ctx; }\n\n"
+                "void MgeScene_Update(MgeSceneCtx* ctx, float dt)\n"
+                "{\n"
+                "    // example: spin every object\n"
+                "    for (int i = 0; i < *ctx->objectCount; i++)\n"
+                "        ctx->objects[i].transform.rotation.y += 40.0f * dt;\n"
+                "}\n\n"
+                "void MgeScene_Shutdown(MgeSceneCtx* ctx) { (void)ctx; }\n",
                 s->name);
             fclose(cf);
         }

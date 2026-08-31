@@ -141,3 +141,75 @@ bool Path_CopyFile(const char* src, const char* dst)
     fclose(out);
     return ok;
 }
+
+static bool has_ext(const char* name, const char* ext)
+{
+    size_t n = strlen(name), e = strlen(ext);
+    return n > e && strcmp(name + n - e, ext) == 0;
+}
+
+#if defined(_WIN32)
+    #include <windows.h>
+int Path_List(const char* dir, const char* ext, bool wantDirs, char (*out)[128], int maxOut)
+{
+    char pat[1024];
+    snprintf(pat, sizeof(pat), "%s\\*", dir);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE)
+        return -1;
+
+    int n = 0;
+    do {
+        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+            continue;
+        bool isDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (wantDirs != isDir)
+            continue;
+        if (!wantDirs && ext != NULL && !has_ext(fd.cFileName, ext))
+            continue;
+        if (n < maxOut)
+            snprintf(out[n], 128, "%.127s", fd.cFileName);
+        n++;
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    return n < maxOut ? n : maxOut;
+}
+#else
+    #include <dirent.h>
+int Path_List(const char* dir, const char* ext, bool wantDirs, char (*out)[128], int maxOut)
+{
+    DIR* d = opendir(dir);
+    if (d == NULL)
+        return -1;
+
+    int n = 0;
+    struct dirent* e;
+    while ((e = readdir(d)) != NULL) {
+        if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
+            continue;
+        char full[1024];
+        snprintf(full, sizeof(full), "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(full, &st) != 0)
+            continue;
+        bool isDir = S_ISDIR(st.st_mode);
+        if (wantDirs != isDir)
+            continue;
+        if (!wantDirs && ext != NULL && !has_ext(e->d_name, ext))
+            continue;
+        if (n < maxOut)
+            snprintf(out[n], 128, "%.127s", e->d_name);
+        n++;
+    }
+    closedir(d);
+    return n < maxOut ? n : maxOut;
+}
+#endif
+
+long Path_MTime(const char* path)
+{
+    struct stat st;
+    return (stat(path, &st) == 0) ? (long)st.st_mtime : 0;
+}

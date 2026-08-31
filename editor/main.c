@@ -7,16 +7,18 @@
 //     left-click         select an object / a light
 //     drag a gizmo       move / rotate / scale it (switch mode in the top bar)
 //   Ctrl+S (EDIT mode)   save the active scene       F12   screenshot
+//   Play / Stop          build + run the scene's code (hot-reloads on .c change)
 //   panels
-//     top bar            Project + Scene menus, mode, gizmo, Render menu
+//     top bar            Project + Scene menus, Play/Build/Console, mode, gizmo, Render
 //     left (Hierarchy)   objects + lights; add / rename / toggle / delete
 //     right (Inspector)  the selection's fields
-//     bottom (Resources) project resource explorer (stub until Phase 5)
+//     bottom             project resource explorer (Phase 5 stub), or the build console
 //
 // This file: the window, the frame loop, the docked-panel layout, and the one
 // Mge_Gui frame the panels share. The Project + active Scene are owned here.
 // Scene data + rendering live in scene.c; the project in project.c; the camera
-// in editor_camera.c; File actions in fileops.c; each panel in its own <name>.c.
+// in editor_camera.c; File actions in fileops.c; play/build in play.c; each
+// panel in its own <name>.c.
 #include <mge.h>
 #include <mge_gui.h>
 
@@ -28,6 +30,7 @@
 #include "inspector.h"
 #include "resources.h"
 #include "fileops.h"
+#include "play.h"
 
 static const int width = 1280, height = 720;
 
@@ -58,6 +61,8 @@ int main(void)
     Scene_Init(&scene, width, height); // GPU resources + the default "untitled" scene data
 
     FileOps ops = { 0 };
+    Play play;
+    Play_Init(&play);
 
     int fpsShown = 0, drawsShown = 0;
     double fpsAt = 0.0;
@@ -87,8 +92,11 @@ int main(void)
 
         EditorCamera_Update(&camera, editMode, guiMouse);
 
+        // while playing, run the scene module + hot-reload; editing is paused
+        Play_Frame(&play, &project, &scene, &camera);
+
         bool looking = EditorCamera_IsLooking(&camera);
-        bool interact = editMode && !looking && !guiMouse;
+        bool interact = editMode && !looking && !guiMouse && !play.playing;
 
         Mge_BeginDrawing();
 
@@ -114,15 +122,21 @@ int main(void)
             FileOps_Request(&ops, (TopbarResult){ TOPBAR_QUIT, 0 }, &project, &scene, &camera);
         }
 
-        TopbarResult tr = Topbar_Draw(rTop, &project, &scene, &editMode);
+        TopbarResult tr = Topbar_Draw(rTop, &project, &scene, &editMode, play.playing, &play.showConsole);
         Hierarchy_Draw(rLeft, &scene);
         Inspector_Draw(rRight, &scene);
-        Resources_Draw(rBottom, &project, &scene, fpsShown, drawsShown);
+        if (play.showConsole)
+            Play_DrawConsole(&play, rBottom);
+        else
+            Resources_Draw(rBottom, &project, &scene, fpsShown, drawsShown);
 
         // Ctrl+S -> save the active scene (EDIT mode only; VIEW mode uses S to fly)
         bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
-        if (editMode && ctrl && IsKeyPressed(KEY_S) && !guiKeyboard)
+        if (editMode && ctrl && IsKeyPressed(KEY_S) && !guiKeyboard && !play.playing)
             tr = (TopbarResult){ TOPBAR_SCENE_SAVE, 0 };
+
+        if (Play_Action(&play, tr.action, &project, &scene, &camera))
+            tr.action = TOPBAR_NONE;
 
         FileOps_Request(&ops, tr, &project, &scene, &camera);
         FileOps_Draw(&ops, &project, &scene, &camera);
@@ -138,6 +152,7 @@ int main(void)
             break;
     }
 
+    Play_Shutdown(&play, &scene, &camera);
     Scene_Shutdown(&scene);
     Mge_GuiShutdown();
     Mge_CloseWindow();

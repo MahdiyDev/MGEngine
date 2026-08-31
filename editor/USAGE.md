@@ -12,9 +12,12 @@ A scene editor built on top of the engine library — see
 | `project_io.c` / `.h` | `project.mgproject` read / write (`Project_Save` / `Project_Load`) — flat text, **data only** |
 | `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures`, and the render passes (shadow + lit + gizmo + skybox) |
 | `scene_io.c` / `.h` | `.mgscene` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
-| `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `MakeDirs` / `CopyFile` — small path + fs helpers |
-| `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; Build; Quit) with the unsaved-changes confirm modal + the new-scene name modal |
-| `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save) with a `*` dirty marker, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
+| `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `Equal` / `MakeDirs` / `CopyFile` / `List` / `MTime` — small path + fs helpers |
+| `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; New Script; Quit) with the unsaved-changes confirm modal + the name-entry modal |
+| `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog` |
+| `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
+| `play.c` / `.h` | Play / Stop / Build: snapshot the scene, compile + load, run `MgeScene_Update` each frame, hot-reload on change, restore on Stop; draws the console panel |
+| `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
 | `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection (Object: active, primitive, transform, material slots. Light: type, colour, attenuation / direction) |
 | `resources.c` / `.h` | the **bottom** panel: the project resource explorer (`<root>/res/`) — a stub until Phase 5 |
@@ -52,6 +55,7 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 | EDIT — select | **left-click** an object or a light; click empty space to deselect |
 | EDIT — gizmo | drag a handle to **move / rotate / scale** the selection (switch mode in the top bar). Translate has axis arrows + a centre ball; rotate shows the camera-facing part of each ring; scale has cube tips. The hovered handle highlights white |
 | **Ctrl+S** (EDIT mode) | save the active scene (same as Scene ▸ Save Scene; prompts for a project location if the project is new) |
+| **Play** / **Stop** | build + run the active scene's code; editing is paused while playing and the scene is restored on Stop |
 | **F12** | save `editor_screenshot.png` next to the executable (`Mge_TakeScreenshot`) |
 
 Panels are only clickable in EDIT mode. Engine input is suppressed while a widget
@@ -72,7 +76,8 @@ myproject/
   scenes/
     level1/
       scene.mgscene     editor-authored objects / lights / camera
-      level1.c          scene logic (every .c here joins the build -- Phase 4)
+      level1.c          scene logic (every .c here compiles into the module)
+      build/            generated .dll + _live_ copies (gitignored)
 ```
 
 **Project** menu:
@@ -91,13 +96,45 @@ myproject/
 | **New Scene...** | name-entry modal → creates `scenes/<name>/` (`scene.mgscene` + `<name>.c`), adds it to the project, switches |
 | **Add Scene...** | pick an existing `scenes/<name>/scene.mgscene` *inside this project* to register it (rejected otherwise) |
 | **Save Scene** | write just the active scene's `scene.mgscene` |
+| **New Script...** | scaffold another `.c` in the active scene's folder (compiles into the same module) |
 
-New Scene / Add Scene / Save Scene need the project saved first (they write into
-its folder). Scene names are folder-safe (`[A-Za-z0-9_-]`) and can't be `build`,
-`res`, `scenes`, `obj`, `bin`. The project + scene names each show a trailing
-`*` while dirty.
+New Scene / Add Scene / Save Scene / New Script need the project saved first
+(they write into its folder). Scene names are folder-safe (`[A-Za-z0-9_-]`) and
+can't be `build`, `res`, `scenes`, `obj`, `bin`. The project + scene names each
+show a trailing `*` while dirty.
 **New / Open Project**, a scene **switch**, and the window close button — when
 the project or scene is dirty — first pop a **Save / Discard / Cancel** modal.
+
+### Scene code — Play / Build / hot reload
+
+A scene's `.c` files compile into a **module** (a shared library) exporting:
+
+```c
+#include <mge.h>
+void MgeScene_Init(MgeSceneCtx* ctx);
+void MgeScene_Update(MgeSceneCtx* ctx, float dt);
+void MgeScene_Shutdown(MgeSceneCtx* ctx);
+```
+
+`New Scene` scaffolds a starter `<name>.c` (a demo that spins every object).
+`MgeSceneCtx` points at the editor's live storage — `ctx->objects` /
+`*ctx->objectCount` (grow within `ctx->maxObjects`), `ctx->lights`,
+`ctx->camera`, `ctx->selected` — so a rebuild never loses state. The module
+links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`, `Mge_Load*`, etc.
+
+| top-bar button | |
+| --- | --- |
+| **Build** | compile the active scene → `scenes/<name>/build/<name>_debug.dll`; output goes to the **Console** panel |
+| **Play** / **Stop** | Build, then load + run: `MgeScene_Init` once, `MgeScene_Update(ctx, dt)` every frame. Editing / the gizmo are paused. **Stop** calls `MgeScene_Shutdown` and restores the scene to its pre-Play state (Play-mode changes are discarded) |
+| **Console** | toggle the build-log panel (replaces Resources at the bottom) |
+
+While **Play** is running, saving any `.c` in the scene folder triggers an
+automatic **rebuild + reload** (`Shutdown` old, `Init` new) — a compile error
+just shows in the console and the old module keeps running.
+
+The compiler is `$CC` (default `gcc`) and must be on `PATH`. The editor finds the
+engine SDK via `$MGE_ENGINE`, else by searching upward from the working directory
+for a folder with `source/mge.h` + `build/libmgengine`.
 
 A `.mgscene` file is a flat, indentation-cosmetic, line-based text format —
 diffable, no JSON dependency. One `object` / `light` block per entity, plus
@@ -197,10 +234,11 @@ how the texture samples past the UV edges.
 ## Extending it
 
 Scene data + rendering: `scene.c`; project structure: `project.c`; the file/menu
-actions: `fileops.c`. A panel: its own `*.c` (they Begin/End their own
-`Mge_GuiBeginPanel`). A new inspectable kind needs an `inspect_*` in
+actions: `fileops.c`; Play / Build: `play.c` (compile in `scene_build.c`, load +
+hot-reload in `scene_runtime.c`). A panel: its own `*.c` (they Begin/End their
+own `Mge_GuiBeginPanel`). A new inspectable kind needs an `inspect_*` in
 `inspector.c` and a hierarchy row; a new movable kind also needs a `Scene_Sel*`
 accessor so `Mge_Gizmo3D` can reach its transform. New serialised fields go in
 `scene_io.c` (writer + parser) or `project_io.c`, with a matching `test_*_io.c`
-check. Textures the scene loads are freed in `Scene_Shutdown` /
-`Scene_DeleteObject`.
+check. New `MgeSceneCtx` fields go in `mge.h` + `play.c`'s `make_ctx`. Textures
+the scene loads are freed in `Scene_Shutdown` / `Scene_DeleteObject`.

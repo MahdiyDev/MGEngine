@@ -16,7 +16,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -80,6 +80,10 @@ test_scene_io$(EXE): test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c .
 # editor project.mgproject (de)serialiser + Project helpers; no engine deps at all
 test_project_io$(EXE): test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c ../editor/project.h ../editor/project_io.h $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c
+
+# dynamic library loading (mge_dylib.c) -- compiles + loads a tiny .dll/.so at runtime
+test_dylib$(EXE): test_dylib.c ../source/mge_dylib.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_dylib.c ../source/mge_dylib.c
 
 test_material$(EXE): test_material.c ../source/mge_material.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_material.c ../source/mge_material.c

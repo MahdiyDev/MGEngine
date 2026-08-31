@@ -14,7 +14,8 @@ typedef struct FileOps {
     TopbarAction pending; // action deferred behind the confirm modal (TOPBAR_NONE = none)
     int pendingArg;
     bool quit;            // set true when the app should exit
-    bool namePrompt;      // the "New Scene" name modal is open
+    bool namePrompt;      // the name-entry modal is open
+    int  promptKind;      // 0 = new scene, 1 = new script
     char nameBuf[64];
 } FileOps;
 

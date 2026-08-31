@@ -637,6 +637,41 @@ typedef struct Object {
 	bool selected;
 } Object;
 
+// --- Hot-reloadable scene modules ------------------------------------------
+//
+// A scene module is a shared library exporting three C functions:
+//
+//   void MgeScene_Init(MgeSceneCtx*);
+//   void MgeScene_Update(MgeSceneCtx*, float dt);
+//   void MgeScene_Shutdown(MgeSceneCtx*);
+//
+// The host (the editor, or your own runtime) compiles it, loads it with
+// Mge_LoadLibrary, and calls it each frame with an MgeSceneCtx pointing at the
+// host's live object / light storage -- so a rebuild-and-reload never loses
+// state. The module links `libmgengine` dynamically and #includes <mge.h>.
+typedef struct MgeSceneCtx {
+	Object*  objects;     // the host's object array
+	int*     objectCount; // live count; the module may grow/shrink within maxObjects
+	int      maxObjects;
+	Light*   lights;      // the host's light array
+	int*     lightCount;
+	int      maxLights;
+	Camera3D camera;      // the host's current view camera
+	int      selected;    // host's selected object index, or -1
+	void*    user;        // host-defined; the module must not touch it
+} MgeSceneCtx;
+
+typedef void (*MgeSceneInitFn)(MgeSceneCtx*);
+typedef void (*MgeSceneUpdateFn)(MgeSceneCtx*, float dt);
+typedef void (*MgeSceneShutdownFn)(MgeSceneCtx*);
+
+// Dynamic library loading (Windows: LoadLibrary; POSIX: dlopen with RTLD_NOW |
+// RTLD_LOCAL). Returns NULL on failure -- Mge_GetDylibError() has the reason.
+void* Mge_LoadLibrary(const char* path);
+void* Mge_GetSymbol(void* handle, const char* name);
+void  Mge_FreeLibrary(void* handle);
+const char* Mge_GetDylibError(void);
+
 // Core
 
 // OpenGL debug output: the driver logs invalid API use / UB / perf warnings as
