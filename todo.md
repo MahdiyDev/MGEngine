@@ -74,18 +74,19 @@ app keeps working the whole way.
 
 ## Phase 0 -- engine prerequisites (do first, they ripple)
 
-- [ ] `Transform { Vector3 position, rotation (euler deg), scale; }` on `Object`;
-      replace the loose `position` / `size` / `rotation`. Update `Draw_CubeEx` /
-      `Draw_SphereEx` / `Draw_Plane` call sites, `mge_gizmo.c`, `mge_stencil.c`,
-      picking, and every example + test. Consider a `parent` index field now
-      (cheap to add, enables hierarchy later) even if unused.
-- [ ] `Object.active` (bool, default **true** -- set in `Mge_MakeObject*`).
-      `Mge_DrawObject` / outline / shadow pass skip when `!active`.
-- [ ] `Mge_SetObjectPrimitive(Object*, PrimitiveKind)` (or just let the inspector
-      write `obj->primitive` -- confirm sphere/plane draw + outline already switch
-      on it; they do).
-- [ ] File API: `Mge_MountPak(path)` + make `Mge_LoadFileData` / `Mge_LoadImage`
-      / `Mge_LoadModel` pak-aware (loose files win in debug, pak in release).
+- [x] `Transform { Vector3 position, rotation (euler deg), scale; int parent; }`
+      on `Object`; replaced the loose `position` / `size` / `rotation`. Updated
+      `mge_object.c`, `mge_stencil.c`, picking, the gizmo call sites, `builder/`
+      (`scene.c` + `sidebar.c`), and every example + test. `parent` is `-1` on a
+      fresh object (hierarchy reserved for Phase 6).
+- [x] `Object.active` (bool, default **true** -- set in `Mge_MakeObject*`).
+      `Mge_DrawObject`, `Mge_DrawObjectOutline` and the builder shadow pass skip
+      when `!active`. Inspector has an **active** checkbox.
+- [x] Inspector writes `obj->primitive` directly (a **primitive** dropdown);
+      sphere / plane draw + outline already switch on it. No setter needed.
+- [ ] (moved to Phase 5) File API: `Mge_MountPak(path)` + make `Mge_LoadFileData`
+      / `Mge_LoadImage` / `Mge_LoadModel` pak-aware -- doesn't ripple through
+      examples/tests, so it belongs with the release bundle work.
 
 ## Phase 1 -- rename + panel layout
 

@@ -241,7 +241,7 @@ static void scene_gizmo(GizmoMode mode, const char* name)
     sun.ambient = 0.35f;
 
     Object o = Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, (Color){ 130, 170, 210, 255 });
-    o.rotation = (Vector3){ 20.0f, 35.0f, 0.0f }; // exercises Draw_CubeEx
+    o.transform.rotation = (Vector3){ 20.0f, 35.0f, 0.0f }; // exercises Draw_CubeEx
 
     Mge_SetGizmoMode(mode);
 
@@ -251,7 +251,7 @@ static void scene_gizmo(GizmoMode mode, const char* name)
     Mge_BeginLighting3D(sun, cam);
     Mge_DrawObject(o);
     Mge_EndLighting3D();
-    Mge_Gizmo3D(&o.position, &o.rotation, &o.size, cam, 2.4f); // no mouse -> just draws
+    Mge_Gizmo3D(&o.transform.position, &o.transform.rotation, &o.transform.scale, cam, 2.4f); // no mouse -> just draws
     Mge_EndMode3D();
     check(name);
     Mge_EndDrawing();
@@ -275,7 +275,7 @@ static void scene_rotate_gizmo(Vector3 camPos, const char* name)
     Mge_BeginLighting3D(sun, cam);
     Mge_DrawObject(o);
     Mge_EndLighting3D();
-    Mge_Gizmo3D(&o.position, &o.rotation, &o.size, cam, 1.7f);
+    Mge_Gizmo3D(&o.transform.position, &o.transform.rotation, &o.transform.scale, cam, 1.7f);
     Mge_EndMode3D();
     check(name);
     Mge_EndDrawing();
@@ -307,7 +307,7 @@ static void scene_scripted_rotate(void)
         Mge_BeginLighting3D(sun, cam);
         Mge_DrawObject(o);
         Mge_EndLighting3D();
-        Mge_Gizmo3D(&o.position, &o.rotation, &o.size, cam, 1.9f);
+        Mge_Gizmo3D(&o.transform.position, &o.transform.rotation, &o.transform.scale, cam, 1.9f);
         Mge_EndMode3D();
         if (f == 2)
             check("scripted_rotate");
@@ -316,8 +316,8 @@ static void scene_scripted_rotate(void)
     Mge_ClearMouseOverride();
 
     printf("    scripted drag -> object euler (%.0f, %.0f, %.0f)\n",
-        (double)o.rotation.x, (double)o.rotation.y, (double)o.rotation.z);
-    if (fabsf(o.rotation.x) + fabsf(o.rotation.y) + fabsf(o.rotation.z) < 1.0f) {
+        (double)o.transform.rotation.x, (double)o.transform.rotation.y, (double)o.transform.rotation.z);
+    if (fabsf(o.transform.rotation.x) + fabsf(o.transform.rotation.y) + fabsf(o.transform.rotation.z) < 1.0f) {
         printf("    scripted_rotate  FAIL  -- the drag did not rotate the object\n");
         g_fails++;
     }

@@ -94,7 +94,7 @@ void Scene_Pick(Scene* s, Camera3D camera)
     float best = 48.0f;
 
     for (int i = 0; i < s->objectCount; i++) {
-        Vector2 sc = Mge_GetWorldToScreenEx(s->objects[i].position, camera, w, h);
+        Vector2 sc = Mge_GetWorldToScreenEx(s->objects[i].transform.position, camera, w, h);
         float d = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
         if (d < best) { best = d; kind = SEL_OBJECT; index = i; }
     }
@@ -113,7 +113,7 @@ void Scene_Pick(Scene* s, Camera3D camera)
 Vector3* Scene_SelPosition(Scene* s)
 {
     if (s->selKind == SEL_OBJECT)
-        return &s->objects[s->selIndex].position;
+        return &s->objects[s->selIndex].transform.position;
     if (s->selKind == SEL_LIGHT && s->lights[s->selIndex].type != LIGHT_DIRECTIONAL)
         return &s->lights[s->selIndex].position;
     return NULL;
@@ -121,12 +121,12 @@ Vector3* Scene_SelPosition(Scene* s)
 
 Vector3* Scene_SelRotation(Scene* s)
 {
-    return (s->selKind == SEL_OBJECT) ? &s->objects[s->selIndex].rotation : NULL;
+    return (s->selKind == SEL_OBJECT) ? &s->objects[s->selIndex].transform.rotation : NULL;
 }
 
 Vector3* Scene_SelScale(Scene* s)
 {
-    return (s->selKind == SEL_OBJECT) ? &s->objects[s->selIndex].size : NULL;
+    return (s->selKind == SEL_OBJECT) ? &s->objects[s->selIndex].transform.scale : NULL;
 }
 
 // fixed -- the gizmo is a constant on-screen tool, it does not track object size
@@ -142,7 +142,8 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
     if (s->shadowsOn) {
         Mge_BeginShadowPass(&s->shadow, s->lights[0], s->shadowCenter, s->shadowRadius);
         for (int i = 0; i < s->objectCount; i++)
-            Mge_DrawPrimitive(s->objects[i], (Color){ 255, 255, 255, 255 });
+            if (s->objects[i].active)
+                Mge_DrawPrimitive(s->objects[i], (Color){ 255, 255, 255, 255 });
         Mge_EndShadowPass();
     }
 

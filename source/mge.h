@@ -615,16 +615,25 @@ typedef struct ModelBatch {
 	int count;                // number of instances
 } ModelBatch;
 
+// Where and how big a thing is. `scale` is the full extents of a primitive
+// (a cube of scale {2,2,2} is 2 units across; a sphere's diameter is scale.x;
+// 2D: {w, h, 0}); default {1,1,1}. `rotation` is XYZ euler degrees.
+typedef struct Transform {
+	Vector3 position;  // centre; z unused for OBJECT_2D
+	Vector3 rotation;  // XYZ euler degrees; {0} = axis-aligned
+	Vector3 scale;     // full extents (see above)
+	int parent;        // index of the parent object, or -1 (hierarchy: reserved)
+} Transform;
+
 typedef struct Object {
 	ObjectKind kind;
 	PrimitiveKind primitive; // 3D shape: cube / sphere / plane (ignored for 2D)
-	Vector3 position;   // centre; z is unused for OBJECT_2D
-	Vector3 size;       // full extents (2D: {w, h, 0})
-	Vector3 rotation;   // XYZ euler degrees (3D only); {0} = axis-aligned
+	Transform transform;
 	Material material;  // surface response: diffuse/specular/normal maps + tint.
 	                    // The diffuse map colour is the object's base colour
 	                    // (2D rects draw with it too).
 	int id;
+	bool active;       // false -> not drawn / not outlined
 	bool selected;
 } Object;
 
@@ -1040,11 +1049,12 @@ Vector2 Mge_GetWorldToScreenEx(Vector3 position, Camera3D camera, int screenWidt
 
 // Objects. The `color` is stored as the material's diffuse-map tint (there is no
 // separate Object.color); pass WHITE for an untinted surface. Mge_MakeObject3D
-// makes a cube -- use Mge_MakeShape3D for a sphere or a plane.
+// makes a cube -- use Mge_MakeShape3D for a sphere or a plane. Constructors set
+// `active = true` and `transform.parent = -1`; `size` fills `transform.scale`.
 Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
 Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
 Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color);
-void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.rotation for 3D objects
+void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.transform.rotation; skips !obj.active
 void   Mge_DrawPrimitive(Object obj, Color color); // just the 3D primitive geometry, one colour
 
 // Mesh -- copies the arrays you pass, then owns them. Upload once, draw many.
@@ -1105,7 +1115,8 @@ void Mge_SetSelectedObject(Object* objects, int count, int index); // select as 
 // while a handle is being dragged -- gate camera control / picking on !that.
 //
 //   Mge_SetGizmoMode(GIZMO_ROTATE);
-//   bool busy = Mge_Gizmo3D(&obj.position, &obj.rotation, &obj.size, camera, 2.0f);
+//   bool busy = Mge_Gizmo3D(&obj.transform.position, &obj.transform.rotation,
+//                           &obj.transform.scale, camera, 2.0f);
 typedef enum {
 	GIZMO_TRANSLATE = 0, // axis arrows
 	GIZMO_ROTATE,        // three rings

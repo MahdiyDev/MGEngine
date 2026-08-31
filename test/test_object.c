@@ -62,16 +62,19 @@ TEST(make_objects)
 {
     Object a = Mge_MakeObject2D(10.0f, 20.0f, 30.0f, 40.0f, RED);
     CHECK(a.kind == OBJECT_2D);
-    CHECK_F(a.position.x, 10.0f);
-    CHECK_F(a.position.y, 20.0f);
-    CHECK_F(a.size.x, 30.0f);
-    CHECK_F(a.size.y, 40.0f);
+    CHECK_F(a.transform.position.x, 10.0f);
+    CHECK_F(a.transform.position.y, 20.0f);
+    CHECK_F(a.transform.scale.x, 30.0f);
+    CHECK_F(a.transform.scale.y, 40.0f);
     CHECK(!a.selected);
+    CHECK(a.active);              // objects start active (drawn)
+    CHECK(a.transform.parent == -1);
 
     Object b = Mge_MakeObject3D((Vector3){ 1, 2, 3 }, (Vector3){ 4, 5, 6 }, GREEN);
     CHECK(b.kind == OBJECT_3D);
-    CHECK_F(b.position.z, 3.0f);
-    CHECK_F(b.size.z, 6.0f);
+    CHECK_F(b.transform.position.z, 3.0f);
+    CHECK_F(b.transform.scale.z, 6.0f);
+    CHECK(b.active);
 
     // a 3D object gets a default material whose diffuse map is tinted with its colour
     CHECK_F(b.material.shininess, 32.0f);
@@ -159,8 +162,8 @@ TEST(manipulate_2d_select_and_body_drag)
     // drag the body by (+50, +30)
     drag_to(150.0f, 130.0f);
     Mge_ManipulateObjects2D(objs, 2, 60.0f);
-    CHECK_F(objs[0].position.x, 150.0f);
-    CHECK_F(objs[0].position.y, 130.0f);
+    CHECK_F(objs[0].transform.position.x, 150.0f);
+    CHECK_F(objs[0].transform.position.y, 130.0f);
     release();
     Mge_ManipulateObjects2D(objs, 2, 60.0f);
 
@@ -184,18 +187,18 @@ TEST(manipulate_2d_axis_constrained_drag)
     Mge_ManipulateObjects2D(objs, 1, axis);
     drag_to(270.0f, 225.0f);
     Mge_ManipulateObjects2D(objs, 1, axis);
-    CHECK_F(objs[0].position.x, 240.0f); // moved along X only
-    CHECK_F(objs[0].position.y, 200.0f); // Y unchanged
+    CHECK_F(objs[0].transform.position.x, 240.0f); // moved along X only
+    CHECK_F(objs[0].transform.position.y, 200.0f); // Y unchanged
     release();
     Mge_ManipulateObjects2D(objs, 1, axis);
 
     // grab the +Y arrow (points up) at the object's *current* position, drag up 30
-    press_at(objs[0].position.x, objs[0].position.y - 30.0f); // ~ (240, 170)
+    press_at(objs[0].transform.position.x, objs[0].transform.position.y - 30.0f); // ~ (240, 170)
     Mge_ManipulateObjects2D(objs, 1, axis);
-    drag_to(objs[0].position.x + 15.0f, objs[0].position.y - 60.0f); // ~ (255, 140)
+    drag_to(objs[0].transform.position.x + 15.0f, objs[0].transform.position.y - 60.0f); // ~ (255, 140)
     Mge_ManipulateObjects2D(objs, 1, axis);
-    CHECK_F(objs[0].position.x, 240.0f); // X unchanged
-    CHECK_F(objs[0].position.y, 170.0f); // moved up by 30
+    CHECK_F(objs[0].transform.position.x, 240.0f); // X unchanged
+    CHECK_F(objs[0].transform.position.y, 170.0f); // moved up by 30
     release();
     Mge_ManipulateObjects2D(objs, 1, axis);
 
@@ -205,9 +208,9 @@ TEST(manipulate_2d_axis_constrained_drag)
 TEST(object_rotation_defaults_to_zero)
 {
     Object o = Mge_MakeObject3D((Vector3){ 1, 2, 3 }, (Vector3){ 1, 1, 1 }, RED);
-    CHECK_F(o.rotation.x, 0.0f);
-    CHECK_F(o.rotation.y, 0.0f);
-    CHECK_F(o.rotation.z, 0.0f);
+    CHECK_F(o.transform.rotation.x, 0.0f);
+    CHECK_F(o.transform.rotation.y, 0.0f);
+    CHECK_F(o.transform.rotation.z, 0.0f);
 }
 
 TEST(pick_object_3d_selects_nearest_screen_centre)
@@ -220,7 +223,7 @@ TEST(pick_object_3d_selects_nearest_screen_centre)
         .fovy = 60.0f, .projection = CAMERA_PERSPECTIVE };
     Mge_ClearSelection(objs, 2);
 
-    Vector2 c1 = Mge_GetWorldToScreenEx(objs[1].position, cam, 800, 600);
+    Vector2 c1 = Mge_GetWorldToScreenEx(objs[1].transform.position, cam, 800, 600);
     press_at(c1.x, c1.y);
     CHECK(Mge_PickObject3D(objs, 2, cam) == 1);
     CHECK(objs[1].selected && !objs[0].selected);

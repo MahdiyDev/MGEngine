@@ -58,7 +58,10 @@ void Draw_CubeEx(Vector3 pos, Vector3 size, Vector3 rot, Color c)
 void Draw_RectangleRec(Rectangle r, Color c) { (void)r; (void)c; }
 
 // lives in mge_object.c (not linked here); the outline only needs the cube path
-void Mge_DrawPrimitive(Object o, Color c) { Draw_CubeEx(o.position, o.size, o.rotation, c); }
+void Mge_DrawPrimitive(Object o, Color c)
+{
+    Draw_CubeEx(o.transform.position, o.transform.scale, o.transform.rotation, c);
+}
 
 // ---- tests ----
 
@@ -138,7 +141,8 @@ TEST(end_stencil_keeps_depth_off_when_it_was_off)
 
 TEST(draw_object_outline_stamps_then_borders)
 {
-    Object box = { .kind = OBJECT_3D, .primitive = PRIM_CUBE, .position = { 0, 0, 0 }, .size = { 2, 2, 2 } };
+    Object box = { .kind = OBJECT_3D, .primitive = PRIM_CUBE, .active = true,
+        .transform = { .position = { 0, 0, 0 }, .scale = { 2, 2, 2 } } };
     g_cubeDraws = 0;
 
     Mge_DrawObjectOutline(box, 0.5f, WHITE);

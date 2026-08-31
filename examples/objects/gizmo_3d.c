@@ -63,7 +63,8 @@ int main(void)
 
         bool busy = false;
         if (sel >= 0)
-            busy = Mge_Gizmo3D(&objects[sel].position, &objects[sel].rotation, &objects[sel].size, camera, 2.0f);
+            busy = Mge_Gizmo3D(&objects[sel].transform.position, &objects[sel].transform.rotation,
+                &objects[sel].transform.scale, camera, 2.0f);
         Mge_EndMode3D();
 
         if (!busy)

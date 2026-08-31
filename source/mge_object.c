@@ -31,8 +31,10 @@ Object Mge_MakeObject2D(float x, float y, float w, float h, Color color)
 {
     Object o = { 0 };
     o.kind = OBJECT_2D;
-    o.position = (Vector3){ x, y, 0.0f };
-    o.size = (Vector3){ w, h, 0.0f };
+    o.active = true;
+    o.transform.position = (Vector3){ x, y, 0.0f };
+    o.transform.scale = (Vector3){ w, h, 0.0f };
+    o.transform.parent = -1;
     o.material = Mge_DefaultMaterial();
     o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
     return o;
@@ -42,9 +44,11 @@ Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, 
 {
     Object o = { 0 };
     o.kind = OBJECT_3D;
+    o.active = true;
     o.primitive = primitive;
-    o.position = position;
-    o.size = size;
+    o.transform.position = position;
+    o.transform.scale = size;
+    o.transform.parent = -1;
     o.material = Mge_DefaultMaterial();
     o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
     return o;
@@ -61,27 +65,29 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
 // lit draw and (via Mge_DrawObjectOutline) the stencil outline.
 void Mge_DrawPrimitive(Object obj, Color color)
 {
+    const Vector3 p = obj.transform.position, s = obj.transform.scale;
     switch (obj.primitive) {
     case PRIM_SPHERE:
-        Draw_SphereEx(obj.position, obj.size.x * 0.5f, 16, 24, color);
+        Draw_SphereEx(p, s.x * 0.5f, 16, 24, color);
         break;
     case PRIM_PLANE:
-        Draw_Plane(obj.position, obj.size.x, obj.size.z, color);
+        Draw_Plane(p, s.x, s.z, color);
         break;
     case PRIM_CUBE:
     default:
-        Draw_CubeEx(obj.position, obj.size, obj.rotation, color);
+        Draw_CubeEx(p, s, obj.transform.rotation, color);
         break;
     }
 }
 
 void Mge_DrawObject(Object obj)
 {
+    if (!obj.active)
+        return;
+
+    const Vector3 p = obj.transform.position, s = obj.transform.scale;
     if (obj.kind == OBJECT_2D) {
-        Rectangle r = {
-            obj.position.x - obj.size.x * 0.5f, obj.position.y - obj.size.y * 0.5f,
-            obj.size.x, obj.size.y
-        };
+        Rectangle r = { p.x - s.x * 0.5f, p.y - s.y * 0.5f, s.x, s.y };
         Draw_RectangleRec(r, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
         if (obj.selected)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_2D, MGE_SELECT_OUTLINE_COLOR);
@@ -95,7 +101,7 @@ void Mge_DrawObject(Object obj)
 
 void Mge_DrawObjectGizmo2D(Object obj, float axisLength)
 {
-    Vector2 o = { obj.position.x, obj.position.y };
+    Vector2 o = { obj.transform.position.x, obj.transform.position.y };
     Draw_Arrow(o, (Vector2){ o.x + axisLength, o.y }, 12.0f, RED);   // +X (right)
     Draw_Arrow(o, (Vector2){ o.x, o.y - axisLength }, 12.0f, GREEN); // +Y (up on screen)
 }
@@ -161,9 +167,9 @@ static float DistPointSegment(Vector2 p, Vector2 a, Vector2 b)
 
 static bool PointInObject2D(Vector2 p, Object o)
 {
-    float hx = fabsf(o.size.x) * 0.5f, hy = fabsf(o.size.y) * 0.5f;
-    return (p.x >= o.position.x - hx) && (p.x <= o.position.x + hx) &&
-        (p.y >= o.position.y - hy) && (p.y <= o.position.y + hy);
+    float hx = fabsf(o.transform.scale.x) * 0.5f, hy = fabsf(o.transform.scale.y) * 0.5f;
+    return (p.x >= o.transform.position.x - hx) && (p.x <= o.transform.position.x + hx) &&
+        (p.y >= o.transform.position.y - hy) && (p.y <= o.transform.position.y + hy);
 }
 
 // ----- manipulation -----
@@ -224,7 +230,7 @@ int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength)
 
         // 1. axis arrows of the currently selected object
         if (g_active >= 0 && g_active < count) {
-            Vector3 p = objects[g_active].position;
+            Vector3 p = objects[g_active].transform.position;
             Vector2 origin = { p.x, p.y };
             Vector2 xEnd = { origin.x + axisLength, origin.y };
             Vector2 yEnd = { origin.x, origin.y - axisLength };
@@ -249,13 +255,13 @@ int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength)
         }
 
         if (g_drag != DRAG_NONE && g_active >= 0) {
-            g_dragStartPos = objects[g_active].position;
+            g_dragStartPos = objects[g_active].transform.position;
             g_dragStartMouse = m;
         }
     }
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && g_drag != DRAG_NONE && g_active >= 0 && g_active < count) {
-        Vector3* pos = &objects[g_active].position;
+        Vector3* pos = &objects[g_active].transform.position;
         Vector2 d = { m.x - g_dragStartMouse.x, m.y - g_dragStartMouse.y };
         if (g_drag == DRAG_X) {
             pos->x = g_dragStartPos.x + d.x;
@@ -288,7 +294,7 @@ int Mge_PickObject3D(Object* objects, int count, Camera3D camera)
         for (int i = 0; i < count; i++) {
             if (objects[i].kind != OBJECT_3D)
                 continue;
-            Vector2 sc = Mge_GetWorldToScreenEx(objects[i].position, camera, w, h);
+            Vector2 sc = Mge_GetWorldToScreenEx(objects[i].transform.position, camera, w, h);
             float dd = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
             if (dd < bestD) {
                 bestD = dd;

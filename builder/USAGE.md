@@ -59,7 +59,7 @@ up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when f
 
   | selection | fields |
   | --- | --- |
-  | **Object** | primitive label, position, **rotation** (euler °), size; `shininess`; then one **group per material map** — diffuse / specular / normal |
+  | **Object** | **active** toggle, **primitive** dropdown (cube / sphere / plane), then the `Transform` — position, **rotation** (euler °), size (= `transform.scale`); `shininess`; then one **group per material map** — diffuse / specular / normal |
   | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 
   Above the groups: **shininess**, **tiling** / **offset** (the per-material UV

@@ -20,7 +20,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_math.h mge_math.c  Vector2/3/4, Matrix, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
-  mge_object.c          Object struct (primitive/position/rotation/size/material) + 3D picking
+  mge_object.c          Object struct (primitive + Transform + material, active flag) + 3D picking
   mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
   mge_dialog.c          native "open file" dialog (Mge_OpenFileDialog / Mge_OpenImageDialog)
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
@@ -484,15 +484,20 @@ while (!Mge_WindowShouldClose()) {
 ### Objects & the manipulation gizmo
 
 An `Object` is a movable rectangle (`OBJECT_2D`) or a 3D primitive (`OBJECT_3D`:
-`PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`) with a `position`
-(centre), `size`, `rotation` (XYZ euler degrees, 3D only), a `material`, an `id`
-and a `selected` flag. There is **no `Object.color`** — the base colour is the
+`PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`). Its placement
+lives in `obj.transform` — a `Transform { Vector3 position, rotation (XYZ euler
+degrees), scale; int parent; }` where `scale` is the full extents (a cube of
+scale `{2,2,2}` is 2 units across; a sphere's diameter is `scale.x`); `parent`
+is reserved for hierarchy and is `-1` on a fresh object. An object also has a
+`material`, an `id`, an `active` flag (false → not drawn / not outlined) and a
+`selected` flag. There is **no `Object.color`** — the base colour is the
 diffuse map's tint (`obj.material.maps[MATERIAL_MAP_DIFFUSE].color`); the
-`Mge_MakeObject*` constructors still take a `Color` and store it there.
-`Mge_MakeObject3D` makes a cube; `Mge_MakeShape3D(primitive, pos, size, color)`
-makes any of the three. `Mge_DrawObject` renders the primitive rotated (cube
-corners + normals are rotated on the CPU — there is no per-object model matrix),
-with a stencil outline when `selected`. `Mge_DrawPrimitive(obj, color)` draws just
+`Mge_MakeObject*` constructors still take a `Color` and store it there, and set
+`active = true`. `Mge_MakeObject3D` makes a cube;
+`Mge_MakeShape3D(primitive, pos, size, color)` makes any of the three.
+`Mge_DrawObject` renders the primitive rotated (cube corners + normals are
+rotated on the CPU — there is no per-object model matrix), with a stencil
+outline when `selected`, and draws nothing when `!active`. `Mge_DrawPrimitive(obj, color)` draws just
 the geometry (used by the shadow pass and the outline).
 
 **Picking** (3D): `Mge_PickObject3D(objects, count, camera)` selects the object
@@ -536,7 +541,8 @@ Mge_BeginMode3D(camera);
     for (...) Mge_DrawObject(objs[i]);
     bool busy = false;
     if (sel >= 0)
-        busy = Mge_Gizmo3D(&objs[sel].position, &objs[sel].rotation, &objs[sel].size, camera, 2.0f);
+        busy = Mge_Gizmo3D(&objs[sel].transform.position, &objs[sel].transform.rotation,
+                           &objs[sel].transform.scale, camera, 2.0f);
 Mge_EndMode3D();
 if (!busy) Mge_PickObject3D(objs, n, camera); // don't re-pick mid-drag
 ```
@@ -636,7 +642,7 @@ Mge_BeginMode3D(camera);
                                    .maps[MATERIAL_MAP_SPECULAR].value = 1.0f, .shininess = 8 });
         Draw_Cube((Vector3){ 0, -1, 0 }, (Vector3){ 24, 0.1f, 24 }, GRAY); // lit floor
     Mge_EndLighting3D();
-    if (sel >= 0) Mge_Gizmo3D(&box.position, &box.rotation, &box.size, camera, 2.0f);
+    if (sel >= 0) Mge_Gizmo3D(&box.transform.position, &box.transform.rotation, &box.transform.scale, camera, 2.0f);
 Mge_EndMode3D();
 ```
 
@@ -1313,7 +1319,7 @@ Mge_GuiBeginFrame();                         // after the 3D/2D scene
     if (Mge_GuiBeginSidebar("Scene", 300, false)) {   // full-height dock on the left
         if (Mge_GuiSelectable("Cube 0", sel == 0)) sel = 0;
         Mge_GuiSeparator();
-        Mge_GuiInputVec3("position", &obj.position);   // "draw input" for a Vector3
+        Mge_GuiInputVec3("position", &obj.transform.position);   // "draw input" for a Vector3
         Mge_GuiInputColor("diffuse", &mat.maps[MATERIAL_MAP_DIFFUSE].color); // 8-bit RGBA swatch
         Mge_GuiSliderFloat("shininess", &mat.shininess, 1, 128);
         if (Mge_GuiImageButton("albedo", tex.id, 56.0f)) { /* open a file picker */ }

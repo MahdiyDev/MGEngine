@@ -58,11 +58,18 @@ static void inspect_object(Scene* s)
     Object* o = &s->objects[s->selIndex];
     unsigned char* wrap = s->texWrap[s->selIndex];
 
-    static const char* prims[3] = { "cube (3D)", "sphere (3D)", "plane (3D)" };
-    Mge_GuiLabel(o->kind == OBJECT_3D ? prims[o->primitive] : "rect (2D)");
-    Mge_GuiInputVec3("position", &o->position);
-    Mge_GuiInputVec3("rotation", &o->rotation);
-    Mge_GuiInputVec3("size", &o->size);
+    static const char* prims[3] = { "cube", "sphere", "plane" };
+    Mge_GuiCheckbox("active", &o->active);
+    if (o->kind == OBJECT_3D) {
+        int prim = o->primitive;
+        if (Mge_GuiCombo("primitive", &prim, prims, 3))
+            o->primitive = (PrimitiveKind)prim;
+    } else {
+        Mge_GuiLabel("rect (2D)");
+    }
+    Mge_GuiInputVec3("position", &o->transform.position);
+    Mge_GuiInputVec3("rotation", &o->transform.rotation);
+    Mge_GuiInputVec3("size", &o->transform.scale);
     Mge_GuiSeparator();
 
     Mge_GuiLabel("material");

@@ -71,24 +71,26 @@ void Mge_EndStencil(void)
 
 void Mge_DrawObjectOutline(Object obj, float thickness, Color color)
 {
+    if (!obj.active)
+        return;
+
+    const Vector3 p = obj.transform.position, s = obj.transform.scale;
+
     Mge_BeginStencilMask();
     if (obj.kind == OBJECT_3D) {
         Mge_DrawPrimitive(obj, color); // colour is irrelevant here -- colour mask is off
     } else {
-        Rectangle r = { obj.position.x - obj.size.x * 0.5f, obj.position.y - obj.size.y * 0.5f,
-            obj.size.x, obj.size.y };
-        Draw_RectangleRec(r, color);
+        Draw_RectangleRec((Rectangle){ p.x - s.x * 0.5f, p.y - s.y * 0.5f, s.x, s.y }, color);
     }
 
     Mge_BeginStencilOutside();
     if (obj.kind == OBJECT_3D) {
         Object shell = obj;
-        shell.size = (Vector3){ obj.size.x + thickness, obj.size.y + thickness, obj.size.z + thickness };
+        shell.transform.scale = (Vector3){ s.x + thickness, s.y + thickness, s.z + thickness };
         Mge_DrawPrimitive(shell, color);
     } else {
-        float w = obj.size.x + thickness;
-        float h = obj.size.y + thickness;
-        Draw_RectangleRec((Rectangle){ obj.position.x - w * 0.5f, obj.position.y - h * 0.5f, w, h }, color);
+        float w = s.x + thickness, h = s.y + thickness;
+        Draw_RectangleRec((Rectangle){ p.x - w * 0.5f, p.y - h * 0.5f, w, h }, color);
     }
 
     Mge_EndStencil();
