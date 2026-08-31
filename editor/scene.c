@@ -1,14 +1,26 @@
 #include "scene.h"
+#include "pathutil.h"
 
 #include <mge_math.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-void Scene_Init(Scene* s, int width, int height)
+// Reset the entity + settings fields to a fresh default scene, without touching
+// the GL resources (shadow map / HDR target / bloom / sky). Shared by
+// Scene_Init and Scene_New.
+static void reset_data(Scene* s)
 {
-    *s = (Scene){ 0 };
-    strcpy(s->name, "untitled");
+    for (int i = 0; i < s->objectCount; i++)
+        for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
+            Mge_UnloadTexture(s->objects[i].material.maps[m].texture);
+
+    memset(s->objects, 0, sizeof(s->objects));
+    memset(s->objectNames, 0, sizeof(s->objectNames));
+    memset(s->texWrap, 0, sizeof(s->texWrap));
+    memset(s->texPath, 0, sizeof(s->texPath));
+    memset(s->lights, 0, sizeof(s->lights));
+    memset(s->lightNames, 0, sizeof(s->lightNames));
 
     s->objects[0] = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0.0f, -1.1f, 0.0f }, (Vector3){ 24.0f, 0.2f, 24.0f }, (Color){ 90, 95, 105, 255 });
     s->objects[1] = Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
@@ -30,22 +42,68 @@ void Scene_Init(Scene* s, int width, int height)
     s->selKind = SEL_NONE;
     s->selIndex = 0;
 
-    s->shadow = Mge_LoadShadowMap(2048);
+    strcpy(s->name, "untitled");
+    s->path[0] = '\0';
+    s->dirty = false;
+
     s->shadowsOn = true;
     s->shadowCenter = (Vector3){ 0.0f, 0.0f, 0.0f };
     s->shadowRadius = 14.0f;
+    s->hdrOn = false; // opt-in -- tone mapping also affects the (LDR) skybox
+    s->toneMap = TONEMAP_ACES;
+    s->exposure = 1.0f;
+    s->bloomOn = false;
+}
+
+void Scene_Init(Scene* s, int width, int height)
+{
+    *s = (Scene){ 0 };
+
+    s->shadow = Mge_LoadShadowMap(2048);
 
     s->sky = Mge_LoadCubemapDir("assets/skybox");
     if (s->sky.id == 0)
         s->sky = Mge_LoadCubemapDir("../assets/skybox");
 
     s->hdrRT = Mge_LoadRenderTextureHDR(width, height);
-    s->hdrOn = false; // opt-in -- tone mapping also affects the (LDR) skybox
-    s->toneMap = TONEMAP_ACES;
-    s->exposure = 1.0f;
-
     s->bloom = Mge_LoadBloom(width, height);
-    s->bloomOn = false;
+
+    reset_data(s);
+}
+
+void Scene_New(Scene* s)
+{
+    reset_data(s);
+}
+
+void Scene_LoadMaterialTextures(Scene* s)
+{
+    char dir[512];
+    Path_Dir(s->path, dir, sizeof(dir));
+
+    for (int i = 0; i < s->objectCount; i++) {
+        for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+            Mge_UnloadTexture(s->objects[i].material.maps[m].texture);
+            s->objects[i].material.maps[m].texture = (Texture2D){ 0 };
+
+            const char* rel = s->texPath[i][m];
+            if (rel[0] == '\0')
+                continue;
+
+            char full[1024];
+            if (Path_IsAbsolute(rel))
+                snprintf(full, sizeof(full), "%s", rel);
+            else
+                Path_Join(dir, rel, full, sizeof(full));
+
+            Texture2D t = Mge_LoadTextureEx(full, m == MATERIAL_MAP_DIFFUSE);
+            if (t.id == 0 && !Path_IsAbsolute(rel)) // fall back to a cwd-relative path
+                t = Mge_LoadTextureEx(rel, m == MATERIAL_MAP_DIFFUSE);
+            s->objects[i].material.maps[m].texture = t;
+            if (t.id != 0)
+                Mge_SetTextureWrap(t, s->texWrap[i][m]);
+        }
+    }
 }
 
 void Scene_Shutdown(Scene* s)
@@ -81,6 +139,7 @@ void Scene_AddShape(Scene* s, PrimitiveKind primitive)
 
     s->selKind = SEL_OBJECT;
     s->selIndex = i;
+    s->dirty = true;
 }
 
 void Scene_AddLight(Scene* s)
@@ -94,6 +153,7 @@ void Scene_AddLight(Scene* s)
 
     s->selKind = SEL_LIGHT;
     s->selIndex = i;
+    s->dirty = true;
 }
 
 void Scene_DeleteObject(Scene* s, int index)
@@ -108,8 +168,10 @@ void Scene_DeleteObject(Scene* s, int index)
         s->objects[i] = s->objects[i + 1];
         memcpy(s->objectNames[i], s->objectNames[i + 1], sizeof(s->objectNames[i]));
         memcpy(s->texWrap[i], s->texWrap[i + 1], sizeof(s->texWrap[i]));
+        memcpy(s->texPath[i], s->texPath[i + 1], sizeof(s->texPath[i]));
     }
     s->objectCount--;
+    s->dirty = true;
 
     if (s->selKind == SEL_OBJECT) {
         if (s->selIndex == index)
@@ -129,6 +191,7 @@ void Scene_DeleteLight(Scene* s, int index)
         memcpy(s->lightNames[i], s->lightNames[i + 1], sizeof(s->lightNames[i]));
     }
     s->lightCount--;
+    s->dirty = true;
 
     if (s->selKind == SEL_LIGHT) {
         if (s->selIndex == index)

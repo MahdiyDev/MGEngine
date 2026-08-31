@@ -6,10 +6,13 @@ A scene editor built on top of the engine library — see
 
 | file | contents |
 | --- | --- |
-| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, and the shared `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair every panel draws into |
-| `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held |
-| `scene.c` / `scene.h` | `Scene`: name, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_DeleteObject` / `Scene_DeleteLight`, and the render passes (shadow + lit + gizmo + skybox) |
-| `topbar.c` / `.h` | the **top** strip: scene name, Open / Save / Build (stubs until Phase 2/3), VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
+| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, **F12** screenshot, the close-button guard, and the shared `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair every panel draws into |
+| `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |
+| `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects, lights, selection, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures`, and the render passes (shadow + lit + gizmo + skybox) |
+| `scene_io.c` / `.h` | `scene.mge` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
+| `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `MakeDirs` / `CopyFile` — small path + fs helpers for scene I/O |
+| `sceneops.c` / `.h` | executes File-menu actions (New / Open / Save / Save As / Build / Quit) with the unsaved-changes confirm modal |
+| `topbar.c` / `.h` | the **top** strip: a **File** menu, scene name + `*` dirty marker, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: objects + lights as a flat list. `+ add` menu (Cube / Sphere / Plane / Light), per-row select, **double-click to rename**, active/enabled checkbox, `x` to delete |
 | `inspector.c` / `.h` | the **right** panel: a type-aware inspector for the selection (Object: active, primitive, transform, material slots. Light: type, colour, attenuation / direction) |
 | `resources.c` / `.h` | the **bottom** panel: the per-scene resource explorer — a stub until Phase 4 |
@@ -50,6 +53,74 @@ via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 
 Panels are only clickable in EDIT mode. Engine input is suppressed while a widget
 has focus (`Mge_GuiWantsMouse` / `Mge_GuiWantsKeyboard`).
+
+## Scenes (`scene.mge`)
+
+The top-bar **File** menu:
+
+| item | |
+| --- | --- |
+| **New** | reset to a fresh default scene (floor + sun + lamp) |
+| **Open...** | native file dialog → pick a `.mge`; textures resolve against its folder |
+| **Save** | write back to the current file (or prompt if the scene was never saved) |
+| **Save As...** | native save dialog → writes `<name>.mge`, creates `<name>/res/`, and scaffolds a `<name>.c` template (Phase 3 compiles it) |
+| **Build** | stub until Phase 3 |
+
+The title shows the scene name with a trailing `*` while there are unsaved edits.
+**New / Open** and the window close button, when the scene is dirty, first pop a
+**Save / Discard / Cancel** modal.
+
+`scene.mge` is a flat, indentation-cosmetic, line-based text format — diffable,
+no JSON dependency. One `object` / `light` block per entity, plus `camera` and
+`render` sections:
+
+```
+mgescene 1
+name "my scene"
+
+camera
+  position 0 3.5 13
+  target 0 0 -1
+  up 0 1 0
+  fov 60
+
+render
+  shadows 1
+  hdr 0
+  tonemap 2
+  exposure 1
+  bloom 0
+  msaa 1
+
+object "Floor"
+  primitive plane          # cube | sphere | plane
+  active 1
+  position 0 -1.1 0
+  rotation 0 0 0            # XYZ euler degrees
+  scale 24 0.2 24
+  shininess 32
+  tiling 1 1
+  offset 0 0
+  triplanar 0
+  triplanarScale 1
+  m0.color 90 95 105 255    # m0..m3 = diffuse / specular / normal / height
+  m0.value 1
+  m0.wrap 0
+  m0.texture "res/floor.png"   # relative to the scene dir; absolute also works
+
+light "Sun"
+  type directional         # directional | point | spot
+  enabled 1
+  direction -0.5 -1 -0.4
+  color 0.7 0.7 0.8
+  ambient 0.22
+  ...
+```
+
+Texture references are stored as `res/<file>` — on **Save**, any texture whose
+source lies outside the scene's `res/` is copied in and the path rewritten.
+`Scene_Load` fills the data only; `Scene_LoadMaterialTextures` then brings the
+textures onto the GPU. `#` starts a comment.
 
 ## The Hierarchy (left panel)
 

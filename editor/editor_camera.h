@@ -14,6 +14,11 @@ typedef struct EditorCamera {
 
 void EditorCamera_Init(EditorCamera* c);
 
+// Jump the camera to `cam` (position / target / up / fov), re-deriving yaw/pitch
+// from the target direction so the fly-cam keeps working. Used after loading a
+// scene.
+void EditorCamera_SetPose(EditorCamera* c, Camera3D cam);
+
 // Advance one frame. `editMode` false = always fly. `guiMouse` gates starting a
 // look-drag so a click on a panel doesn't grab the camera. Toggles the OS cursor
 // as needed.

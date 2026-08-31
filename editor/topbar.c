@@ -41,27 +41,34 @@ static void render_menu(Scene* s)
     Mge_GuiEndMenu();
 }
 
-void Topbar_Draw(Rectangle rect, Scene* s, bool* editMode)
+static TopbarAction file_menu(Scene* s)
+{
+    TopbarAction act = TOPBAR_NONE;
+    if (!Mge_GuiBeginMenu("File"))
+        return act;
+    if (Mge_GuiMenuItem("New")) act = TOPBAR_NEW;
+    if (Mge_GuiMenuItem("Open...")) act = TOPBAR_OPEN;
+    if (Mge_GuiMenuItem(s->path[0] ? "Save" : "Save...")) act = TOPBAR_SAVE;
+    if (Mge_GuiMenuItem("Save As...")) act = TOPBAR_SAVE_AS;
+    if (Mge_GuiMenuItem("Build")) act = TOPBAR_BUILD;
+    Mge_GuiEndMenu();
+    return act;
+}
+
+TopbarAction Topbar_Draw(Rectangle rect, Scene* s, bool* editMode)
 {
     if (!Mge_GuiBeginPanel("##topbar", rect.x, rect.y, rect.width, rect.height)) {
         Mge_GuiEndPanel();
-        return;
+        return TOPBAR_NONE;
     }
 
-    // scene name
-    Mge_GuiSetNextItemWidth(150.0f);
-    Mge_GuiInputText("##scene", s->name, (int)sizeof(s->name));
+    TopbarAction act = file_menu(s);
     Mge_GuiSameLine();
 
-    // file actions -- wired up in Phase 2 / 3
-    if (Mge_GuiButton("Open"))
-        printf("[editor] Open: scene files land in Phase 2\n");
-    Mge_GuiSameLine();
-    if (Mge_GuiButton("Save"))
-        printf("[editor] Save: scene files land in Phase 2\n");
-    Mge_GuiSameLine();
-    if (Mge_GuiButton("Build"))
-        printf("[editor] Build: scene-as-code lands in Phase 3\n");
+    // scene name + unsaved marker
+    char title[80];
+    snprintf(title, sizeof(title), "%s%s", s->name, s->dirty ? " *" : "");
+    Mge_GuiLabel(title);
     Mge_GuiSameLine();
     Mge_GuiSeparator();
     Mge_GuiSameLine();
@@ -87,4 +94,5 @@ void Topbar_Draw(Rectangle rect, Scene* s, bool* editMode)
     render_menu(s);
 
     Mge_GuiEndPanel();
+    return act;
 }

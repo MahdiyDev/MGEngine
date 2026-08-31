@@ -47,6 +47,14 @@ void EditorCamera_Init(EditorCamera* c)
     c->looking = false;
 }
 
+void EditorCamera_SetPose(EditorCamera* c, Camera3D cam)
+{
+    c->cam = cam;
+    Vector3 d = Vector3Normalize(cam.target);
+    c->pitch = Clamp(asinf(d.y) * RAD2DEG, -89.0f, 89.0f);
+    c->yaw = atan2f(d.z, d.x) * RAD2DEG;
+}
+
 void EditorCamera_Update(EditorCamera* c, bool editMode, bool guiMouse)
 {
     if (!editMode) {

@@ -118,18 +118,27 @@ app keeps working the whole way.
 - [x] Added `Mge_TakeScreenshot` / `MgeGL_SaveScreenshot` (`mge_screenshot.c`,
       stb_image_write) -- editor F12, render-smoke round-trip, USAGE section.
 
-## Phase 2 -- scene as data
+## Phase 2 -- scene as data   [DONE]
 
-- [ ] `scene.mge` text format (line/section based, diffable -- no JSON dep):
-      one block per object (`primitive`, `transform`, `active`, `name`, material
-      slots with `res/`-relative texture paths + colours/values) and per light;
-      plus the editor camera (pos/target/fov).
-- [ ] `Scene_Save` / `Scene_Load` in `scene_io.c`. Texture paths are stored
-      relative to the scene's `res/`; loading resolves against it.
-- [ ] Open-scene flow (file dialog -> pick `scenes/<name>/`), Save, Save As.
-- [ ] New-scene scaffold: create `scenes/<name>/` + template `<name>.c` +
-      empty `scene.mge` + `res/`.
-- [ ] Unsaved-changes guard on scene switch / editor exit.
+- [x] `scene.mge` text format (flat, line-based, diffable, no JSON): `camera` +
+      `render` sections, one `object` / `light` block per entity (primitive,
+      transform, active, name, `m0..m3` material slots with `res/`-relative
+      texture paths + colours/values/wrap). `#` comments.
+- [x] `Scene_Save` / `Scene_Load` in `scene_io.c` -- **data only, no GL**.
+      `Scene_LoadMaterialTextures` (in `scene.c`) brings textures onto the GPU
+      afterwards. On Save, textures outside `res/` are copied in + paths rewritten.
+      Path helpers in `pathutil.c`. Unit test: `test/test_scene_io.c` (round-trip
+      + path helpers, hermetic).
+- [x] File menu (New / Open / Save / Save As / Build) in `topbar.c`; actions +
+      guard in `sceneops.c`. Engine additions: `Mge_SaveFileDialog`,
+      `Mge_SetWindowShouldClose`, `Mge_GuiOpenPopup/BeginPopup/EndPopup/ClosePopup`.
+- [x] Save As scaffolds `<dir>/res/` + a `<name>.c` scene-code template (Phase 3).
+- [x] Unsaved-changes guard: `Scene.dirty` (set by every mutator / inspector edit
+      / gizmo drag / rename); New / Open / window-close pop a Save/Discard/Cancel
+      modal. Scene name in the top bar shows a `*` while dirty.
+- Deferred: a `scenes/<name>/` convention isn't enforced -- Save As writes the
+  `.mge` wherever the user picks and treats that folder as the scene root. The
+  new-scene *directory* scaffold (vs. just the template `.c`) can come with Phase 3.
 
 ## Phase 3 -- scene as code + hot reload
 

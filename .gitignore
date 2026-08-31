@@ -32,3 +32,5 @@ examples/lighting/specular
 
 test/render_out/
 test/render_smoke
+test/scene_io_tmp/
+test/test_scene_io

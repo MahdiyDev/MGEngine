@@ -24,6 +24,7 @@ static void commit_rename(Scene* s)
         snprintf(s->lightNames[s_renameIndex], sizeof(s->lightNames[s_renameIndex]), "%s", s_renameBuf);
     s_renameKind = SEL_NONE;
     s_renameIndex = -1;
+    s->dirty = true;
 }
 
 // One list row. Returns the index to delete (via *del), else leaves it.
@@ -32,7 +33,8 @@ static void entity_row(Scene* s, int kind, int i, const char* name, bool* active
     char id[32];
     snprintf(id, sizeof(id), "##%s%d", kind == SEL_OBJECT ? "o" : "l", i);
 
-    Mge_GuiCheckbox(id, activeFlag); // active (object) / enabled (light)
+    if (Mge_GuiCheckbox(id, activeFlag)) // active (object) / enabled (light)
+        s->dirty = true;
     Mge_GuiSameLine();
 
     if (s_renameKind == kind && s_renameIndex == i) {

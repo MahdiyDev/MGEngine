@@ -16,7 +16,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -72,6 +72,10 @@ test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../
 
 test_gizmo$(EXE): test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c -lm
+
+# editor scene.mge (de)serialiser + path helpers; scene_io.c's engine deps are stubbed in the test
+test_scene_io$(EXE): test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c ../editor/scene.h ../editor/scene_io.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c -lm
 
 test_material$(EXE): test_material.c ../source/mge_material.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_material.c ../source/mge_material.c

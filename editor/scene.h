@@ -9,12 +9,20 @@ enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT };
 #define SCENE_MAX_OBJECTS 8
 #define SCENE_MAX_LIGHTS  4
 
+#define SCENE_TEXPATH_LEN 128
+
 typedef struct Scene {
-    char name[64]; // shown in the top bar; the scene folder / file stem later
+    char name[64];  // shown in the top bar; the scene-file stem
+    char path[512]; // absolute path to this scene's `scene.mge` ("" = never saved)
+    bool dirty;     // unsaved edits since the last load / save
 
     Object objects[SCENE_MAX_OBJECTS];
     char objectNames[SCENE_MAX_OBJECTS][24]; // mutable: the hierarchy names + renames spawned shapes
     unsigned char texWrap[SCENE_MAX_OBJECTS][MATERIAL_MAP_COUNT]; // TextureWrap per map slot (0 = REPEAT)
+    // source path of each material-map texture, relative to the scene dir (or
+    // absolute); "" = no texture. Kept in step with the GL ids so the scene can
+    // be serialised and reloaded.
+    char texPath[SCENE_MAX_OBJECTS][MATERIAL_MAP_COUNT][SCENE_TEXPATH_LEN];
     int objectCount;
 
     Light lights[SCENE_MAX_LIGHTS]; // [0] = sun (directional, casts shadow), [1] = lamp (point)
@@ -42,6 +50,13 @@ typedef struct Scene {
 
 void Scene_Init(Scene* s, int width, int height);
 void Scene_Shutdown(Scene* s);
+
+// Reset to a fresh default scene (floor + sun + lamp), name "untitled", no path.
+void Scene_New(Scene* s);
+
+// (Re)load every material-map texture from `texPath` into the GL ids, resolving
+// relative paths against the scene's directory. Call after Scene_Load.
+void Scene_LoadMaterialTextures(Scene* s);
 
 // Spawn a primitive at the origin, name it, and select it. No-op when the scene
 // is full (SCENE_MAX_OBJECTS).

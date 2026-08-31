@@ -216,6 +216,28 @@ void Mge_GuiEndMenu(void)
     ImGui::PopID();
 }
 
+void Mge_GuiOpenPopup(const char* id)
+{
+    if (s_inFrame)
+        ImGui::OpenPopup(id);
+}
+bool Mge_GuiBeginPopup(const char* id)
+{
+    if (!s_inFrame)
+        return false;
+    return ImGui::BeginPopupModal(id, nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+}
+void Mge_GuiEndPopup(void)
+{
+    if (s_inFrame)
+        ImGui::EndPopup();
+}
+void Mge_GuiClosePopup(void)
+{
+    if (s_inFrame)
+        ImGui::CloseCurrentPopup();
+}
+
 bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size)
 {
     if (!s_inFrame)

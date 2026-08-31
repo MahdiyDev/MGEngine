@@ -22,7 +22,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
   mge_object.c          Object struct (primitive + Transform + material, active flag) + 3D picking
   mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
-  mge_dialog.c          native "open file" dialog (Mge_OpenFileDialog / Mge_OpenImageDialog)
+  mge_dialog.c          native file dialogs (Mge_OpenFileDialog / Mge_OpenImageDialog / Mge_SaveFileDialog)
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
   mge_pbr.c            physically-based rendering -- Cook-Torrance BRDF + material
   mge_ibl.c            image-based lighting precompute (irradiance / prefilter / BRDF LUT)
@@ -49,10 +49,13 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
 editor/                THE APP -- scene editor (docked panel shell around a viewport)
-  main.c               window, loop, panel-rectangle layout, the shared Mge_Gui frame
+  main.c               window, loop, panel-rectangle layout, close guard, the shared Mge_Gui frame
   editor_camera.c/.h   the yaw/pitch fly-cam (VIEW = always fly, EDIT = fly on RIGHT mouse)
-  scene.c/.h           entities, selection, picking, add/delete, the render passes
-  topbar.c/.h          top strip: scene name, file actions, mode, gizmo, Render menu
+  scene.c/.h           entities, selection, picking, add/delete/new, the render passes
+  scene_io.c/.h        scene.mge read/write (Scene_Save / Scene_Load) -- flat text, data only
+  pathutil.c/.h        path + fs helpers (dir/base/join/isabsolute/mkdirs/copyfile)
+  sceneops.c/.h        File-menu actions + the unsaved-changes confirm modal
+  topbar.c/.h          top strip: File menu, scene name, mode, gizmo, Render menu
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
   inspector.c/.h       right panel: the type-aware inspector (+ texture slots)
   resources.c/.h       bottom panel: per-scene resource explorer (stub until Phase 4)
@@ -227,6 +230,11 @@ int main(void)
     return 0;
 }
 ```
+
+`Mge_WindowShouldClose()` latches true on the window's X button or **ESC**.
+`Mge_SetWindowShouldClose(false)` clears it — call it to cancel a quit and show a
+"save first?" prompt, then exit the loop yourself once the user confirms (the
+editor's close guard does this).
 
 3D uses a `Camera3D` (passed **by value**) between `Mge_BeginMode3D` /
 `Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Sphere` /
@@ -953,9 +961,11 @@ Demo: `examples/materials/tiling_triplanar.c`.
 Linux: `zenity`, then `kdialog`) filtered to image extensions and returns a
 **malloc'd** path you `free()`, or `NULL` on cancel / when no backend is present.
 `Mge_OpenFileDialog(title, filterName, filterExts)` is the general form
-(`filterExts` is `;`-separated, e.g. `"*.png;*.jpg"`). The dialog never changes
-the process working directory. The editor's inspector uses it for the three
-material-map thumbnails (`Mge_GuiImageButton`).
+(`filterExts` is `;`-separated, e.g. `"*.png;*.jpg"`), and
+`Mge_SaveFileDialog(title, filterName, filterExts, defaultName)` is the save
+counterpart (overwrite prompt, pre-filled name). The dialogs never change the
+process working directory. The editor's inspector uses the open dialog for the
+material-map thumbnails; the File menu uses both for `scene.mge` open / save.
 
 ### Mesh
 
@@ -1357,6 +1367,7 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | frame | `Mge_GuiBeginFrame` / `Mge_GuiEndFrame`, `Mge_GuiShutdown` |
 | boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (full-height edge dock) / `Mge_GuiBeginPanel` (exact screen rect, no title bar — for a docked shell) + matching `End*` |
 | widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiSetNextItemWidth`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiSelectableEx` (reports double-click), `Mge_GuiImageButton` (square texture thumbnail; id `0` → a "+" placeholder), `Mge_GuiBeginMenu` / `Mge_GuiMenuItem` / `Mge_GuiEndMenu` (button → popup menu) |
+| modals | `Mge_GuiOpenPopup` (trigger) + `Mge_GuiBeginPopup` / `Mge_GuiEndPopup` (every frame) + `Mge_GuiClosePopup` (dismiss from inside) |
 | inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputText`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
 
 Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /

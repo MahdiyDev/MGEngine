@@ -71,6 +71,16 @@ bool Mge_GuiBeginMenu(const char* label);
 bool Mge_GuiMenuItem(const char* label);
 void Mge_GuiEndMenu(void);
 
+// Modal popups. Call Mge_GuiOpenPopup(id) once to trigger; then every frame call
+// Mge_GuiBeginPopup(id) -- it returns true only while open, wrap the body and
+// call Mge_GuiEndPopup. Mge_GuiClosePopup() dismisses it from inside.
+//   if (savePressed) Mge_GuiOpenPopup("confirm");
+//   if (Mge_GuiBeginPopup("confirm")) { ...; if (ok) Mge_GuiClosePopup(); Mge_GuiEndPopup(); }
+void Mge_GuiOpenPopup(const char* id);
+bool Mge_GuiBeginPopup(const char* id);
+void Mge_GuiEndPopup(void);
+void Mge_GuiClosePopup(void);
+
 // A square thumbnail button. `textureId` is a GL texture id (Texture2D.id); pass
 // 0 for an empty slot (draws a bordered "+" placeholder). True the frame it is
 // clicked. `strId` must be unique among sibling widgets.

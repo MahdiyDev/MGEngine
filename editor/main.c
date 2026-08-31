@@ -7,14 +7,15 @@
 //     left-click         select an object / a light
 //     drag a gizmo       move / rotate / scale it (switch mode in the top bar)
 //   panels
-//     top bar            scene name, file actions, mode, gizmo, Render menu
+//     top bar            File menu, scene name, mode, gizmo, Render menu
 //     left (Hierarchy)   objects + lights; add / rename / toggle / delete
 //     right (Inspector)  the selection's fields
 //     bottom (Resources) per-scene resource explorer (stub until Phase 4)
 //
 // This file: the window, the frame loop, the docked-panel layout, and the one
 // Mge_Gui frame the panels share. Scene data + rendering live in scene.c; the
-// camera in editor_camera.c; each panel in its own <name>.c.
+// camera in editor_camera.c; File actions in sceneops.c; each panel in its own
+// <name>.c.
 #include <mge.h>
 #include <mge_gui.h>
 
@@ -24,6 +25,7 @@
 #include "hierarchy.h"
 #include "inspector.h"
 #include "resources.h"
+#include "sceneops.h"
 
 static const int width = 1280, height = 720;
 
@@ -50,11 +52,13 @@ int main(void)
     Scene scene;
     Scene_Init(&scene, width, height);
 
+    SceneOps ops = { 0 };
+
     int fpsShown = 0, drawsShown = 0;
     double fpsAt = 0.0;
     bool prevEditMode = editMode;
 
-    while (!Mge_WindowShouldClose()) {
+    for (;;) {
         bool guiKeyboard = Mge_GuiWantsKeyboard();
         bool guiMouse = Mge_GuiWantsMouse();
 
@@ -84,6 +88,8 @@ int main(void)
         Mge_BeginDrawing();
 
         bool gizmoBusy = Scene_Draw(&scene, camera.cam, interact);
+        if (gizmoBusy)
+            scene.dirty = true;
         if (interact && !gizmoBusy)
             Scene_Pick(&scene, camera.cam);
 
@@ -96,16 +102,30 @@ int main(void)
         Rectangle rBottom = { 0, H - BOTTOM_H, W, BOTTOM_H };
 
         Mge_GuiBeginFrame();
-        Topbar_Draw(rTop, &scene, &editMode);
+
+        // close button / ESC -> route through the unsaved-changes guard
+        if (Mge_WindowShouldClose()) {
+            Mge_SetWindowShouldClose(false);
+            SceneOps_Request(&ops, TOPBAR_QUIT, &scene, &camera);
+        }
+
+        TopbarAction act = Topbar_Draw(rTop, &scene, &editMode);
         Hierarchy_Draw(rLeft, &scene);
         Inspector_Draw(rRight, &scene);
         Resources_Draw(rBottom, &scene, fpsShown, drawsShown);
+
+        SceneOps_Request(&ops, act, &scene, &camera);
+        SceneOps_Draw(&ops, &scene, &camera);
+
         Mge_GuiEndFrame();
 
         if (IsKeyPressed(KEY_F12) && !guiKeyboard)
             Mge_TakeScreenshot("editor_screenshot.png");
 
         Mge_EndDrawing();
+
+        if (ops.quit)
+            break;
     }
 
     Scene_Shutdown(&scene);

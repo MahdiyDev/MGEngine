@@ -660,6 +660,7 @@ void Mge_SetMSAAEnabled(bool enabled); // toggle the multisample resolve at runt
 bool Mge_IsMSAAEnabled(void);
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
+void Mge_SetWindowShouldClose(bool value); // set/clear the close flag -- e.g. cancel a quit to prompt "save first?"
 void Mge_CloseWindow(void);
 double Mge_GetTime(void);
 double Mge_GetDeltaTime(void);
@@ -736,11 +737,15 @@ void Mge_UnloadTexture(Texture2D texture); // free the GPU texture (no-op when i
 void Mge_SetTextureWrap(Texture2D texture, int wrap);
 void Mge_SetTextureWrapEx(Texture2D texture, int wrapU, int wrapV);
 
-// Native "open file" dialog (Windows: comdlg32; Linux: zenity/kdialog). Returns a
+// Native file dialogs (Windows: comdlg32; Linux: zenity/kdialog). Each returns a
 // malloc'd absolute path the caller must free(), or NULL if cancelled / no dialog
-// backend. Mge_OpenImageDialog filters to common image extensions.
+// backend. `filterExts` is ';'-separated globs ("*.mge;*.txt"). Mge_OpenImageDialog
+// filters to common image extensions; Mge_SaveFileDialog prompts on overwrite and
+// pre-fills `defaultName` (may be NULL).
 char* Mge_OpenFileDialog(const char* title, const char* filterName, const char* filterExts);
 char* Mge_OpenImageDialog(void);
+char* Mge_SaveFileDialog(const char* title, const char* filterName, const char* filterExts,
+    const char* defaultName);
 
 void Mge_ClearBackground(Color color);
 void Mge_BeginDrawing(void);

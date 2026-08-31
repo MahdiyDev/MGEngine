@@ -146,6 +146,13 @@ bool Mge_WindowShouldClose(void)
     return true;
 }
 
+void Mge_SetWindowShouldClose(bool value)
+{
+    CORE.Window.shouldClose = value;
+    if (platform.window != NULL)
+        glfwSetWindowShouldClose(platform.window, value ? GLFW_TRUE : GLFW_FALSE);
+}
+
 void Close_Platform(void)
 {
     glfwDestroyWindow(platform.window);
