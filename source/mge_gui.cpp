@@ -8,6 +8,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <cfloat>
+
 static bool s_ready = false;   // backend initialised
 static bool s_inFrame = false; // between BeginFrame / EndFrame
 
@@ -120,6 +122,27 @@ void Mge_GuiEndSidebar(void)
         ImGui::End();
 }
 
+bool Mge_GuiBeginPanel(const char* title, float x, float y, float w, float h)
+{
+    if (!s_inFrame)
+        return false;
+
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + x, vp->WorkPos.y + y));
+    ImGui::SetNextWindowSize(ImVec2(w, h));
+
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoTitleBar;
+    return ImGui::Begin(title, nullptr, flags);
+}
+
+void Mge_GuiEndPanel(void)
+{
+    if (s_inFrame)
+        ImGui::End();
+}
+
 // --- widgets ---
 
 void Mge_GuiLabel(const char* text)
@@ -142,10 +165,55 @@ void Mge_GuiSameLine(void)
     if (s_inFrame)
         ImGui::SameLine();
 }
+void Mge_GuiSetNextItemWidth(float width)
+{
+    if (s_inFrame)
+        ImGui::SetNextItemWidth(width > 0.0f ? width : -FLT_MIN);
+}
 bool Mge_GuiButton(const char* label) { return s_inFrame && ImGui::Button(label); }
 bool Mge_GuiSelectable(const char* label, bool selected)
 {
     return s_inFrame && ImGui::Selectable(label, selected);
+}
+bool Mge_GuiSelectableEx(const char* label, bool selected, bool* doubleClicked)
+{
+    if (!s_inFrame)
+        return false;
+    bool clicked = ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick);
+    if (doubleClicked != nullptr)
+        *doubleClicked = clicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+    return clicked;
+}
+
+bool Mge_GuiInputText(const char* label, char* buf, int bufSize)
+{
+    if (!s_inFrame || buf == nullptr || bufSize <= 0)
+        return false;
+    return ImGui::InputText(label, buf, (size_t)bufSize);
+}
+
+bool Mge_GuiBeginMenu(const char* label)
+{
+    if (!s_inFrame)
+        return false;
+    ImGui::PushID(label);
+    if (ImGui::Button(label))
+        ImGui::OpenPopup("##menu");
+    bool open = ImGui::BeginPopup("##menu");
+    if (!open)
+        ImGui::PopID();
+    return open;
+}
+bool Mge_GuiMenuItem(const char* label)
+{
+    return s_inFrame && ImGui::MenuItem(label);
+}
+void Mge_GuiEndMenu(void)
+{
+    if (!s_inFrame)
+        return;
+    ImGui::EndPopup();
+    ImGui::PopID();
 }
 
 bool Mge_GuiImageButton(const char* strId, unsigned int textureId, float size)

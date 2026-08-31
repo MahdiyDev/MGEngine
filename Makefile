@@ -1,9 +1,9 @@
 # MGEngine build.
 #
-# The engine is a shared library; `builder/` is a separate app (the editor demo)
+# The engine is a shared library; `editor/` is a separate app (the scene editor)
 # that links against it through the public headers in `source/`.
 #
-#   make              -> build/libmgengine.(dll|so) + build/mgengine (the app)
+#   make              -> build/libmgengine.(dll|so) + build/editor (the app)
 #                        DEBUG build: -O0 -g, assertions on
 #   make release      -> same targets, PRODUCTION build: -O2 -DNDEBUG, stripped,
 #                        dead code removed. Use this one for actual runs.
@@ -83,7 +83,7 @@ else
     APP_EXTRA   :=
 endif
 
-# every source/*.{c,cpp} is engine code (the builder app lives in builder/); the
+# every source/*.{c,cpp} is engine code (the editor app lives in editor/); the
 # desktop platform file is #included by mge_core.c, not compiled on its own.
 # mge_gui.cpp is the one C++ unit (Dear ImGui backend).
 CSOURCES   = $(wildcard $(SOURCE_DIR)/*.c)
@@ -97,7 +97,7 @@ COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) \
            $(IMGUI_OBJ) $(BUILD_OBJ_DIR)/glad.o
 
 ENGINE_LIB = $(BUILD_DIR)/$(LIB_NAME)
-APP        = $(BUILD_DIR)/mgengine$(EXE)
+APP        = $(BUILD_DIR)/editor$(EXE)
 
 .PHONY: all lib release clean clean-obj vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
 
@@ -147,10 +147,10 @@ $(BUILD_OBJ_DIR)/imgui:
 $(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
 	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
-# --- builder app: a plain-C consumer of the library + its headers ---
-BUILDER_SRC = $(wildcard builder/*.c)
-$(APP): $(BUILDER_SRC) $(wildcard builder/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $(BUILDER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
+# --- editor app: a plain-C consumer of the library + its headers ---
+EDITOR_SRC = $(wildcard editor/*.c)
+$(APP): $(EDITOR_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $(EDITOR_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp
 

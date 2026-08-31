@@ -694,6 +694,35 @@ static void scene_pbr(void)
     Mge_UnloadEnvironment(&env);
 }
 
+// MgeGL_SaveScreenshot: draw something, save a PNG, then confirm the file exists
+// and has a plausible size.
+static void scene_screenshot(void)
+{
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 20, 60, 120, 255 });
+    Draw_RectangleRec((Rectangle){ 30, 30, 200, 140 }, (Color){ 240, 200, 60, 255 });
+    MgeGL_Draw();
+
+    const char* path = OUT_DIR "/_screenshot.png";
+    bool wrote = MgeGL_SaveScreenshot(path, 0, 0, W, H);
+
+    long sz = 0;
+    FILE* f = fopen(path, "rb");
+    if (f != NULL) {
+        fseek(f, 0, SEEK_END);
+        sz = ftell(f);
+        fclose(f);
+    }
+
+    int ok = wrote && sz > 1000;
+    g_scenes++;
+    if (!ok)
+        g_fails++;
+    printf("  %-16s  wrote=%d  bytes=%ld   %s\n", "screenshot", (int)wrote, sz, ok ? "ok" : "FAIL");
+
+    Mge_EndDrawing();
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -728,6 +757,7 @@ int main(void)
     scene_rotate_gizmo((Vector3){ 0.2f, 0.3f, 6.0f }, "rot_facing_z"); // face-on -> full ring
     scene_rotate_gizmo((Vector3){ 6.0f, 0.3f, 0.2f }, "rot_facing_x");
     scene_scripted_rotate();
+    scene_screenshot();
 
     Mge_CloseWindow();
 

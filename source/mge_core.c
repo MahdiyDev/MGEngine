@@ -463,6 +463,12 @@ int Mge_GetScreenHeight(void)
     return (int)CORE.Window.screen.height;
 }
 
+bool Mge_TakeScreenshot(const char* fileName)
+{
+    return MgeGL_SaveScreenshot(fileName, 0, 0,
+        (int)CORE.Window.screen.width, (int)CORE.Window.screen.height);
+}
+
 bool IsCursorHidden(void)
 {
     return CORE.Input.Mouse.cursorHidden;

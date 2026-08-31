@@ -88,29 +88,33 @@ app keeps working the whole way.
       / `Mge_LoadImage` / `Mge_LoadModel` pak-aware -- doesn't ripple through
       examples/tests, so it belongs with the release bundle work.
 
-## Phase 1 -- rename + panel layout
+## Phase 1 -- rename + panel layout   [DONE]
 
-- [ ] `builder/` -> `editor/`; `build/mgengine.exe` -> `build/editor.exe`;
-      update Makefile (`$(APP)`, `BUILDER_SRC`), `USAGE.md`, `builder/USAGE.md`,
-      session/run-skill references, `.gitignore`.
-- [ ] Split into: `main.c` (window/loop/camera), `topbar.c`, `hierarchy.c`
-      (left), `inspector.c` (right), `resources.c` (bottom), `scene.c` (data),
-      `scene_io.c`, `scene_build.c`, `editor_camera.c`.
-- [ ] **Top bar** -- narrow strip at the top: View/Edit mode toggle (icon
-      buttons -- icons TBD), World/Local space **dropdown**, gizmo Move/Rotate/
-      Scale, scene name + Open / Save / Build buttons. (`Mge_GuiBeginBox` docked
-      to the top edge, or extend `Mge_GuiBeginSidebar` with a top/bottom edge.)
-- [ ] **Left sidebar** -- the scene's object + light list (flat for now). A row
-      per entity; click selects (drives the inspector + gizmo). A **"+" add-object
-      button** at the top (plus icon TBD) -> menu: Cube / Sphere / Plane / Light.
-      Per-row: rename (double-click), an **active** toggle, delete.
-- [ ] **Right sidebar** -- the inspector (move the current `sidebar.c` inspector
-      here). Object: `transform` (pos/rot/scale vec3s), **primitive-type
-      dropdown**, `active` checkbox, material groups (already built). Light: as
-      today.
-- [ ] **Bottom panel** -- the resource explorer (Phase 4). For now, a stub.
-- [ ] Keep MSAA / HDR / bloom / shadows toggles somewhere sensible (a top-bar
-      "Render" dropdown, or a collapsible section).
+- [x] `builder/` -> `editor/`; `build/mgengine.exe` -> `build/editor.exe`;
+      Makefile (`$(APP)`, `EDITOR_SRC`), `README.md`, `USAGE.md`,
+      `editor/USAGE.md`, `examples/Makefile` comment. (No `.gitignore` changes
+      needed -- `build/` was already ignored; the `scenes/**` rules land in
+      Phase 3.)
+- [x] Split into: `main.c` (window/loop/layout), `editor_camera.c`, `topbar.c`,
+      `hierarchy.c` (left), `inspector.c` (right), `resources.c` (bottom),
+      `scene.c` (data). `scene_io.c` / `scene_build.c` are Phase 2 / 3.
+- [x] Engine GUI additions: `Mge_GuiBeginPanel` (exact-rect, title-bar-less
+      docked panel), `Mge_GuiInputText`, `Mge_GuiSelectableEx` (double-click),
+      `Mge_GuiBeginMenu` / `MenuItem` / `EndMenu`, `Mge_GuiSetNextItemWidth`.
+- [x] **Top bar** (`Mge_GuiBeginPanel`, 46px): scene-name field, Open / Save /
+      Build (stubs), VIEW/EDIT toggle, gizmo Move/Rot/Scl, World/Local dropdown,
+      **Render** menu (shadows / HDR / tone map / bloom). Icons still text
+      placeholders -- swap when the icon set arrives.
+- [x] **Left panel** (Hierarchy): objects + lights, flat list. `+ add` menu
+      (Cube / Sphere / Plane / Light). Per-row: select, double-click rename,
+      active/enabled checkbox, `x` delete (Sun protected). `Scene_AddLight` /
+      `Scene_DeleteObject` / `Scene_DeleteLight` added.
+- [x] **Right panel** (Inspector): the old `sidebar.c` inspector, unchanged
+      (active toggle, primitive dropdown, transform vec3s, material groups).
+- [x] **Bottom panel** (Resources): stub -- scene stats + FPS/draws readout.
+- [x] MSAA is fixed at 4x; shadows / HDR / bloom moved to the top-bar Render menu.
+- [x] Added `Mge_TakeScreenshot` / `MgeGL_SaveScreenshot` (`mge_screenshot.c`,
+      stb_image_write) -- editor F12, render-smoke round-trip, USAGE section.
 
 ## Phase 2 -- scene as data
 

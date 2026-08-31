@@ -711,6 +711,11 @@ int Mge_GetScreenWidth(void);
 int Mge_GetScreenHeight(void);
 void* Mge_GetWindowHandle(void); // native handle (GLFWwindow*) -- for GUI / interop
 
+// Save the current window framebuffer to a PNG (top-down). Call after drawing,
+// before the buffers swap (i.e. before Mge_EndDrawing, or right after it while
+// the back buffer is still readable). Returns false on a write / alloc failure.
+bool Mge_TakeScreenshot(const char* fileName);
+
 // Texture
 Image Mge_LoadImageFromMemory(const char *fileType, const unsigned char *fileData, int dataSize);
 Image Mge_LoadImage(const char* fileName);

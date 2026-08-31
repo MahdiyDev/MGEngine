@@ -1,9 +1,9 @@
 # MGEngine
 
 A small raylib-style 2D/3D rendering engine. The engine builds as a **shared
-library** (`libmgengine.dll` / `.so`); `builder/` is a separate app that links
+library** (`libmgengine.dll` / `.so`); `editor/` is a separate app that links
 against it through the headers in `source/` (see
-[builder/USAGE.md](builder/USAGE.md), and [README.md](README.md) for the map of
+[editor/USAGE.md](editor/USAGE.md), and [README.md](README.md) for the map of
 the whole repo). Engine code is **C11**; OpenGL 4.4 core via GLFW + glad, image
 loading via stb_image, model loading via
 [Assimp](https://github.com/assimp/assimp), UI via
@@ -45,14 +45,18 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
   mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / ...HDR (float) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
+  mge_screenshot.c     Mge_TakeScreenshot / MgeGL_SaveScreenshot -- framebuffer -> PNG (stb_image_write)
   mge_utils.h mge_utils.c   Trace_Log, file loading
   platforms/mge_code_desktop.c   GLFW backend (#included by mge_core.c)
-builder/               THE APP -- scene editor (fly-camera + TAB edit mode + gizmo + panels)
-  main.c               window, loop, camera, the shared Mge_Gui frame
-  scene.c/.h           entities, selection, picking, spawn (Scene_AddShape), the render passes
-  sidebar.c/.h         left panel: mode, gizmo switch, entity list, inspector (+ texture slots)
-  explorer.c/.h        right panel: the shape palette (spawn cube / sphere / plane)
-  USAGE.md             builder docs
+editor/                THE APP -- scene editor (docked panel shell around a viewport)
+  main.c               window, loop, panel-rectangle layout, the shared Mge_Gui frame
+  editor_camera.c/.h   the yaw/pitch fly-cam (VIEW = always fly, EDIT = fly on RIGHT mouse)
+  scene.c/.h           entities, selection, picking, add/delete, the render passes
+  topbar.c/.h          top strip: scene name, file actions, mode, gizmo, Render menu
+  hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
+  inspector.c/.h       right panel: the type-aware inspector (+ texture slots)
+  resources.c/.h       bottom panel: per-scene resource explorer (stub until Phase 4)
+  USAGE.md             editor docs
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h
@@ -124,10 +128,10 @@ recipe to add formats.
 `g++ -std=c++17` (the desktop platform file is `#include`d by `mge_core.c`, not
 compiled on its own), links them into `build/libmgengine.dll` with `g++`
 (`-static-libgcc -static-libstdc++ -static`, so the DLL carries the C/C++ runtime
-and GLFW / Assimp / Dear ImGui are already inside), then builds `builder/main.c`
+and GLFW / Assimp / Dear ImGui are already inside), then builds `editor/*.c`
 against it with plain `gcc -Isource -lmgengine`.
 `make_build_dir` stages `assets/` (and `shaders/`) plus, on Windows, the DLL
-sits next to `build/mgengine.exe`, so the app runs from `build/`.
+sits next to `build/editor.exe`, so the app runs from `build/`.
 
 Your own app is the same one-liner: `gcc yours.c -Isource -Lbuild -lmgengine`
 plus `libmgengine.dll` on the path (or beside the exe). The `examples/` still
@@ -173,13 +177,13 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~21 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~24 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
 mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
 tone-mapped vs clamped, a bloom glow, a deferred-shaded scene, an SSAO scene,
 a PBR + IBL sphere grid, the cube/sphere/plane primitives, a rotated cube with
-each gizmo mode, the rotate gizmo head-on, a scripted rotate drag) one frame
-each, reads the
+each gizmo mode, the rotate gizmo head-on, a scripted rotate drag, a
+`MgeGL_SaveScreenshot` round-trip) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
 this is how you catch *valid-but-wrong* output that the stub tests can't see.
@@ -228,7 +232,7 @@ int main(void)
 `Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Sphere` /
 `Draw_Plane` / `Draw_Arrow3D` (and the `*Ex` variants) or the
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
-calls. `builder/` shows a fly-camera plus TAB-toggled edit mode with the
+calls. `editor/` shows a fly-camera plus TAB-toggled edit mode with the
 translate / rotate / scale gizmo.
 
 ### How the renderer batches
@@ -260,7 +264,7 @@ VRAM.
 What is *not* merged: each retained `Mesh` has its own VAO and its own
 `glDrawElements`; different models are separate calls (use a `ModelBatch` for
 many copies of one). `Draw_*` shapes across a shader/texture/state change land in
-different batches. The builder shows the live count next to the FPS.
+different batches. The editor shows the live count next to the FPS.
 
 Demo: `examples/batching/draw_calls.c` — an 800-shape grid that stays at ~2 draw
 calls a frame.
@@ -280,7 +284,7 @@ int got = Mge_GetMSAA();  // sample count the driver actually granted (0 = none)
 
 `Mge_SetMSAA` only records the request; it must be called first because the
 sample count is fixed at window creation (`glfwWindowHint(GLFW_SAMPLES, …)`).
-`builder/main.c` calls `Mge_SetMSAA(4)` explicitly. This covers the window's
+`editor/main.c` calls `Mge_SetMSAA(4)` explicitly. This covers the window's
 framebuffer only — a `RenderTexture` from `Mge_LoadRenderTexture` is still
 single-sampled, so post-processed passes don't get MSAA.
 
@@ -343,7 +347,7 @@ HDR environment map.
 
 Demo: `examples/lighting/hdr.c` — a corridor with one very bright light; SPACE
 toggles tone map vs raw clamp, T cycles the operator, UP/DOWN adjust exposure.
-The builder's sidebar has an **HDR** toggle + tone-map + exposure.
+The editor's top-bar **Render** menu has an **HDR** toggle + tone-map + exposure.
 
 ### Bloom
 
@@ -370,8 +374,8 @@ HDR surfaces glow a little too. Same gamma rule as HDR (the composite does it
 unless `GL_FRAMEBUFFER_SRGB` is on).
 
 Demo: `examples/lighting/bloom.c` — coloured lamps in a dark room; SPACE toggles
-bloom, `[` `]` the threshold, `-` `=` the intensity. The builder's sidebar has a
-**bloom** toggle (under HDR) with threshold + intensity sliders.
+bloom, `[` `]` the threshold, `-` `=` the intensity. The editor's top-bar
+**Render** menu has a **bloom** toggle (under HDR) with threshold + intensity sliders.
 
 ### Deferred shading
 
@@ -400,7 +404,7 @@ Mge_UnloadGBuffer(&g);
 Wrap `Mge_DeferredLighting` in `Mge_BeginTextureMode(hdrRT)` to feed it into the
 HDR / bloom path. The deferred path has **no shadows and no normal / parallax /
 triplanar maps** — it's the "lots of little lights" pipeline; keep the forward
-path (and the builder) for the rest. `g.position` / `g.normal` / `g.albedoSpec`
+path (and the editor) for the rest. `g.position` / `g.normal` / `g.albedoSpec`
 are plain `Texture2D`s you can blit for debugging.
 
 Demo: `examples/lighting/deferred_shading.c` — a 5×5 field under 24 drifting
@@ -460,7 +464,7 @@ screenshot check is what catches that.
 | `Mge_ToggleCursor()` | flip between `EnableCursor()` and `DisableCursor()` |
 | `IsCursorHidden()` | `true` while the cursor is hidden / locked |
 
-Bind it to a key in your loop — `builder/main.c` uses **TAB** to free and re-lock
+Bind it to a key in your loop — `editor/main.c` uses **TAB** to free and re-lock
 the mouse, and only runs the fly-camera while it is locked:
 
 ```c
@@ -479,6 +483,19 @@ while (!Mge_WindowShouldClose()) {
     /* ... draw ... */
     Mge_EndDrawing();
 }
+```
+
+### Screenshots
+
+`Mge_TakeScreenshot("shot.png")` reads the window framebuffer back and writes a
+PNG (rows flipped to top-down). Call it after drawing and before the buffers swap
+— the end of the loop body, after `Mge_GuiEndFrame` but before (or right after)
+`Mge_EndDrawing`. `MgeGL_SaveScreenshot(path, x, y, w, h)` is the lower-level
+form that captures an arbitrary rectangle. `editor/main.c` binds **F12** to it.
+
+```c
+if (IsKeyPressed(KEY_F12))
+    Mge_TakeScreenshot("screenshot.png");   // next to the executable
 ```
 
 ### Objects & the manipulation gizmo
@@ -555,7 +572,7 @@ Supporting pieces: mouse buttons (`IsMouseButtonPressed/Down/Released`,
 `Matrix_RotateXYZ` / `Matrix_ToEulerXYZ` / `Vector3_RotateAround`, and world→screen
 projection (`Mge_GetWorldToScreen[Ex]`, `Mge_GetCameraViewMatrix`,
 `Mge_GetCameraProjectionMatrix`). Demos: `examples/objects/gizmo_2d.c` and
-`gizmo_3d.c` (1/2/3 switch modes); `builder/` uses it in full.
+`gizmo_3d.c` (1/2/3 switch modes); `editor/` uses it in full.
 
 **Testing a drag without a mouse** — `Mge_SetMouseOverride(pos, leftDown)` feeds a
 fake cursor to `GetMousePosition` / `GetMouseDelta` / `IsMouseButton*(LEFT)`.
@@ -658,7 +675,7 @@ Demos: `examples/lighting/` — `ambient` / `diffuse` / `specular` isolate the
 three terms; `directional` / `point` / `spotlight` isolate the three light types
 (spotlight shows a hard vs. a soft cone side by side); `blinn_phong` toggles the
 two specular models over a low-shininess floor; `gamma_correction` toggles sRGB
-output; `shadow_mapping` casts a directional shadow; `builder/main.c` combines a
+output; `shadow_mapping` casts a directional shadow; `editor/main.c` combines a
 directional fill with an orbiting point light.
 
 ### PBR & image-based lighting
@@ -895,7 +912,7 @@ Mge_SetTextureWrapEx(tex, TEXTURE_WRAP_REPEAT, TEXTURE_WRAP_CLAMP); // U repeats
 | `TEXTURE_WRAP_MIRROR_CLAMP` | `GL_MIRROR_CLAMP_TO_EDGE` | "mirror once" — mirror across one boundary, then clamp |
 
 The state lives on the GL texture object, so set it once (it isn't stored in
-`Material`). The builder's inspector has a per-slot **wrap** dropdown.
+`Material`). The editor's inspector has a per-slot **wrap** dropdown.
 
 #### Tiling, offset & triplanar
 
@@ -930,7 +947,7 @@ Linux: `zenity`, then `kdialog`) filtered to image extensions and returns a
 **malloc'd** path you `free()`, or `NULL` on cancel / when no backend is present.
 `Mge_OpenFileDialog(title, filterName, filterExts)` is the general form
 (`filterExts` is `;`-separated, e.g. `"*.png;*.jpg"`). The dialog never changes
-the process working directory. The builder's inspector uses it for the three
+the process working directory. The editor's inspector uses it for the three
 material-map thumbnails (`Mge_GuiImageButton`).
 
 ### Mesh
@@ -1331,9 +1348,9 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | kind | calls |
 | --- | --- |
 | frame | `Mge_GuiBeginFrame` / `Mge_GuiEndFrame`, `Mge_GuiShutdown` |
-| boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (edge dock) + matching `End*` |
-| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiImageButton` (square texture thumbnail; id `0` → a "+" placeholder) |
-| inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
+| boxes | `Mge_GuiBeginBox` (floating panel) / `Mge_GuiBeginSidebar` (full-height edge dock) / `Mge_GuiBeginPanel` (exact screen rect, no title bar — for a docked shell) + matching `End*` |
+| widgets | `Mge_GuiLabel`, `Mge_GuiSeparator`, `Mge_GuiSpacing`, `Mge_GuiSameLine`, `Mge_GuiSetNextItemWidth`, `Mge_GuiButton`, `Mge_GuiSelectable`, `Mge_GuiSelectableEx` (reports double-click), `Mge_GuiImageButton` (square texture thumbnail; id `0` → a "+" placeholder), `Mge_GuiBeginMenu` / `Mge_GuiMenuItem` / `Mge_GuiEndMenu` (button → popup menu) |
+| inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputText`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
 
 Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
 `Mge_GuiButton` return `true` on click. Gate your own picking and camera on
@@ -1341,10 +1358,10 @@ Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
 viewport. The backend boots lazily on the first `Mge_GuiBeginFrame` after
 `Mge_InitWindow`; apps that never call it pay nothing.
 
-`builder/` is the worked example — a left sidebar with a type-aware inspector
-(Object vs Light) plus a right-edge shape palette, both drawn in one
+`editor/` is the worked example — a docked shell (top bar + left hierarchy +
+right inspector + bottom resources) built from `Mge_GuiBeginPanel`, all in one
 `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair. See
-[builder/USAGE.md](builder/USAGE.md).
+[editor/USAGE.md](editor/USAGE.md).
 
 ### Math
 

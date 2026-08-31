@@ -155,6 +155,11 @@ int MgeGL_LoadTextureHDR(const float *data, int width, int height, int channels)
 void MgeGL_UnloadTexture(unsigned int id); // glDeleteTextures; ignores 0 and the shared white texture
 void MgeGL_SetTextureWrap(unsigned int id, int wrapS, int wrapT); // GL_TEXTURE_WRAP_S/T from a TextureWrap
 
+// Read back the given framebuffer rectangle and write it as a PNG (rows flipped
+// to top-down). Returns true on success. GL-side call -- do it after the frame
+// is drawn and before the buffers swap.
+bool MgeGL_SaveScreenshot(const char *fileName, int x, int y, int width, int height);
+
 #ifdef __cplusplus
 }
 #endif

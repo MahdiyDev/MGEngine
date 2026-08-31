@@ -37,13 +37,39 @@ void Mge_GuiEndBox(void);
 bool Mge_GuiBeginSidebar(const char* title, float width, bool rightEdge);    // full-height dock
 void Mge_GuiEndSidebar(void);
 
+// A panel pinned to an exact screen rectangle: no title bar, move, resize or
+// collapse, and it never comes to the front on click. `title` is just the
+// internal id (make it unique). The caller owns the layout maths (screen size is
+// Mge_GetScreenWidth/Height) -- use it to build a docked editor shell (top bar +
+// left / right / bottom panels around a central viewport).
+bool Mge_GuiBeginPanel(const char* title, float x, float y, float w, float h);
+void Mge_GuiEndPanel(void);
+
 // --- widgets ---
 void Mge_GuiLabel(const char* text);
 void Mge_GuiSeparator(void);
 void Mge_GuiSpacing(void);
 void Mge_GuiSameLine(void);                                // lay the next widget beside this one
+void Mge_GuiSetNextItemWidth(float width);                 // width for the next input / combo (<=0 resets)
 bool Mge_GuiButton(const char* label);                    // true the frame it is clicked
 bool Mge_GuiSelectable(const char* label, bool selected);  // list row; true when clicked
+// Like Mge_GuiSelectable, but also reports a double-click on the row (for
+// rename-in-place). `doubleClicked` may be NULL.
+bool Mge_GuiSelectableEx(const char* label, bool selected, bool* doubleClicked);
+
+// A single-line text field. Writes into `buf` (NUL-terminated, <= bufSize).
+// Returns true the frame the text changes.
+bool Mge_GuiInputText(const char* label, char* buf, int bufSize);
+
+// A button that opens a popup menu. Wrap the items between Begin/End; BeginMenu
+// returns true only while the popup is open. Mge_GuiMenuItem is a clickable row.
+//   if (Mge_GuiBeginMenu("+ add")) {
+//       if (Mge_GuiMenuItem("Cube"))  ...;
+//       Mge_GuiEndMenu();
+//   }
+bool Mge_GuiBeginMenu(const char* label);
+bool Mge_GuiMenuItem(const char* label);
+void Mge_GuiEndMenu(void);
 
 // A square thumbnail button. `textureId` is a GL texture id (Texture2D.id); pass
 // 0 for an empty slot (draws a bordered "+" placeholder). True the frame it is

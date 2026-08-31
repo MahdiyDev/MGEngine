@@ -8,6 +8,7 @@
 void Scene_Init(Scene* s, int width, int height)
 {
     *s = (Scene){ 0 };
+    strcpy(s->name, "untitled");
 
     s->objects[0] = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0.0f, -1.1f, 0.0f }, (Vector3){ 24.0f, 0.2f, 24.0f }, (Color){ 90, 95, 105, 255 });
     s->objects[1] = Mge_MakeObject3D((Vector3){ -3.0f, 0.0f, 0.0f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
@@ -22,8 +23,8 @@ void Scene_Init(Scene* s, int width, int height)
     s->lights[0] = Mge_MakeDirectionalLight((Vector3){ -0.5f, -1.0f, -0.4f }, (Vector3){ 0.7f, 0.7f, 0.8f });
     s->lights[0].ambient = 0.22f; // fill so shadowed faces aren't pitch black
     s->lights[1] = Mge_MakePointLight((Vector3){ 3.0f, 5.0f, 2.0f }, (Vector3){ 1.0f, 0.85f, 0.6f });
-    s->lightNames[0] = "Sun";
-    s->lightNames[1] = "Lamp";
+    strcpy(s->lightNames[0], "Sun");
+    strcpy(s->lightNames[1], "Lamp");
     s->lightCount = 2;
 
     s->selKind = SEL_NONE;
@@ -80,6 +81,61 @@ void Scene_AddShape(Scene* s, PrimitiveKind primitive)
 
     s->selKind = SEL_OBJECT;
     s->selIndex = i;
+}
+
+void Scene_AddLight(Scene* s)
+{
+    if (s->lightCount >= SCENE_MAX_LIGHTS)
+        return;
+
+    int i = s->lightCount++;
+    s->lights[i] = Mge_MakePointLight((Vector3){ 0.0f, 4.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f });
+    snprintf(s->lightNames[i], sizeof(s->lightNames[i]), "Light %d", i);
+
+    s->selKind = SEL_LIGHT;
+    s->selIndex = i;
+}
+
+void Scene_DeleteObject(Scene* s, int index)
+{
+    if (index < 0 || index >= s->objectCount)
+        return;
+
+    for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
+        Mge_UnloadTexture(s->objects[index].material.maps[m].texture);
+
+    for (int i = index; i < s->objectCount - 1; i++) {
+        s->objects[i] = s->objects[i + 1];
+        memcpy(s->objectNames[i], s->objectNames[i + 1], sizeof(s->objectNames[i]));
+        memcpy(s->texWrap[i], s->texWrap[i + 1], sizeof(s->texWrap[i]));
+    }
+    s->objectCount--;
+
+    if (s->selKind == SEL_OBJECT) {
+        if (s->selIndex == index)
+            s->selKind = SEL_NONE;
+        else if (s->selIndex > index)
+            s->selIndex--;
+    }
+}
+
+void Scene_DeleteLight(Scene* s, int index)
+{
+    if (index <= 0 || index >= s->lightCount) // light 0 is the sun -- keep it
+        return;
+
+    for (int i = index; i < s->lightCount - 1; i++) {
+        s->lights[i] = s->lights[i + 1];
+        memcpy(s->lightNames[i], s->lightNames[i + 1], sizeof(s->lightNames[i]));
+    }
+    s->lightCount--;
+
+    if (s->selKind == SEL_LIGHT) {
+        if (s->selIndex == index)
+            s->selKind = SEL_NONE;
+        else if (s->selIndex > index)
+            s->selIndex--;
+    }
 }
 
 void Scene_Pick(Scene* s, Camera3D camera)

@@ -1,4 +1,4 @@
-#include "sidebar.h"
+#include "inspector.h"
 
 #include <mge_gui.h>
 #include <stdlib.h>
@@ -10,7 +10,7 @@ static const char* const WRAP_NAMES[4] = { "Repeat", "Clamp", "Mirror", "Mirror 
 // plus a clear "x"), then the slot's colour, scalar value and wrap mode.
 // `showColor` is false for the normal / height maps, where a tint is meaningless.
 // `valueMax` / `valueLabel` give the slot's `.value` its slot-specific meaning.
-// `wrap` points at the builder's stored TextureWrap for this slot.
+// `wrap` points at the editor's stored TextureWrap for this slot.
 static void material_slot(Material* mat, int mapIndex, unsigned char* wrap, const char* name,
     const char* id, bool showColor, float valueMax, const char* valueLabel)
 {
@@ -106,76 +106,22 @@ static void inspect_light(Light* l)
     }
 }
 
-static void gizmo_switch(void)
+void Inspector_Draw(Rectangle rect, Scene* s)
 {
-    Mge_GuiLabel("GIZMO");
-    GizmoMode mode = Mge_GetGizmoMode();
-    if (Mge_GuiSelectable("Move (translate)", mode == GIZMO_TRANSLATE))
-        Mge_SetGizmoMode(GIZMO_TRANSLATE);
-    if (Mge_GuiSelectable("Rotate", mode == GIZMO_ROTATE))
-        Mge_SetGizmoMode(GIZMO_ROTATE);
-    if (Mge_GuiSelectable("Scale", mode == GIZMO_SCALE))
-        Mge_SetGizmoMode(GIZMO_SCALE);
-
-    Mge_GuiSpacing();
-    GizmoSpace space = Mge_GetGizmoSpace();
-    Mge_GuiLabel(space == GIZMO_LOCAL ? "SPACE: Local" : "SPACE: World");
-    if (Mge_GuiSelectable("World", space == GIZMO_WORLD))
-        Mge_SetGizmoSpace(GIZMO_WORLD);
-    if (Mge_GuiSelectable("Local", space == GIZMO_LOCAL))
-        Mge_SetGizmoSpace(GIZMO_LOCAL);
-}
-
-void Sidebar_Draw(Scene* s, bool editMode, int fps, int draws)
-{
-    if (Mge_GuiBeginSidebar("Scene", 300.0f, false)) {
-        Mge_GuiLabel(editMode ? "MODE: EDIT" : "MODE: VIEW  (TAB to edit)");
-
-        char row[48];
-        snprintf(row, sizeof(row), "FPS: %d   draws: %d", fps, draws);
-        Mge_GuiLabel(row);
-        Mge_GuiCheckbox("shadows", &s->shadowsOn);
-
-        Mge_GuiCheckbox("HDR", &s->hdrOn);
-        if (s->hdrOn) {
-            static const char* const TONE_NAMES[3] = { "Reinhard", "Exposure", "ACES" };
-            Mge_GuiCombo("tone map", &s->toneMap, TONE_NAMES, 3);
-            Mge_GuiSliderFloat("exposure", &s->exposure, 0.1f, 4.0f);
-            Mge_GuiCheckbox("bloom", &s->bloomOn);
-            if (s->bloomOn) {
-                Mge_GuiSliderFloat("threshold", &s->bloom.threshold, 0.0f, 3.0f);
-                Mge_GuiSliderFloat("intensity", &s->bloom.intensity, 0.0f, 2.0f);
-            }
-        }
-        Mge_GuiSeparator();
-
-        gizmo_switch();
-        Mge_GuiSeparator();
-
-        Mge_GuiLabel("OBJECTS");
-        for (int i = 0; i < s->objectCount; i++)
-            if (Mge_GuiSelectable(s->objectNames[i], s->selKind == SEL_OBJECT && s->selIndex == i)) {
-                s->selKind = SEL_OBJECT;
-                s->selIndex = i;
-            }
-
-        Mge_GuiSeparator();
-        Mge_GuiLabel("LIGHTS");
-        for (int i = 0; i < s->lightCount; i++)
-            if (Mge_GuiSelectable(s->lightNames[i], s->selKind == SEL_LIGHT && s->selIndex == i)) {
-                s->selKind = SEL_LIGHT;
-                s->selIndex = i;
-            }
-
-        Mge_GuiSeparator();
-        Mge_GuiLabel("INSPECTOR");
-        Mge_GuiSpacing();
-        if (s->selKind == SEL_OBJECT)
-            inspect_object(s);
-        else if (s->selKind == SEL_LIGHT)
-            inspect_light(&s->lights[s->selIndex]);
-        else
-            Mge_GuiLabel("(nothing selected)");
+    if (!Mge_GuiBeginPanel("Inspector", rect.x, rect.y, rect.width, rect.height)) {
+        Mge_GuiEndPanel();
+        return;
     }
-    Mge_GuiEndSidebar();
+
+    Mge_GuiLabel("INSPECTOR");
+    Mge_GuiSeparator();
+
+    if (s->selKind == SEL_OBJECT)
+        inspect_object(s);
+    else if (s->selKind == SEL_LIGHT)
+        inspect_light(&s->lights[s->selIndex]);
+    else
+        Mge_GuiLabel("(nothing selected)");
+
+    Mge_GuiEndPanel();
 }

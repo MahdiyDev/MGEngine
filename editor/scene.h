@@ -1,4 +1,4 @@
-// The builder's scene: entities, selection, and the render passes. No UI here.
+// The editor's scene: entities, selection, and the render passes. No UI here.
 #pragma once
 
 #include <mge.h>
@@ -10,13 +10,15 @@ enum { SEL_NONE = 0, SEL_OBJECT, SEL_LIGHT };
 #define SCENE_MAX_LIGHTS  4
 
 typedef struct Scene {
+    char name[64]; // shown in the top bar; the scene folder / file stem later
+
     Object objects[SCENE_MAX_OBJECTS];
-    char objectNames[SCENE_MAX_OBJECTS][24]; // mutable: the explorer names spawned shapes
+    char objectNames[SCENE_MAX_OBJECTS][24]; // mutable: the hierarchy names + renames spawned shapes
     unsigned char texWrap[SCENE_MAX_OBJECTS][MATERIAL_MAP_COUNT]; // TextureWrap per map slot (0 = REPEAT)
     int objectCount;
 
     Light lights[SCENE_MAX_LIGHTS]; // [0] = sun (directional, casts shadow), [1] = lamp (point)
-    const char* lightNames[SCENE_MAX_LIGHTS];
+    char lightNames[SCENE_MAX_LIGHTS][24];
     int lightCount;
 
     int selKind;  // SEL_*
@@ -44,6 +46,14 @@ void Scene_Shutdown(Scene* s);
 // Spawn a primitive at the origin, name it, and select it. No-op when the scene
 // is full (SCENE_MAX_OBJECTS).
 void Scene_AddShape(Scene* s, PrimitiveKind primitive);
+
+// Add a point light above the origin, name it, and select it. No-op when full.
+void Scene_AddLight(Scene* s);
+
+// Remove an entity and re-pack the arrays. Deleting the directional sun (light 0)
+// is a no-op -- the shadow pass depends on it. Selection falls back sensibly.
+void Scene_DeleteObject(Scene* s, int index);
+void Scene_DeleteLight(Scene* s, int index);
 
 // Left-click picking: nearest object centre, or the lamp. Click on empty space
 // deselects. Call only when the gizmo is not being dragged.
