@@ -526,6 +526,41 @@ static void scene_hdr(void)
     Mge_UnloadRenderTexture(hdr);
 }
 
+// Bloom: the bright light should bleed a soft glow (composite = scene + blur).
+static void scene_bloom(void)
+{
+    RenderTexture hdr = Mge_LoadRenderTextureHDR(W, H);
+    BloomFX bloom = Mge_LoadBloom(W, H);
+    bloom.intensity = 1.0f;
+
+    Light bright = Mge_MakePointLight((Vector3){ 0, 1.2f, 1.0f }, (Vector3){ 30.0f, 26.0f, 12.0f });
+    bright.ambient = 0.02f;
+    Light lights[1] = { bright };
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0, 1.2f, 4.5f };
+    cam.target = (Vector3){ 0, 0, -1 };
+
+    Mge_BeginDrawing();
+    Mge_BeginTextureMode(hdr);
+    Mge_ClearBackground((Color){ 2, 2, 4, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3DEx(lights, 1, cam);
+    Draw_Cube((Vector3){ 0, -1.0f, -4 }, (Vector3){ 8, 0.3f, 18 }, (Color){ 200, 195, 185, 255 });
+    Draw_Cube((Vector3){ -2.0f, 0.2f, -3 }, (Vector3){ 1, 1, 1 }, (Color){ 200, 120, 90, 255 });
+    Mge_EndLighting3D();
+    Draw_Cube(bright.position, (Vector3){ 0.25f, 0.25f, 0.25f }, WHITE); // the glowing bulb
+    Mge_EndMode3D();
+    Mge_EndTextureMode();
+
+    Mge_DrawBloom(hdr, &bloom, TONEMAP_ACES, 1.0f);
+    check("bloom");
+    Mge_EndDrawing();
+
+    Mge_UnloadBloom(&bloom);
+    Mge_UnloadRenderTexture(hdr);
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -549,6 +584,7 @@ int main(void)
     scene_texwrap();
     scene_tiling();
     scene_hdr();
+    scene_bloom();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

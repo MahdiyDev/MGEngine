@@ -47,6 +47,8 @@ up to `SCENE_MAX_OBJECTS` (8) — the panel shows the count and greys out when f
 - **HDR** — checkbox, off by default. Renders the lit pass into an RGBA16F target
   and tone-maps it out; reveals a **tone map** dropdown (Reinhard / Exposure /
   ACES) and an **exposure** slider. Note it also tone-maps the (LDR) skybox.
+- **bloom** — checkbox under HDR (needs it on). Adds a soft glow to over-bright
+  pixels, with **threshold** + **intensity** sliders.
 - **GIZMO** — Move / Rotate / Scale, one active (`Mge_SetGizmoMode`); and
   **SPACE** World / Local (`Mge_SetGizmoSpace`), shown as `SPACE: World|Local`.
   Local aligns the handles to a rotated object's own axes.

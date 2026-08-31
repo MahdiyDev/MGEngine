@@ -733,6 +733,29 @@ void Mge_DrawRenderTextureFX(RenderTexture target, int effect); // a PostFX; POS
 RenderTexture Mge_LoadRenderTextureHDR(int width, int height);
 void Mge_DrawRenderTextureHDR(RenderTexture target, int toneMap, float exposure); // a ToneMap
 
+// Bloom: the bright parts of an HDR scene bleed a soft glow into their
+// surroundings. Fed the HDR scene texture, it extracts pixels above `threshold`,
+// Gaussian-blurs them (ping-pong, `iterations` H+V passes at half resolution),
+// then composites `scene + bloom * intensity` and tone-maps the result out.
+// Mge_DrawBloom replaces Mge_DrawRenderTextureHDR as the final step.
+//
+//   BloomFX bloom = Mge_LoadBloom(w, h);   // w,h = the HDR scene's size
+//   ... render the lit scene into an HDR RenderTexture ...
+//   Mge_DrawBloom(hdrScene, &bloom, TONEMAP_ACES, exposure);   // -> the window
+//
+typedef struct BloomFX {
+    RenderTexture bright;      // extracted bright pixels (half res)
+    RenderTexture pingpong[2]; // Gaussian-blur ping-pong buffers (half res)
+    int width, height;         // half the scene size
+    float threshold;           // luminance cutoff to count as "bright"  (default 1.0)
+    float intensity;           // how strongly the glow is added back    (default 0.6)
+    int iterations;            // blur passes, each one horizontal + vertical (default 5)
+} BloomFX;
+
+BloomFX Mge_LoadBloom(int sceneWidth, int sceneHeight);
+void    Mge_UnloadBloom(BloomFX* bloom);
+void    Mge_DrawBloom(RenderTexture hdrScene, BloomFX* bloom, int toneMap, float exposure);
+
 // Cube maps / skybox / environment mapping.
 //
 //   Cubemap sky = Mge_LoadCubemapDir("assets/skybox");

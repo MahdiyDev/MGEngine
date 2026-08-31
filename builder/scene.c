@@ -42,6 +42,9 @@ void Scene_Init(Scene* s, int width, int height)
     s->hdrOn = false; // opt-in -- tone mapping also affects the (LDR) skybox
     s->toneMap = TONEMAP_ACES;
     s->exposure = 1.0f;
+
+    s->bloom = Mge_LoadBloom(width, height);
+    s->bloomOn = false;
 }
 
 void Scene_Shutdown(Scene* s)
@@ -53,6 +56,7 @@ void Scene_Shutdown(Scene* s)
     Mge_UnloadShadowMap(&s->shadow);
     Mge_UnloadCubemap(s->sky);
     Mge_UnloadRenderTexture(s->hdrRT);
+    Mge_UnloadBloom(&s->bloom);
 }
 
 void Scene_AddShape(Scene* s, PrimitiveKind primitive)
@@ -176,7 +180,10 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact)
 
     if (s->hdrOn) {
         Mge_EndTextureMode();
-        Mge_DrawRenderTextureHDR(s->hdrRT, s->toneMap, s->exposure);
+        if (s->bloomOn)
+            Mge_DrawBloom(s->hdrRT, &s->bloom, s->toneMap, s->exposure);
+        else
+            Mge_DrawRenderTextureHDR(s->hdrRT, s->toneMap, s->exposure);
     }
 
     return busy;

@@ -134,6 +134,11 @@ void Sidebar_Draw(Scene* s, bool editMode, int fps, int draws)
             static const char* const TONE_NAMES[3] = { "Reinhard", "Exposure", "ACES" };
             Mge_GuiCombo("tone map", &s->toneMap, TONE_NAMES, 3);
             Mge_GuiSliderFloat("exposure", &s->exposure, 0.1f, 4.0f);
+            Mge_GuiCheckbox("bloom", &s->bloomOn);
+            if (s->bloomOn) {
+                Mge_GuiSliderFloat("threshold", &s->bloom.threshold, 0.0f, 3.0f);
+                Mge_GuiSliderFloat("intensity", &s->bloom.intensity, 0.0f, 2.0f);
+            }
         }
         Mge_GuiSeparator();
 

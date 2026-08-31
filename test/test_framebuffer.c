@@ -31,10 +31,19 @@ TEST(render_texture_zero_value_is_inert)
     // exercised by the examples where a GL context exists.
 }
 
+TEST(bloom_zero_value_is_inert)
+{
+    BloomFX b = { 0 };
+    CHECK(b.bright.fbo == 0 && b.pingpong[0].fbo == 0 && b.pingpong[1].fbo == 0);
+    CHECK(b.width == 0 && b.height == 0);
+    // Mge_DrawBloom guards on bright.fbo == 0; Mge_UnloadBloom guards on NULL.
+}
+
 int main(void)
 {
     RUN(postfx_enum_is_contiguous);
     RUN(tonemap_enum_is_contiguous);
     RUN(render_texture_zero_value_is_inert);
+    RUN(bloom_zero_value_is_inert);
     return test_summary();
 }

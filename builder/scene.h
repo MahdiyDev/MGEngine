@@ -33,6 +33,9 @@ typedef struct Scene {
     bool hdrOn;
     int toneMap;          // ToneMap
     float exposure;
+
+    BloomFX bloom;        // used when hdrOn && bloomOn
+    bool bloomOn;
 } Scene;
 
 void Scene_Init(Scene* s, int width, int height);

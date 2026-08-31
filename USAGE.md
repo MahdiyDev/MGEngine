@@ -32,6 +32,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_stencil.c        stencil test + Mge_DrawObjectOutline
   mge_cull.c           face culling on/off + cull face / winding
   mge_framebuffer.c    RenderTexture + full-screen post-processing + HDR tone mapping
+  mge_bloom.c          bloom -- bright-pass + separable Gaussian + tone-mapped composite
   mge_cubemap.c        cube maps: skybox, environment mapping, dynamic probes
   mge_geometry.c       geometry-shader effects: explode, normal visualization
   mge_instancing.c     ModelBatch: many copies of a Model in one instanced draw
@@ -59,7 +60,7 @@ vendor/
 test/                  unit tests (no window/GL); test/glstub/ = a fake glad so mge_gl.c itself is testable
 examples/shapes/       draw_line, draw_rectangle, draw_triangle, mixed
 examples/objects/      gizmo_2d, gizmo_3d
-examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, hdr, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
+examples/lighting/     ambient, diffuse, specular, directional, point, spotlight, blinn_phong, gamma_correction, hdr, bloom, shadow_mapping, point_shadows, normal_mapping, parallax_mapping
 examples/materials/    textured_cube, tiling_triplanar
 examples/meshes/       textured_quad, batched_attributes
 examples/models/       load_melon
@@ -167,11 +168,12 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~17 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~18 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
 mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
-tone-mapped vs clamped, the cube/sphere/plane primitives, a rotated cube with
-each gizmo mode, the rotate gizmo head-on, a scripted rotate drag) one frame
+tone-mapped vs clamped, a bloom glow, the cube/sphere/plane primitives, a rotated
+cube with each gizmo mode, the rotate gizmo head-on, a scripted rotate drag) one
+frame
 each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
@@ -337,6 +339,34 @@ HDR environment map.
 Demo: `examples/lighting/hdr.c` — a corridor with one very bright light; SPACE
 toggles tone map vs raw clamp, T cycles the operator, UP/DOWN adjust exposure.
 The builder's sidebar has an **HDR** toggle + tone-map + exposure.
+
+### Bloom
+
+The bright parts of an HDR image bleed a soft glow. Given the HDR scene texture,
+`Mge_DrawBloom` extracts pixels above a luminance `threshold`, Gaussian-blurs
+them (separable, ping-pong, `iterations` H+V rounds at half resolution), then
+composites `scene + blur · intensity` **and** tone-maps — it replaces the
+`Mge_DrawRenderTextureHDR` step.
+
+```c
+BloomFX bloom = Mge_LoadBloom(w, h);      // w,h = the HDR scene's size
+bloom.threshold = 1.0f;                   // >1 = only genuinely over-bright pixels
+bloom.intensity = 0.6f;
+bloom.iterations = 5;
+...
+Mge_BeginTextureMode(hdr); /* ...lit scene... */ Mge_EndTextureMode();
+Mge_DrawBloom(hdr, &bloom, TONEMAP_ACES, exposure);   // -> the window
+...
+Mge_UnloadBloom(&bloom);
+```
+
+The bright pass has a soft knee, so `threshold` below `1.0` lets bright-but-not-
+HDR surfaces glow a little too. Same gamma rule as HDR (the composite does it
+unless `GL_FRAMEBUFFER_SRGB` is on).
+
+Demo: `examples/lighting/bloom.c` — coloured lamps in a dark room; SPACE toggles
+bloom, `[` `]` the threshold, `-` `=` the intensity. The builder's sidebar has a
+**bloom** toggle (under HDR) with threshold + intensity sliders.
 
 ### GL debug output
 
@@ -1048,7 +1078,7 @@ Demo: `examples/framebuffer/post_process.c` cycles through every effect.
 
 For a **floating-point** target (values above `1.0` survive), use
 `Mge_LoadRenderTextureHDR` + `Mge_DrawRenderTextureHDR(target, TONEMAP_*, exposure)`
-— see [HDR & tone mapping](#hdr--tone-mapping).
+— see [HDR & tone mapping](#hdr--tone-mapping) and [Bloom](#bloom).
 
 ### Cube maps, skybox & environment mapping
 
@@ -1235,7 +1265,7 @@ External material this engine's design and shaders are based on.
 | LearnOpenGL — [Depth testing](https://learnopengl.com/Advanced-OpenGL/Depth-testing) / [Stencil testing](https://learnopengl.com/Advanced-OpenGL/Stencil-testing) / [Face culling](https://learnopengl.com/Advanced-OpenGL/Face-culling) | `mge_depth.c`, `mge_stencil.c` + object outlining, `mge_cull.c` |
 | LearnOpenGL — [Framebuffers](https://learnopengl.com/Advanced-OpenGL/Framebuffers) / [Cubemaps](https://learnopengl.com/Advanced-OpenGL/Cubemaps) | `RenderTexture` + post-processing kernels, skybox + environment mapping (`mge_cubemap.c`) |
 | LearnOpenGL — [Instancing](https://learnopengl.com/Advanced-OpenGL/Instancing) / [Anti-Aliasing](https://learnopengl.com/Advanced-OpenGL/Anti-Aliasing) / [Geometry Shader](https://learnopengl.com/Advanced-OpenGL/Geometry-Shader) | `mge_instancing.c` (`ModelBatch`), MSAA (`mge_msaa.c`), explode / normal-viz (`mge_geometry.c`) |
-| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) / [HDR](https://learnopengl.com/Advanced-Lighting/HDR) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`), RGBA16F render target + tone mapping (`Mge_LoadRenderTextureHDR` / `Mge_DrawRenderTextureHDR`) |
+| LearnOpenGL — [Advanced Lighting](https://learnopengl.com/Advanced-Lighting/Advanced-Lighting) / [Gamma Correction](https://learnopengl.com/Advanced-Lighting/Gamma-Correction) / [HDR](https://learnopengl.com/Advanced-Lighting/HDR) / [Bloom](https://learnopengl.com/Advanced-Lighting/Bloom) | Blinn-Phong specular, `GL_FRAMEBUFFER_SRGB` + sRGB texture loading (`mge_gamma.c`), RGBA16F render target + tone mapping (`mge_framebuffer.c`), bright-pass + Gaussian bloom (`mge_bloom.c`) |
 | LearnOpenGL — [Shadow Mapping](https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping) / [Point Shadows](https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows) | `ShadowMap` / `PointShadowMap`, the depth pass + PCF (`mge_shadow.c`) |
 | LearnOpenGL — [Normal Mapping](https://learnopengl.com/Advanced-Lighting/Normal-Mapping) / [Parallax Mapping](https://learnopengl.com/Advanced-Lighting/Parallax-Mapping) | derivative-TBN normal maps, parallax-occlusion mapping (`MATERIAL_MAP_NORMAL` / `MATERIAL_MAP_HEIGHT`); `assets/bricks/` is LearnOpenGL's `bricks2` set |
 | LearnOpenGL — [Advanced Data](https://learnopengl.com/Advanced-OpenGL/Advanced-Data) | batched vertex attributes (`Mge_MakeMeshFromArrays` — one VBO, block per attribute) |
