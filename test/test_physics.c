@@ -11,6 +11,7 @@ static bool feq(float a, float b) { return fabsf(a - b) < 1e-3f; }
 // ---- draw / input backend stubs (so mge_physics.c links without a window) ----
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 void Draw_CubeWires(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
+void Draw_SphereWiresEx(Vector3 a, float r, int ri, int sl, Color c) { (void)a; (void)r; (void)ri; (void)sl; (void)c; }
 
 static Vector2 g_mouse = { 400.0f, 300.0f };
 Vector2 GetMousePosition(void) { return g_mouse; }
@@ -151,12 +152,13 @@ static Object shape(PrimitiveKind k, Vector3 pos, Vector3 scale)
 {
     Object o = { 0 };
     o.kind = OBJECT_3D;
-    o.primitive = k;
     o.transform.position = pos;
     o.transform.scale = scale;
     o.transform.rotation = Quaternion_Identity();
     o.transform.parent = -1;
     o.active = true;
+    Shape* sh = Mge_AddComponent(&o, COMPONENT_SHAPE);
+    sh->primitive = k;
     return o;
 }
 
@@ -236,10 +238,11 @@ TEST(raycast_objects_arrow_and_polygon)
 
     // a triangle polygon on the local XY plane (Z=0), scale 1
     Object tri = shape(PRIM_POLYGON, (Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 });
-    tri.poly[0] = (Vector3){ 0, 1, 0 };
-    tri.poly[1] = (Vector3){ -1, -1, 0 };
-    tri.poly[2] = (Vector3){ 1, -1, 0 };
-    tri.polyCount = 3;
+    Shape* ts = Mge_GetShapeComponent(&tri);
+    ts->poly[0] = (Vector3){ 0, 1, 0 };
+    ts->poly[1] = (Vector3){ -1, -1, 0 };
+    ts->poly[2] = (Vector3){ 1, -1, 0 };
+    ts->polyCount = 3;
     RayHit t = Mge_RaycastObjects(ray_from((Vector3){ 0, 0, -5 }, (Vector3){ 0, 0, 1 }), &tri, 1);
     CHECK(t.hit);
     CHECK_F(t.distance, 5.0f);
@@ -312,6 +315,141 @@ TEST(draw_helpers_link_and_run)
     CHECK(true);
 }
 
+// ---- collider overlap + the linear step ----
+
+// a box (kind auto-fits size to `ext`) with a RigidBody of `mass` (0 = static)
+static Object body(Vector3 pos, Vector3 ext, float mass)
+{
+    Object o = { 0 };
+    o.kind = OBJECT_3D;
+    o.transform.position = pos;
+    o.transform.scale = ext;
+    o.transform.rotation = Quaternion_Identity();
+    o.transform.parent = -1;
+    o.active = true;
+    Mge_AddComponent(&o, COMPONENT_COLLIDER); // box, size = ext
+    RigidBody* rb = Mge_AddComponent(&o, COMPONENT_RIGIDBODY);
+    rb->mass = mass;
+    rb->restitution = 0.5f;
+    rb->useGravity = true;
+    return o;
+}
+
+static void make_sphere_collider(Object* o, float radius)
+{
+    Collider* c = Mge_GetColliderComponent(o);
+    c->kind = COLLIDER_SPHERE;
+    c->size = (Vector3){ radius, 0, 0 };
+}
+
+TEST(overlap_box_box_and_mtv)
+{
+    Object a = body((Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, 1.0f);
+    Object b = body((Vector3){ 1.5f, 0, 0 }, (Vector3){ 2, 2, 2 }, 1.0f);
+    Vector3 mtv;
+    CHECK(Mge_ObjectsOverlap(&a, &b, &mtv));
+    CHECK_F(mtv.x, -0.5f);   // half-extents 1+1, centres 1.5 apart -> push a by -0.5x
+    CHECK_F(mtv.y, 0.0f);
+
+    Object far = body((Vector3){ 5, 0, 0 }, (Vector3){ 2, 2, 2 }, 1.0f);
+    CHECK(!Mge_ObjectsOverlap(&a, &far, NULL));
+}
+
+TEST(overlap_sphere_sphere_and_mtv)
+{
+    Object a = body((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    Object b = body((Vector3){ 1.5f, 0, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    make_sphere_collider(&a, 1.0f);
+    make_sphere_collider(&b, 1.0f);
+    Vector3 mtv;
+    CHECK(Mge_ObjectsOverlap(&a, &b, &mtv));
+    CHECK_F(mtv.x, -0.5f);   // radii 1+1, dist 1.5 -> pen 0.5 toward -x for a
+}
+
+TEST(overlap_box_vs_sphere)
+{
+    Object box = body((Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, 0.0f);
+    Object sph = body((Vector3){ 1.8f, 0, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    make_sphere_collider(&sph, 1.0f);
+    Vector3 mtv;
+    CHECK(Mge_ObjectsOverlap(&box, &sph, &mtv));
+    CHECK_F(mtv.x, -0.2f);   // box face x=1, sphere reaches x=0.8 -> pen 0.2, push box -x
+}
+
+TEST(step_integrates_gravity)
+{
+    Object o = body((Vector3){ 0, 10, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    Mge_StepPhysics(&o, 1, 0.1f);
+    RigidBody* rb = Mge_GetRigidBodyComponent(&o);
+    CHECK_F(rb->velocity.y, -0.981f);                  // v += g*dt
+    CHECK_F(o.transform.position.y, 10.0f - 0.0981f);  // pos += v*dt
+}
+
+TEST(step_static_body_does_not_move)
+{
+    Object o = body((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, 0.0f);
+    Mge_StepPhysics(&o, 1, 0.1f);
+    CHECK_F(o.transform.position.y, 0.0f);
+}
+
+TEST(step_bounces_off_static_floor)
+{
+    Object floor = body((Vector3){ 0, 0, 0 }, (Vector3){ 10, 1, 10 }, 0.0f);
+    Object ball = body((Vector3){ 0, 1.2f, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    RigidBody* rb = Mge_GetRigidBodyComponent(&ball);
+    rb->velocity = (Vector3){ 0, -5.0f, 0 };
+    rb->useGravity = false;
+
+    Object objs[2] = { floor, ball };
+    Mge_StepPhysics(objs, 2, 0.05f);
+
+    RigidBody* rr = Mge_GetRigidBodyComponent(&objs[1]);
+    CHECK(rr->velocity.y > 0.0f);        // bounced back up
+    CHECK_F(rr->velocity.y, 2.5f);       // -e * vn  =  -0.5 * -5
+    CHECK(objs[1].transform.position.y > 0.9f); // pushed out of the floor
+}
+
+TEST(step_bounces_off_collider_only_floor)
+{
+    // the floor is STATIC via a Collider with no RigidBody at all -- the ball's
+    // own restitution must still drive the bounce
+    Object floor = { 0 };
+    floor.kind = OBJECT_3D;
+    floor.transform.scale = (Vector3){ 10, 1, 10 };
+    floor.transform.rotation = Quaternion_Identity();
+    floor.transform.parent = -1;
+    floor.active = true;
+    Mge_AddComponent(&floor, COMPONENT_COLLIDER); // box, no rigidbody
+
+    Object ball = body((Vector3){ 0, 1.2f, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    RigidBody* rb = Mge_GetRigidBodyComponent(&ball);
+    rb->velocity = (Vector3){ 0, -5.0f, 0 };
+    rb->restitution = 0.5f;
+    rb->useGravity = false;
+
+    Object objs[2] = { floor, ball };
+    Mge_StepPhysics(objs, 2, 0.05f);
+
+    RigidBody* rr = Mge_GetRigidBodyComponent(&objs[1]);
+    CHECK(rr->velocity.y > 0.0f);
+    CHECK_F(rr->velocity.y, 2.5f); // 0.5 * 5
+}
+
+TEST(step_trigger_collider_has_no_response)
+{
+    Object floor = body((Vector3){ 0, 0, 0 }, (Vector3){ 10, 1, 10 }, 0.0f);
+    Mge_GetColliderComponent(&floor)->isTrigger = true;
+    Object ball = body((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, 1.0f);
+    RigidBody* rb = Mge_GetRigidBodyComponent(&ball);
+    rb->velocity = (Vector3){ 0, -5.0f, 0 };
+    rb->useGravity = false;
+
+    Object objs[2] = { floor, ball };
+    Mge_StepPhysics(objs, 2, 0.05f);
+
+    CHECK_F(Mge_GetRigidBodyComponent(&objs[1])->velocity.y, -5.0f); // unchanged
+}
+
 int main(void)
 {
     RUN(sphere_hit_head_on);
@@ -338,5 +476,13 @@ int main(void)
     RUN(screen_ray_hits_object_under_centre);
     RUN(mouse_ray_uses_cursor_and_screen_size);
     RUN(draw_helpers_link_and_run);
+    RUN(overlap_box_box_and_mtv);
+    RUN(overlap_sphere_sphere_and_mtv);
+    RUN(overlap_box_vs_sphere);
+    RUN(step_integrates_gravity);
+    RUN(step_static_body_does_not_move);
+    RUN(step_bounces_off_static_floor);
+    RUN(step_bounces_off_collider_only_floor);
+    RUN(step_trigger_collider_has_no_response);
     return test_summary();
 }

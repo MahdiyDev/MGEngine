@@ -160,22 +160,27 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
     wi(f, "msaa", Mge_IsMSAAEnabled() ? 1 : 0);
     fprintf(f, "  skybox \"%s\"\n", s->skyDir);      // project-root-relative folder of 6 faces
     wi(f, "mainCamera", s->mainCamera);              // index of the OBJECT_CAMERA that runs the game, or -1
+    if (s->showColliders) wi(f, "showColliders", 1);
     fprintf(f, "\n");
 
     for (int i = 0; i < s->objectCount; i++) {
-        const Object* o = &s->objects[i];
+        Object* o = &s->objects[i];
         fprintf(f, "object \"%s\"\n", s->objectNames[i]);
         if (o->kind == OBJECT_CAMERA)
-            fprintf(f, "  kind camera\n"); // a transform-only view camera (no primitive / material)
-        fprintf(f, "  primitive %s\n",
-            PRIM_NAMES[(o->primitive >= 0 && o->primitive < PRIM_KIND_COUNT) ? o->primitive : PRIM_CUBE]);
-        if (o->wireframe)
-            wi(f, "wireframe", 1);
-        if (o->primitive == PRIM_POLYGON) {
-            wi(f, "polyStrip", o->polyStrip ? 1 : 0);
-            for (int k = 0; k < o->polyCount && k < MGE_MAX_POLY_POINTS; k++)
-                fprintf(f, "  point %g %g %g\n",
-                    (double)o->poly[k].x, (double)o->poly[k].y, (double)o->poly[k].z);
+            fprintf(f, "  kind camera\n"); // a transform-only view camera (no components)
+
+        const Shape* sh = Mge_GetShapeComponent(o);
+        if (sh != NULL) {
+            fprintf(f, "  shape %s\n",
+                PRIM_NAMES[(sh->primitive >= 0 && sh->primitive < PRIM_KIND_COUNT) ? sh->primitive : PRIM_CUBE]);
+            if (sh->wireframe)
+                wi(f, "wireframe", 1);
+            if (sh->primitive == PRIM_POLYGON) {
+                wi(f, "polyStrip", sh->polyStrip ? 1 : 0);
+                for (int k = 0; k < sh->polyCount && k < MGE_MAX_POLY_POINTS; k++)
+                    fprintf(f, "  point %g %g %g\n",
+                        (double)sh->poly[k].x, (double)sh->poly[k].y, (double)sh->poly[k].z);
+            }
         }
         wi(f, "active", o->active ? 1 : 0);
         wv3(f, "position", o->transform.position);
@@ -184,19 +189,37 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
         wv3(f, "scale", o->transform.scale);
         if (o->transform.parent >= 0)
             wi(f, "parent", o->transform.parent); // grouping only; index into this list
-        wf(f, "shininess", o->material.shininess);
-        wv2(f, "tiling", o->material.tiling);
-        wv2(f, "offset", o->material.offset);
-        wi(f, "triplanar", o->material.triplanar ? 1 : 0);
-        wf(f, "triplanarScale", o->material.triplanarScale);
-        for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
-            Color c = o->material.maps[m].color;
-            fprintf(f, "  m%d.color %d %d %d %d\n", m, c.r, c.g, c.b, c.a);
-            fprintf(f, "  m%d.value %g\n", m, (double)o->material.maps[m].value);
-            fprintf(f, "  m%d.wrap %d\n", m, s->texWrap[i][m]);
-            if (s->texPath[i][m][0] != '\0')
-                fprintf(f, "  m%d.texture \"%s\"\n", m, s->texPath[i][m]);
+
+        const Material* mt = Mge_GetMaterialComponent(o);
+        if (mt != NULL) {
+            fprintf(f, "  material\n");
+            wf(f, "shininess", mt->shininess);
+            wv2(f, "tiling", mt->tiling);
+            wv2(f, "offset", mt->offset);
+            wi(f, "triplanar", mt->triplanar ? 1 : 0);
+            wf(f, "triplanarScale", mt->triplanarScale);
+            for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+                Color c = mt->maps[m].color;
+                fprintf(f, "  m%d.color %d %d %d %d\n", m, c.r, c.g, c.b, c.a);
+                fprintf(f, "  m%d.value %g\n", m, (double)mt->maps[m].value);
+                fprintf(f, "  m%d.wrap %d\n", m, s->texWrap[i][m]);
+                if (s->texPath[i][m][0] != '\0')
+                    fprintf(f, "  m%d.texture \"%s\"\n", m, s->texPath[i][m]);
+            }
         }
+
+        const Collider* col = Mge_GetColliderComponent(o);
+        if (col != NULL)
+            fprintf(f, "  collider %s %g %g %g %g %g %g %d\n",
+                col->kind == COLLIDER_SPHERE ? "sphere" : "box",
+                (double)col->offset.x, (double)col->offset.y, (double)col->offset.z,
+                (double)col->size.x, (double)col->size.y, (double)col->size.z, col->isTrigger ? 1 : 0);
+
+        const RigidBody* rb = Mge_GetRigidBodyComponent(o);
+        if (rb != NULL)
+            fprintf(f, "  rigidbody %g %g %d\n",
+                (double)rb->mass, (double)rb->restitution, rb->useGravity ? 1 : 0);
+
         fprintf(f, "\n");
     }
 
@@ -244,6 +267,8 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
                 "void MgeScene_Init(MgeSceneCtx* ctx) { (void)ctx; }\n\n"
                 "void MgeScene_Update(MgeSceneCtx* ctx, float dt)\n"
                 "{\n"
+                "    // objects with a Collider + RigidBody component fall + collide on\n"
+                "    // their own -- the host steps the physics, don't call it here.\n\n"
                 "    // example: spin every solid object (leave cameras alone -- one of\n"
                 "    // them is the view)\n"
                 "    for (int i = 0; i < *ctx->objectCount; i++)\n"
@@ -333,7 +358,12 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
             if (s->objectCount >= SCENE_MAX_OBJECTS) { obj = NULL; sec = SEC_OBJECT; continue; }
             objIdx = s->objectCount++;
             obj = &s->objects[objIdx];
-            *obj = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, (Color){ 255, 255, 255, 255 });
+            *obj = (Object){ 0 }; // components come from the lines below
+            obj->kind = OBJECT_3D;
+            obj->active = true;
+            obj->transform.rotation = Quaternion_Identity();
+            obj->transform.scale = (Vector3){ 1, 1, 1 };
+            obj->transform.parent = -1;
             quoted(a, s->objectNames[objIdx], sizeof(s->objectNames[objIdx]));
             sec = SEC_OBJECT;
             continue;
@@ -376,20 +406,59 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
             else if (strcmp(key, "msaa") == 0) Mge_SetMSAAEnabled(atoi(rest) != 0);
             else if (strcmp(key, "skybox") == 0) quoted(a, s->skyDir, SCENE_TEXPATH_LEN);
             else if (strcmp(key, "mainCamera") == 0) s->mainCamera = atoi(rest);
+            else if (strcmp(key, "showColliders") == 0) s->showColliders = atoi(rest) != 0;
             continue;
         }
         if (sec == SEC_OBJECT && obj != NULL) {
-            if (strcmp(key, "kind") == 0)
+            Shape* osh = Mge_GetShapeComponent(obj);
+            Material* omt = Mge_GetMaterialComponent(obj);
+            if (strcmp(key, "kind") == 0) {
                 obj->kind = (strcmp(rest, "camera") == 0) ? OBJECT_CAMERA : OBJECT_3D;
-            else if (strcmp(key, "primitive") == 0)
-                obj->primitive = (PrimitiveKind)name_index(rest, PRIM_NAMES, PRIM_KIND_COUNT, PRIM_CUBE);
-            else if (strcmp(key, "wireframe") == 0)
-                obj->wireframe = atoi(rest) != 0;
-            else if (strcmp(key, "polyStrip") == 0)
-                obj->polyStrip = atoi(rest) != 0;
-            else if (strcmp(key, "point") == 0 && obj->polyCount < MGE_MAX_POLY_POINTS &&
-                     sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
-                obj->poly[obj->polyCount++] = (Vector3){ x, y, z };
+                if (obj->kind == OBJECT_CAMERA) {
+                    Mge_RemoveComponent(obj, COMPONENT_SHAPE);
+                    Mge_RemoveComponent(obj, COMPONENT_MATERIAL);
+                }
+            }
+            else if (strcmp(key, "shape") == 0 || strcmp(key, "primitive") == 0) { // "primitive": legacy alias
+                if (osh == NULL) osh = Mge_AddComponent(obj, COMPONENT_SHAPE);
+                osh->primitive = (PrimitiveKind)name_index(rest, PRIM_NAMES, PRIM_KIND_COUNT, PRIM_CUBE);
+            }
+            else if (strcmp(key, "wireframe") == 0) {
+                if (osh == NULL) osh = Mge_AddComponent(obj, COMPONENT_SHAPE);
+                osh->wireframe = atoi(rest) != 0;
+            }
+            else if (strcmp(key, "polyStrip") == 0) {
+                if (osh == NULL) osh = Mge_AddComponent(obj, COMPONENT_SHAPE);
+                osh->polyStrip = atoi(rest) != 0;
+            }
+            else if (strcmp(key, "point") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3) {
+                if (osh == NULL) osh = Mge_AddComponent(obj, COMPONENT_SHAPE);
+                if (osh->polyCount < MGE_MAX_POLY_POINTS)
+                    osh->poly[osh->polyCount++] = (Vector3){ x, y, z };
+            }
+            else if (strcmp(key, "material") == 0)
+                omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
+            else if (strcmp(key, "collider") == 0) {
+                char kw[16];
+                float ox, oy, oz, sx, sy, sz;
+                int tr = 0;
+                if (sscanf(rest, "%15s %f %f %f %f %f %f %d", kw, &ox, &oy, &oz, &sx, &sy, &sz, &tr) >= 7) {
+                    Collider* c = Mge_AddComponent(obj, COMPONENT_COLLIDER);
+                    c->kind = (strcmp(kw, "sphere") == 0) ? COLLIDER_SPHERE : COLLIDER_BOX;
+                    c->offset = (Vector3){ ox, oy, oz };
+                    c->size = (Vector3){ sx, sy, sz };
+                    c->isTrigger = tr != 0;
+                }
+            }
+            else if (strcmp(key, "rigidbody") == 0) {
+                float mass = 1.0f, rest_ = 0.3f;
+                int grav = 1;
+                sscanf(rest, "%f %f %d", &mass, &rest_, &grav);
+                RigidBody* b = Mge_AddComponent(obj, COMPONENT_RIGIDBODY);
+                b->mass = mass;
+                b->restitution = rest_;
+                b->useGravity = grav != 0;
+            }
             else if (strcmp(key, "active") == 0)
                 obj->active = atoi(rest) != 0;
             else if (strcmp(key, "position") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
@@ -416,23 +485,34 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
                 obj->transform.scale = (Vector3){ x, y, z };
             else if (strcmp(key, "parent") == 0)
                 obj->transform.parent = atoi(rest);
-            else if (strcmp(key, "shininess") == 0)
-                obj->material.shininess = (float)atof(rest);
-            else if (strcmp(key, "tiling") == 0 && sscanf(rest, "%f %f", &x, &y) == 2)
-                obj->material.tiling = (Vector2){ x, y };
-            else if (strcmp(key, "offset") == 0 && sscanf(rest, "%f %f", &x, &y) == 2)
-                obj->material.offset = (Vector2){ x, y };
-            else if (strcmp(key, "triplanar") == 0)
-                obj->material.triplanar = atoi(rest) != 0;
-            else if (strcmp(key, "triplanarScale") == 0)
-                obj->material.triplanarScale = (float)atof(rest);
+            else if (strcmp(key, "shininess") == 0) {
+                if (omt == NULL) omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
+                omt->shininess = (float)atof(rest);
+            }
+            else if (strcmp(key, "tiling") == 0 && sscanf(rest, "%f %f", &x, &y) == 2) {
+                if (omt == NULL) omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
+                omt->tiling = (Vector2){ x, y };
+            }
+            else if (strcmp(key, "offset") == 0 && sscanf(rest, "%f %f", &x, &y) == 2) {
+                if (omt == NULL) omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
+                omt->offset = (Vector2){ x, y };
+            }
+            else if (strcmp(key, "triplanar") == 0) {
+                if (omt == NULL) omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
+                omt->triplanar = atoi(rest) != 0;
+            }
+            else if (strcmp(key, "triplanarScale") == 0) {
+                if (omt == NULL) omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
+                omt->triplanarScale = (float)atof(rest);
+            }
             else if (key[0] == 'm' && key[1] >= '0' && key[1] <= '3' && key[2] == '.') {
                 int mi = key[1] - '0';
                 const char* sub = key + 3;
+                if (omt == NULL) omt = Mge_AddComponent(obj, COMPONENT_MATERIAL);
                 if (strcmp(sub, "color") == 0 && sscanf(rest, "%f %f %f %f", &x, &y, &z, &w) == 4)
-                    obj->material.maps[mi].color = (Color){ (unsigned char)x, (unsigned char)y, (unsigned char)z, (unsigned char)w };
+                    omt->maps[mi].color = (Color){ (unsigned char)x, (unsigned char)y, (unsigned char)z, (unsigned char)w };
                 else if (strcmp(sub, "value") == 0)
-                    obj->material.maps[mi].value = (float)atof(rest);
+                    omt->maps[mi].value = (float)atof(rest);
                 else if (strcmp(sub, "wrap") == 0)
                     s->texWrap[objIdx][mi] = (unsigned char)atoi(rest);
                 else if (strcmp(sub, "texture") == 0)

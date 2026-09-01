@@ -639,34 +639,87 @@ typedef struct Transform {
 	int parent;            // index of the parent object, or -1 (hierarchy: reserved)
 } Transform;
 
-typedef struct Object {
-	ObjectKind kind;
-	PrimitiveKind primitive; // 3D shape (ignored for 2D)
-	Transform transform;
-	Material material;  // surface response: diffuse/specular/normal maps + tint.
-	                    // The diffuse map colour is the object's base colour
-	                    // (2D rects draw with it too).
+// --- Components -----------------------------------------------------------
+//
+// An Object carries a fixed array of Components indexed by ComponentType. The
+// data is reached ONLY through Mge_Get<X>Component(obj) (NULL when absent) --
+// never obj.components[...] directly.
+
+typedef enum {
+	COMPONENT_SHAPE = 0,   // drawable primitive (Shape)
+	COMPONENT_MATERIAL,    // surface response (Material)
+	COMPONENT_COLLIDER,    // physics volume (Collider)
+	COMPONENT_RIGIDBODY,   // physics motion (RigidBody)
+	COMPONENT_TYPE_COUNT
+} ComponentType;
+
+// The drawable primitive of an object.
+typedef struct Shape {
+	PrimitiveKind primitive;
 	Vector3 poly[MGE_MAX_POLY_POINTS]; // PRIM_POLYGON: local points, run through transform
 	int  polyCount;    // PRIM_POLYGON: 2..MGE_MAX_POLY_POINTS; 0 otherwise
 	bool polyStrip;    // PRIM_POLYGON: false = triangle fan, true = strip
-	bool wireframe;    // draw the primitive as wire / outline instead of solid
-	int id;
+	bool wireframe;    // draw as wire / outline instead of solid
+} Shape;
+
+typedef enum { COLLIDER_BOX = 0, COLLIDER_SPHERE } ColliderKind;
+
+// A physics collision volume, positioned at transform.position + `offset`.
+typedef struct Collider {
+	ColliderKind kind;
+	Vector3 offset;    // local offset from transform.position
+	Vector3 size;      // box: full extents; sphere: radius in .x  (absolute -- not scaled by transform)
+	bool    isTrigger; // report overlaps but apply no physics response
+} Collider;
+
+// Rigid-body motion state (linear only in this phase).
+typedef struct RigidBody {
+	Vector3 velocity;
+	float   mass;        // 0 -> static / immovable (treated as infinite mass)
+	float   restitution; // bounciness: 0 = none .. 1 = perfectly elastic
+	bool    useGravity;
+} RigidBody;
+
+typedef struct Component {
+	bool present;
+	union {
+		Shape     shape;
+		Material  material;
+		Collider  collider;
+		RigidBody body;
+	};
+} Component;
+
+typedef struct Object {
+	ObjectKind kind;
+	Transform  transform;
+	Component  components[COMPONENT_TYPE_COUNT]; // indexed by ComponentType; use the accessors
+	int  id;
 	bool active;       // false -> not drawn / not outlined
 	bool selected;
 } Object;
 
 // --- Hot-reloadable scene modules ------------------------------------------
 //
-// A scene module is a shared library exporting three C functions:
+// A scene module is a shared library exporting three C functions, plus an
+// optional fourth:
 //
 //   void MgeScene_Init(MgeSceneCtx*);
 //   void MgeScene_Update(MgeSceneCtx*, float dt);
 //   void MgeScene_Shutdown(MgeSceneCtx*);
+//   void MgeScene_Draw(MgeSceneCtx*, Camera3D camera);   // optional
 //
 // The host (the editor, or your own runtime) compiles it, loads it with
 // Mge_LoadLibrary, and calls it each frame with an MgeSceneCtx pointing at the
 // host's live object / light storage -- so a rebuild-and-reload never loses
 // state. The module links `libmgengine` dynamically and #includes <mge.h>.
+//
+// MgeScene_Draw, when present, runs each frame right after the host has drawn
+// the scene (inside Mge_BeginDrawing, scene depth buffer still bound). Use it for
+// game geometry the module owns and that isn't an editor Object -- open your own
+// Mge_BeginMode3D(camera) (+ Mge_BeginLighting3DEx if you want it lit), issue
+// Draw_Cube / Draw_Sphere / ..., then Mge_EndMode3D. The standalone player calls
+// it every frame; the editor calls it only in Play mode.
 typedef struct MgeSceneCtx {
 	Object*  objects;     // the host's object array
 	int*     objectCount; // live count; the module may grow/shrink within maxObjects
@@ -676,12 +729,15 @@ typedef struct MgeSceneCtx {
 	int      maxLights;
 	Camera3D camera;      // the host's current view camera
 	int      selected;    // host's selected object index, or -1
+	const char* sceneName;      // the running scene's name (read-only)
+	char     requestedScene[64]; // write a scene name here to ask the host to switch scenes
 	void*    user;        // host-defined; the module must not touch it
 } MgeSceneCtx;
 
 typedef void (*MgeSceneInitFn)(MgeSceneCtx*);
 typedef void (*MgeSceneUpdateFn)(MgeSceneCtx*, float dt);
 typedef void (*MgeSceneShutdownFn)(MgeSceneCtx*);
+typedef void (*MgeSceneDrawFn)(MgeSceneCtx*, Camera3D camera);
 
 // Dynamic library loading (Windows: LoadLibrary; POSIX: dlopen with RTLD_NOW |
 // RTLD_LOCAL). Returns NULL on failure -- Mge_GetDylibError() has the reason.
@@ -1187,6 +1243,32 @@ Ray Mge_GetMouseRay(Camera3D camera);
 void Mge_DrawRay(Ray ray, float length, Color color);
 void Mge_DrawRayHit(Ray ray, RayHit hit, Color rayColor, Color hitColor);
 
+// --- Rigid-body physics (linear: position + velocity + mass + restitution).
+// Colliders are box / sphere from the Collider component; a box uses its
+// axis-aligned bounds (rotation is ignored in this phase).
+typedef struct MgeCollisionPair {
+	int a, b;        // indices into the object array
+	Vector3 mtv;     // minimum translation vector: move `a` by this to separate it from `b`
+	bool trigger;    // either collider isTrigger -> reported but not resolved
+} MgeCollisionPair;
+
+void    Mge_SetGravity(Vector3 g);   // default { 0, -9.81, 0 }
+Vector3 Mge_GetGravity(void);
+
+// True when a and b's colliders overlap; `mtv` (may be NULL) is filled on a hit.
+bool Mge_ObjectsOverlap(const Object* a, const Object* b, Vector3* mtv);
+
+// Every overlapping pair of active colliders, into `out` (up to `maxOut`).
+int  Mge_CheckCollisions(const Object* objects, int count, MgeCollisionPair* out, int maxOut);
+
+// One physics frame: integrate rigid bodies under gravity, then detect + resolve
+// collisions (positional correction + a restitution impulse, inverse-mass
+// weighted; a collider with no RigidBody, or mass 0, is immovable).
+void Mge_StepPhysics(Object* objects, int count, float dt);
+
+// The collider's world box/sphere as wireframe (inside Mge_BeginMode3D).
+void Draw_ColliderWires(Object obj, Color color);
+
 // Objects. The `color` is stored as the material's diffuse-map tint (there is no
 // separate Object.color); pass WHITE for an untinted surface. Mge_MakeObject3D
 // makes a cube -- use Mge_MakeShape3D for a sphere or a plane. Constructors set
@@ -1194,9 +1276,23 @@ void Mge_DrawRayHit(Ray ray, RayHit hit, Color rayColor, Color hitColor);
 Object Mge_MakeObject2D(float x, float y, float w, float h, Color color);
 Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
 Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color);
-void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.transform.rotation; skips !obj.active
-void   Mge_DrawPrimitive(Object obj, Color color); // just the 3D primitive geometry, one colour
+void   Mge_DrawObject(Object obj); // respects the Shape component + transform; skips !obj.active
+void   Mge_DrawPrimitive(Object obj, Color color); // just the Shape geometry, one colour
 bool   Mge_PrimitiveIsSolid(Object obj); // true = filled surface (casts shadow, gets a stencil outline)
+
+// --- Components. Reach an object's component data ONLY through these; each
+// getter returns NULL when the object lacks that component. Mge_AddComponent
+// seeds a sensible default and returns the data pointer; Mge_RemoveComponent
+// clears it. `Mge_GetComponent` is the generic form (cast the void*).
+bool        Mge_HasComponent(const Object* o, ComponentType t);
+void*       Mge_GetComponent(Object* o, ComponentType t);
+void*       Mge_AddComponent(Object* o, ComponentType t);
+void        Mge_RemoveComponent(Object* o, ComponentType t);
+const char* Mge_ComponentName(ComponentType t);
+Shape*      Mge_GetShapeComponent(Object* o);
+Material*   Mge_GetMaterialComponent(Object* o);
+Collider*   Mge_GetColliderComponent(Object* o);
+RigidBody*  Mge_GetRigidBodyComponent(Object* o);
 
 // Unit forward vector for an OBJECT_CAMERA: its orientation applied to local -Z
 // (identity looks toward -Z). Pair with Quaternion_LookRotation to aim one.
@@ -1299,8 +1395,9 @@ bool Mge_Gizmo3D(Vector3* position, Quaternion* rotation, Vector3* scale, Camera
 //       Mge_SetMaterial(mat);   Draw_Cube(...);
 //   Mge_EndLighting3D();
 //
-// Mge_DrawObject() already calls Mge_SetMaterial(obj.material) for you, so an
-// Object drawn between Begin/End is lit with its own material automatically.
+// Mge_DrawObject() already calls Mge_SetMaterial() with the object's Material
+// component (or a default when it has none), so an Object drawn between Begin/End
+// is lit with its own material automatically.
 
 // Specular model. Blinn-Phong (halfway vector) is the default -- it has no hard
 // cutoff at grazing angles the way classic Phong's reflect() does, so low-

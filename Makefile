@@ -176,7 +176,7 @@ $(APP): $(EDITOR_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENG
 PLAYER_SRC = runtime/player.c editor/scene.c editor/scene_io.c editor/project.c \
              editor/project_io.c editor/pathutil.c editor/editor_camera.c editor/scene_runtime.c
 $(PLAYER): $(PLAYER_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor $(PLAYER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor -I$(MLIB) $(PLAYER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp
 

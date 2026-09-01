@@ -36,8 +36,8 @@ Object Mge_MakeObject2D(float x, float y, float w, float h, Color color)
     o.transform.rotation = Quaternion_Identity();
     o.transform.scale = (Vector3){ w, h, 0.0f };
     o.transform.parent = -1;
-    o.material = Mge_DefaultMaterial();
-    o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    Material* m = Mge_AddComponent(&o, COMPONENT_MATERIAL);
+    m->maps[MATERIAL_MAP_DIFFUSE].color = color;
     return o;
 }
 
@@ -46,13 +46,14 @@ Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, 
     Object o = { 0 };
     o.kind = OBJECT_3D;
     o.active = true;
-    o.primitive = primitive;
     o.transform.position = position;
     o.transform.rotation = Quaternion_Identity();
     o.transform.scale = size;
     o.transform.parent = -1;
-    o.material = Mge_DefaultMaterial();
-    o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    Shape* sh = Mge_AddComponent(&o, COMPONENT_SHAPE);
+    sh->primitive = primitive;
+    Material* m = Mge_AddComponent(&o, COMPONENT_MATERIAL);
+    m->maps[MATERIAL_MAP_DIFFUSE].color = color;
     return o;
 }
 
@@ -65,39 +66,42 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
 
 // PRIM_POLYGON local points -> world space (position + rotation*(point*scale)).
 // Returns the point count actually written (clamped).
-static int poly_world(const Object* o, Vector3 out[MGE_MAX_POLY_POINTS])
+static int poly_world(const Shape* sh, Transform xf, Vector3 out[MGE_MAX_POLY_POINTS])
 {
-    int n = o->polyCount;
+    int n = sh->polyCount;
     if (n > MGE_MAX_POLY_POINTS)
         n = MGE_MAX_POLY_POINTS;
     for (int k = 0; k < n; k++) {
-        Vector3 local = Vector3_Multiply(o->poly[k], o->transform.scale);
-        out[k] = Vector3_Add(o->transform.position, Quaternion_RotateVector3(o->transform.rotation, local));
+        Vector3 local = Vector3_Multiply(sh->poly[k], xf.scale);
+        out[k] = Vector3_Add(xf.position, Quaternion_RotateVector3(xf.rotation, local));
     }
     return n;
 }
 
 // true when the primitive draws as a filled surface (gets a shadow + a stencil
-// selection shell); false for wireframe / arrow / line / polygon-outline.
+// selection shell); false for wireframe / arrow / line / polygon-outline / no shape.
 bool Mge_PrimitiveIsSolid(Object obj)
 {
-    if (obj.kind != OBJECT_3D || obj.wireframe || obj.primitive == PRIM_ARROW)
+    const Shape* sh = Mge_GetShapeComponent(&obj);
+    if (obj.kind != OBJECT_3D || sh == NULL || sh->wireframe || sh->primitive == PRIM_ARROW)
         return false;
-    if (obj.primitive == PRIM_POLYGON)
-        return obj.polyCount >= 3;
+    if (sh->primitive == PRIM_POLYGON)
+        return sh->polyCount >= 3;
     return true;
 }
 
-// The geometry for a 3D object's primitive, in a chosen colour. Shared by the
-// lit draw and (via Mge_DrawObjectOutline) the stencil outline.
+// The geometry for a 3D object's Shape component, in a chosen colour. Shared by
+// the lit draw and (via Mge_DrawObjectOutline) the stencil outline. No-op with
+// no Shape component or an OBJECT_CAMERA.
 void Mge_DrawPrimitive(Object obj, Color color)
 {
-    if (obj.kind == OBJECT_CAMERA)
-        return; // a camera marker has no solid geometry (no shadow, no lit pass)
+    const Shape* sh = Mge_GetShapeComponent(&obj);
+    if (obj.kind == OBJECT_CAMERA || sh == NULL)
+        return;
     const Vector3 p = obj.transform.position, s = obj.transform.scale;
     const Quaternion r = obj.transform.rotation;
-    const bool wire = obj.wireframe;
-    switch (obj.primitive) {
+    const bool wire = sh->wireframe;
+    switch (sh->primitive) {
     case PRIM_SPHERE:
         if (wire)
             Draw_SphereWiresEx(p, s.x * 0.5f, 8, 14, color);
@@ -117,11 +121,11 @@ void Mge_DrawPrimitive(Object obj, Color color)
     }
     case PRIM_POLYGON: {
         Vector3 w[MGE_MAX_POLY_POINTS];
-        int n = poly_world(&obj, w);
+        int n = poly_world(sh, obj.transform, w);
         if (wire || n < 3)
             Draw_Polygon3DWires(w, n, n >= 3, color);
         else
-            Draw_Polygon3D(w, n, obj.polyStrip, color);
+            Draw_Polygon3D(w, n, sh->polyStrip, color);
         break;
     }
     case PRIM_CUBE:
@@ -163,19 +167,26 @@ void Mge_DrawObject(Object obj)
         return;
     }
 
+    Material* mat = Mge_GetMaterialComponent(&obj);
+    Material fallback;
+    if (mat == NULL) {
+        fallback = Mge_DefaultMaterial();
+        mat = &fallback;
+    }
+    Color base = mat->maps[MATERIAL_MAP_DIFFUSE].color;
+
     const Vector3 p = obj.transform.position, s = obj.transform.scale;
     if (obj.kind == OBJECT_2D) {
         Rectangle r = { p.x - s.x * 0.5f, p.y - s.y * 0.5f, s.x, s.y };
-        Draw_RectangleRec(r, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
+        Draw_RectangleRec(r, base);
         if (obj.selected)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_2D, MGE_SELECT_OUTLINE_COLOR);
-    } else {
-        Mge_SetMaterial(obj.material); // no-op unless Mge_BeginLighting3D is active
+    } else if (Mge_GetShapeComponent(&obj) != NULL) {
+        Mge_SetMaterial(*mat); // no-op unless Mge_BeginLighting3D is active
         bool solid = Mge_PrimitiveIsSolid(obj);
         // wire / arrow / line have no fillable interior for a stencil shell --
         // just recolour them when selected (like the camera marker)
-        Color c = (obj.selected && !solid) ? MGE_SELECT_OUTLINE_COLOR
-                                           : obj.material.maps[MATERIAL_MAP_DIFFUSE].color;
+        Color c = (obj.selected && !solid) ? MGE_SELECT_OUTLINE_COLOR : base;
         Mge_DrawPrimitive(obj, c);
         if (obj.selected && solid)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_3D, MGE_SELECT_OUTLINE_COLOR);

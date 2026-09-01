@@ -30,6 +30,7 @@ static MgeSceneCtx make_ctx(Scene* s, Camera3D cam)
     c.maxLights = SCENE_MAX_LIGHTS;
     c.camera = cam;
     c.selected = (s->selKind == SEL_OBJECT) ? s->selIndex : -1;
+    c.sceneName = s->name;
     return c;
 }
 
@@ -183,6 +184,7 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s)
         SceneRuntime_Unload(&p->rt);
         restore(s, &p->snapshot);
         p->playing = false;
+        p->switchReq[0] = '\0';
         return true;
 
     default:
@@ -225,6 +227,26 @@ void Play_Frame(Play* p, Project* proj, Scene* s)
 
     MgeSceneCtx ctx = make_ctx(s, p->viewCam);
     SceneRuntime_Update(&p->rt, &ctx, (float)Mge_GetDeltaTime());
+
+    // linear rigid-body step: falls back to a no-op unless objects carry
+    // Collider + RigidBody components. Discarded on Stop with the snapshot.
+    Mge_StepPhysics(s->objects, s->objectCount, (float)Mge_GetDeltaTime());
+
+    // a module asked to switch scenes -- the editor's Play mode runs one scene;
+    // scene switching happens in the built game (Build Bundle -> mgeplayer)
+    if (ctx.requestedScene[0] != '\0' && strcmp(ctx.requestedScene, p->switchReq) != 0) {
+        snprintf(p->switchReq, sizeof(p->switchReq), "%s", ctx.requestedScene);
+        BuildLog_Line(&p->log, "-- scene switch to '%s' requested: Build Bundle + run the game to see map changes --", ctx.requestedScene);
+        p->showConsole = true;
+    }
+}
+
+void Play_Draw(Play* p, Scene* s, Camera3D view)
+{
+    if (!p->playing)
+        return;
+    MgeSceneCtx ctx = make_ctx(s, view);
+    SceneRuntime_Draw(&p->rt, &ctx, view);
 }
 
 bool Play_DrawOverlay(Play* p, float screenW, int fps)

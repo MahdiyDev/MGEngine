@@ -84,23 +84,26 @@ TEST(make_objects)
     CHECK_F(b.transform.scale.z, 6.0f);
     CHECK(b.active);
 
-    // a 3D object gets a default material whose diffuse map is tinted with its colour
-    CHECK_F(b.material.shininess, 32.0f);
-    CHECK(b.material.maps[MATERIAL_MAP_DIFFUSE].color.g == 255 &&
-        b.material.maps[MATERIAL_MAP_DIFFUSE].color.r == 0);
-    CHECK(b.material.maps[MATERIAL_MAP_DIFFUSE].texture.id == 0); // no texture by default
-    CHECK(b.primitive == PRIM_CUBE); // Mge_MakeObject3D is a cube
+    // a 3D object gets Shape + Material components; the diffuse map is tinted with its colour
+    Material* bm = Mge_GetMaterialComponent(&b);
+    Shape* bs = Mge_GetShapeComponent(&b);
+    CHECK(bm != NULL && bs != NULL);
+    CHECK_F(bm->shininess, 32.0f);
+    CHECK(bm->maps[MATERIAL_MAP_DIFFUSE].color.g == 255 &&
+        bm->maps[MATERIAL_MAP_DIFFUSE].color.r == 0);
+    CHECK(bm->maps[MATERIAL_MAP_DIFFUSE].texture.id == 0); // no texture by default
+    CHECK(bs->primitive == PRIM_CUBE); // Mge_MakeObject3D is a cube
 }
 
 TEST(make_shape_sets_the_primitive)
 {
     Object s = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 0, 0, 0 }, (Vector3){ 2, 2, 2 }, BLUE);
     CHECK(s.kind == OBJECT_3D);
-    CHECK(s.primitive == PRIM_SPHERE);
-    CHECK(s.material.maps[MATERIAL_MAP_DIFFUSE].color.b == 255);
+    CHECK(Mge_GetShapeComponent(&s)->primitive == PRIM_SPHERE);
+    CHECK(Mge_GetMaterialComponent(&s)->maps[MATERIAL_MAP_DIFFUSE].color.b == 255);
 
     Object p = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, 0, 0 }, (Vector3){ 4, 0.2f, 4 }, WHITE);
-    CHECK(p.primitive == PRIM_PLANE);
+    CHECK(Mge_GetShapeComponent(&p)->primitive == PRIM_PLANE);
 }
 
 TEST(vector4_transform)

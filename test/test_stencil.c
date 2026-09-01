@@ -141,7 +141,7 @@ TEST(end_stencil_keeps_depth_off_when_it_was_off)
 
 TEST(draw_object_outline_stamps_then_borders)
 {
-    Object box = { .kind = OBJECT_3D, .primitive = PRIM_CUBE, .active = true,
+    Object box = { .kind = OBJECT_3D, .active = true,
         .transform = { .position = { 0, 0, 0 }, .scale = { 2, 2, 2 } } };
     g_cubeDraws = 0;
 

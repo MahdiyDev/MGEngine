@@ -56,6 +56,8 @@ typedef struct Scene {
 
     BloomFX bloom;        // used when hdrOn && bloomOn
     bool bloomOn;
+
+    bool showColliders;  // draw every object's collider wireframe (editor only)
 } Scene;
 
 void Scene_Init(Scene* s, int width, int height);

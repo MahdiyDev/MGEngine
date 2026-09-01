@@ -9,6 +9,7 @@ typedef struct SceneRuntime {
     MgeSceneInitFn initFn;
     MgeSceneUpdateFn updateFn;
     MgeSceneShutdownFn shutdownFn;
+    MgeSceneDrawFn drawFn;  // optional MgeScene_Draw export; NULL when absent
     int liveN;              // counter for the _live_<n> copies
     char liveDll[600];      // the loaded copy (deleted on unload)
     bool loaded;
@@ -27,6 +28,9 @@ void SceneRuntime_Unload(SceneRuntime* rt);
 
 void SceneRuntime_Init(SceneRuntime* rt, MgeSceneCtx* ctx);
 void SceneRuntime_Update(SceneRuntime* rt, MgeSceneCtx* ctx, float dt);
+// Run the module's optional MgeScene_Draw (no-op when it has none). Call inside
+// Mge_BeginDrawing, after the host has drawn the scene.
+void SceneRuntime_Draw(SceneRuntime* rt, MgeSceneCtx* ctx, Camera3D camera);
 void SceneRuntime_Shutdown(SceneRuntime* rt, MgeSceneCtx* ctx);
 bool SceneRuntime_Loaded(const SceneRuntime* rt);
 

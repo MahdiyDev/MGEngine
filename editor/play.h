@@ -26,6 +26,8 @@ typedef struct Play {
     SceneBuildJob job;   // in-flight compile (runs as a separate process)
     int  jobPurpose;     // JOB_* -- what to do when the compile finishes
     long jobDigest;      // source digest captured when a hot-reload build started
+
+    char switchReq[64];  // last ctx.requestedScene we logged (editor Play only switches in the built game)
 } Play;
 
 void Play_Init(Play* p);
@@ -38,6 +40,10 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s);
 // Per frame: advance an async compile; while playing, hot-reload on source
 // change then run MgeScene_Update with `p->viewCam` as the module's camera.
 void Play_Frame(Play* p, Project* proj, Scene* s);
+
+// Run the playing module's optional MgeScene_Draw. Call inside Mge_BeginDrawing,
+// right after Scene_Draw. No-op unless playing and the module exports it.
+void Play_Draw(Play* p, Scene* s, Camera3D view);
 
 // The play-mode overlay strip: Stop + Console toggle + FPS. Returns true the
 // frame Stop is pressed.

@@ -20,7 +20,9 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_math.h mge_math.c  Vector2/3/4, Matrix, Quaternion, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
-  mge_object.c          Object struct (primitive + Transform + material, active flag) + 3D picking
+  mge_object.c          Object struct (Transform + components, active flag) + 3D picking
+  mge_component.c       Object components (Shape / Material / Collider / RigidBody) + accessors
+  mge_body.c            linear rigid-body step + box/sphere collider overlap + resolution
   mge_gizmo.c           switchable translate / rotate / scale manipulation gizmo
   mge_dialog.c          native dialogs (Mge_OpenFileDialog / Image / Save / Folder)
   mge_light.c          Blinn-Phong lighting; directional / point / spot; normal maps
@@ -184,7 +186,10 @@ with the C compiler and loads / calls / frees it through `Mge_LoadLibrary`;
 `test_pak` writes + reads a `.pak` (crc, split-file spanning, mount stack);
 `test_scene_io` / `test_project_io` round-trip the editor's `.mgscene` /
 `.mgproject` text formats; `test_physics` covers the raycast primitives, the
-nearest-hit object sweep and screen→ray unprojection.
+nearest-hit object sweep, screen→ray unprojection, box/sphere collider overlap
+and one linear rigid-body step; `test_component` covers the component array —
+add / remove / has / get, typed vs generic accessors, the seeded defaults and
+what the `Mge_Make*` constructors attach.
 
 `test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
 `<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
@@ -548,31 +553,63 @@ if (IsKeyPressed(KEY_F12))
 
 ### Objects & the manipulation gizmo
 
-An `Object` is a movable rectangle (`OBJECT_2D`), a 3D primitive (`OBJECT_3D`:
-`obj.primitive` ∈ `PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE` / `PRIM_ARROW` /
-`PRIM_POLYGON`), or a camera marker (`OBJECT_CAMERA` — a transform only, drawn as
-a wireframe box + a representative view frustum, never lit;
-`Mge_CameraObjectForward(rotation)` applies the orientation to local −Z).
-`obj.wireframe` draws the primitive as an outline; `PRIM_ARROW` runs along local
-+X for `scale.x`; `PRIM_POLYGON` draws `obj.poly[0..obj.polyCount)` (local points,
-run through the transform) as a segment / triangle / fan / `obj.polyStrip`.
-Its placement lives in `obj.transform` — a
+An `Object` is a movable rectangle (`OBJECT_2D`), a 3D object (`OBJECT_3D`), or a
+camera marker (`OBJECT_CAMERA` — a transform only, drawn as a wireframe box + a
+representative view frustum, never lit; `Mge_CameraObjectForward(rotation)`
+applies the orientation to local −Z). Its placement lives in `obj.transform` — a
 `Transform { Vector3 position, Quaternion rotation, Vector3 scale; int parent; }`
 where `rotation` is `{0,0,0,1}` (identity) on a fresh object — the constructors
 set it, and a zero-initialised `{0,0,0,0}` is also treated as identity when
 drawn. `scale` is the full extents (a cube of scale `{2,2,2}` is 2 units across;
 a sphere's diameter is `scale.x`); `parent` is reserved for hierarchy and is
-`-1` on a fresh object. An object also has a
-`material`, an `id`, an `active` flag (false → not drawn / not outlined) and a
-`selected` flag. There is **no `Object.color`** — the base colour is the
-diffuse map's tint (`obj.material.maps[MATERIAL_MAP_DIFFUSE].color`); the
-`Mge_MakeObject*` constructors still take a `Color` and store it there, and set
-`active = true`. `Mge_MakeObject3D` makes a cube;
-`Mge_MakeShape3D(primitive, pos, size, color)` makes any of the three.
-`Mge_DrawObject` renders the primitive rotated (cube corners + normals are
-rotated on the CPU — there is no per-object model matrix), with a stencil
-outline when `selected`, and draws nothing when `!active`. `Mge_DrawPrimitive(obj, color)` draws just
-the geometry (used by the shadow pass and the outline).
+`-1` on a fresh object. Beyond the transform, an object carries an `id`, an
+`active` flag (false → not drawn / not outlined), a `selected` flag, and a fixed
+array of **components** (see **Components** below) — everything else (shape,
+material, collider, rigid body) is an optional component.
+
+`Mge_MakeObject3D(pos, size, color)` makes a cube;
+`Mge_MakeShape3D(primitive, pos, size, color)` makes any `PrimitiveKind`
+(`PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE` / `PRIM_ARROW` / `PRIM_POLYGON`) —
+both attach a **Shape** + **Material** component; `Mge_MakeObject2D` attaches
+only a Material. There is **no `Object.color`** — the base colour is the diffuse
+map's tint (`Mge_GetMaterialComponent(&obj)->maps[MATERIAL_MAP_DIFFUSE].color`),
+which the constructors set from their `Color` argument.
+`Mge_DrawObject` renders the Shape rotated (cube corners + normals are rotated on
+the CPU — there is no per-object model matrix), lit with the Material component
+(or a default when absent), with a stencil outline when `selected`, and draws
+nothing when `!active` or when there is no Shape.
+`Mge_DrawPrimitive(obj, color)` draws just the geometry (used by the shadow pass
+and the outline).
+
+### Components
+
+Optional, trivially-copyable data attached to an `Object`, held in a fixed array
+indexed by `ComponentType` (`COMPONENT_SHAPE`, `COMPONENT_MATERIAL`,
+`COMPONENT_COLLIDER`, `COMPONENT_RIGIDBODY`). Never touch `obj.components[...]`
+directly — go through the accessors:
+
+```c
+bool        Mge_HasComponent(const Object* o, ComponentType t);
+void*       Mge_GetComponent(Object* o, ComponentType t);   // &data, or NULL if absent
+void*       Mge_AddComponent(Object* o, ComponentType t);   // adds (seeded default) or returns the existing
+void        Mge_RemoveComponent(Object* o, ComponentType t);
+const char* Mge_ComponentName(ComponentType t);             // "Shape" / "Material" / ...
+Shape*      Mge_GetShapeComponent(Object* o);               // typed wrappers over Mge_GetComponent
+Material*   Mge_GetMaterialComponent(Object* o);
+Collider*   Mge_GetColliderComponent(Object* o);
+RigidBody*  Mge_GetRigidBodyComponent(Object* o);
+```
+
+`Shape { PrimitiveKind primitive; Vector3 poly[MGE_MAX_POLY_POINTS]; int polyCount;
+bool polyStrip, wireframe; }` — `wireframe` draws the primitive as an outline;
+`PRIM_ARROW` runs along local +X for `scale.x`; `PRIM_POLYGON` draws
+`poly[0..polyCount)` (local points through the transform) as a segment / triangle
+/ fan / `polyStrip`. `Mge_AddComponent` seeds Shape → `PRIM_CUBE`, Material →
+`Mge_DefaultMaterial()`, Collider → box auto-fitted to `transform.scale`,
+RigidBody → `{ mass 1, restitution 0.3, useGravity true }`.
+
+Because components are plain values inside `Object`, the whole struct still
+`memcpy`s — snapshot-based undo and Play/Stop keep working unchanged.
 
 **Picking** (3D): `Mge_PickObject3D(objects, count, camera)` casts a ray through
 the cursor on left-click and selects the nearest object whose geometry it hits
@@ -672,7 +709,7 @@ RayHit Mge_RaycastTriangle(Ray ray, Vector3 v0, Vector3 v1, Vector3 v2);        
 `center`; the identity (or a zero) quaternion takes an axis-aligned fast path.
 
 **Scene objects.** `Mge_RaycastObjects(ray, objects, count)` tests each object as
-its `primitive` — `PRIM_SPHERE` (radius `scale.x/2`), `PRIM_CUBE` (an OBB from
+its Shape component's `primitive` — `PRIM_SPHERE` (radius `scale.x/2`), `PRIM_CUBE` (an OBB from
 `transform.scale` + `transform.rotation`), `PRIM_PLANE` (the finite XZ quad,
 `scale.x` × `scale.z`, rotated); an `OBJECT_CAMERA` is tested as its marker-body
 box. It returns the **nearest** forward hit, with `.index` set to that object (or
@@ -697,6 +734,48 @@ the contact point (a long stub on a miss) and marks the point + surface normal.
 Demo: `examples/physics/raycast_pick.c`. Tests: `test/test_physics.c` (hermetic —
 the unprojection maths is self-contained, needing only `mge_math` + libm) and the
 `raycast` scene in `make render`.
+
+### Physics: colliders & the rigid-body step
+
+`mge_body.c` adds linear rigid-body dynamics on top of the **Collider** and
+**RigidBody** components. This pass is *linear only* — position, velocity, mass,
+gravity, restitution and positional correction; boxes collide by their
+axis-aligned bounds (rotation is not yet fed to the contact solver), and there is
+no angular response, friction or sleeping.
+
+```c
+typedef enum { COLLIDER_BOX, COLLIDER_SPHERE } ColliderKind;
+typedef struct { ColliderKind kind; Vector3 offset; Vector3 size; bool isTrigger; } Collider;
+// size: box = full extents; sphere = radius in .x. World centre = transform.position + offset.
+typedef struct { Vector3 velocity; float mass; float restitution; bool useGravity; } RigidBody;
+// mass 0 (or no RigidBody at all, just a Collider) = static / infinite mass.
+
+void Mge_SetGravity(Vector3 g);   Vector3 Mge_GetGravity(void);   // default {0,-9.81,0}
+bool Mge_ObjectsOverlap(const Object* a, const Object* b, Vector3* mtv); // mtv separates a from b
+typedef struct { int a, b; Vector3 mtv; bool trigger; } MgeCollisionPair;
+int  Mge_CheckCollisions(const Object* objects, int count, MgeCollisionPair* out, int maxOut);
+void Mge_StepPhysics(Object* objects, int count, float dt);
+void Draw_ColliderWires(Object obj, Color color);   // inside Mge_BeginMode3D
+```
+
+`Mge_StepPhysics` integrates each dynamic body (`velocity += gravity*dt` if
+`useGravity`, then `position += velocity*dt`), then runs a couple of
+detect/resolve passes: non-trigger pairs get inverse-mass-weighted positional
+correction plus a restitution impulse. `e = min(restitutionA, restitutionB)`, and
+a *static* collider (a Collider with no RigidBody — a floor or wall) counts as
+`restitution 1` here, so a ball bounces off level geometry with its own
+bounciness. Trigger pairs are reported by `Mge_CheckCollisions` but get no
+response. Adding a Collider auto-fits its `size` to `transform.scale`.
+
+The host steps the physics — the editor's Play mode and the built player both
+call `Mge_StepPhysics` each frame, after the scene module's `update`. A scene
+module should **not** call it itself (that would double-step). In the editor Stop
+restores the pre-Play scene, so the simulated motion is discarded. A selected
+object's collider is drawn as a green wireframe, and **Render ▸ colliders** shows
+every collider at once.
+
+Tests: `test/test_physics.c` (overlap + one-step integration / bounce / trigger),
+`test/test_component.c`, and the `physics` scene in `make render`.
 
 ### Lighting
 
@@ -1507,9 +1586,10 @@ directly. `Quaternion_Multiply(a, b)` composes "apply `a`, then `b`" (matches
 ### Hot-reloadable scene modules (`mge_dylib.c`)
 
 A *scene module* is a shared library exporting `MgeScene_Init(MgeSceneCtx*)`,
-`MgeScene_Update(MgeSceneCtx*, float dt)` and `MgeScene_Shutdown(MgeSceneCtx*)`.
-The host compiles it, loads it, and calls it each frame with a pointer to its own
-object / light storage (`MgeSceneCtx`), so recompiling + reloading keeps state.
+`MgeScene_Update(MgeSceneCtx*, float dt)` and `MgeScene_Shutdown(MgeSceneCtx*)`,
+plus an optional `MgeScene_Draw(MgeSceneCtx*, Camera3D camera)`. The host compiles
+it, loads it, and calls it each frame with a pointer to its own object / light
+storage (`MgeSceneCtx`), so recompiling + reloading keeps state.
 
 ```c
 void* h = Mge_LoadLibrary("scene_live_3.dll");   // NULL -> Mge_GetDylibError()
@@ -1518,10 +1598,39 @@ up(&ctx, dt);
 Mge_FreeLibrary(h);
 ```
 
+**`MgeSceneCtx`** carries the host's `objects` / `objectCount` / `maxObjects`,
+`lights` / `lightCount` / `maxLights`, the current `camera`, the `selected` index,
+and two scene-control fields:
+
+- `const char* sceneName` — the running scene's name (read-only). A module keyed
+  on this can behave differently per scene (e.g. one game module, many levels).
+- `char requestedScene[64]` — write a scene name here and the host loads that
+  scene after the frame. Supported by `runtime/player.c` (the built game — every
+  scene's module is pre-built into the bundle); the editor's Play mode only
+  *logs* the request (it runs one scene at a time). Resolution is by name via an
+  `mlib` hashmap (`vendor/mlib/hashmap`) of the project's scene list.
+
+**`MgeScene_Draw`**, when exported, runs each frame right after the host has drawn
+the scene, inside `Mge_BeginDrawing` (the scene depth buffer is still bound — keep
+`hdr 0` for depth-correct results). Use it for game geometry the module owns and
+that isn't an editor Object (so the `SCENE_MAX_OBJECTS` cap doesn't apply):
+
+```c
+void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera) {
+    Mge_BeginMode3D(camera);
+    Mge_BeginLighting3DEx(ctx->lights, *ctx->lightCount, camera);
+    Draw_Cube(pos, size, color);   // ... the module's own board / actors ...
+    Mge_EndLighting3D();
+    Mge_EndMode3D();
+}
+```
+
 Windows locks a loaded DLL, so copy it to a fresh name before loading (the editor
 uses `<name>_live_<n>.dll`). The editor (`editor/scene_build.c` +
-`scene_runtime.c` + `play.c`) is the worked example — see
-[editor/USAGE.md](editor/USAGE.md).
+`scene_runtime.c` + `play.c`) and `runtime/player.c` are the worked examples — see
+[editor/USAGE.md](editor/USAGE.md). A full game (snake, 5 maps, one module keyed
+on `sceneName`, `requestedScene` to advance) lives in
+`../test project/scenes/map1..map5/snake.c`.
 
 ### `.pak` archives (`mge_pak.c`)
 

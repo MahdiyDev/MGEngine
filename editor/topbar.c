@@ -47,6 +47,7 @@ static void render_menu(Scene* s)
         Mge_SetMSAAEnabled(msaa);
 
     Mge_GuiCheckbox("shadows", &s->shadowsOn);
+    Mge_GuiCheckbox("colliders", &s->showColliders);
     Mge_GuiCheckbox("HDR", &s->hdrOn);
     if (s->hdrOn) {
         static const char* const TONE_NAMES[3] = { "Reinhard", "Exposure", "ACES" };

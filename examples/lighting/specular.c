@@ -29,9 +29,9 @@ int main(void)
         Mge_MakeObject3D((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.6f, 1.6f, 1.6f }, LIGHTGRAY),
         Mge_MakeObject3D((Vector3){ 2.5f, 0.0f, 0.0f }, (Vector3){ 1.6f, 1.6f, 1.6f }, LIGHTGRAY),
     };
-    cubes[0].material.shininess = 4.0f;   // broad, soft highlight
-    cubes[1].material.shininess = 32.0f;  // medium
-    cubes[2].material.shininess = 128.0f; // tight, sharp highlight
+    Mge_GetMaterialComponent(&cubes[0])->shininess = 4.0f;   // broad, soft highlight
+    Mge_GetMaterialComponent(&cubes[1])->shininess = 32.0f;  // medium
+    Mge_GetMaterialComponent(&cubes[2])->shininess = 128.0f; // tight, sharp highlight
 
     Light light = Mge_MakeLight((Vector3){ 4.0f, 5.0f, 4.0f }, (Vector3){ 1.0f, 1.0f, 1.0f });
     light.ambient = 0.1f;

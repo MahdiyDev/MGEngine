@@ -244,19 +244,19 @@ static RayHit raycast_object_arrow(Ray ray, Vector3 center, Vector3 size, Quater
 
 // a polygon primitive: local points (Object.poly[] * scale), reoriented by
 // rotation. >=3 points -> the fan/strip triangles; 2 points -> a fat AABB.
-static RayHit raycast_object_polygon(Ray ray, const Object* o)
+static RayHit raycast_object_polygon(Ray ray, const Object* o, const Shape* sh)
 {
     Vector3 c = o->transform.position, s = o->transform.scale;
     Quaternion q = has_rotation(o->transform.rotation) ? Quaternion_Normalize(o->transform.rotation)
                                                        : Quaternion_Identity();
     Quaternion inv = Quaternion_Conjugate(q);
 
-    int n = o->polyCount;
+    int n = sh->polyCount;
     if (n > MGE_MAX_POLY_POINTS)
         n = MGE_MAX_POLY_POINTS;
     Vector3 lp[MGE_MAX_POLY_POINTS];
     for (int k = 0; k < n; k++)
-        lp[k] = (Vector3){ o->poly[k].x * s.x, o->poly[k].y * s.y, o->poly[k].z * s.z };
+        lp[k] = (Vector3){ sh->poly[k].x * s.x, sh->poly[k].y * s.y, sh->poly[k].z * s.z };
 
     Ray local;
     local.position = Quaternion_RotateVector3(inv, v3sub(ray.position, c));
@@ -265,8 +265,8 @@ static RayHit raycast_object_polygon(Ray ray, const Object* o)
     RayHit h = RAYHIT_MISS;
     if (n >= 3) {
         for (int i = 2; i < n; i++) {
-            RayHit t = o->polyStrip ? Mge_RaycastTriangle(local, lp[i - 2], lp[i - 1], lp[i])
-                                    : Mge_RaycastTriangle(local, lp[0], lp[i - 1], lp[i]);
+            RayHit t = sh->polyStrip ? Mge_RaycastTriangle(local, lp[i - 2], lp[i - 1], lp[i])
+                                     : Mge_RaycastTriangle(local, lp[0], lp[i - 1], lp[i]);
             if (t.hit && (!h.hit || t.distance < h.distance))
                 h = t;
         }
@@ -287,9 +287,13 @@ RayHit Mge_RaycastObjects(Ray ray, const Object* objects, int count)
     RayHit best = RAYHIT_MISS;
 
     for (int i = 0; i < count; i++) {
-        const Object o = objects[i];
+        Object o = objects[i];
         if (!o.active || o.kind == OBJECT_2D)
             continue; // a 2D rect has no ray volume
+
+        const Shape* sh = Mge_GetShapeComponent(&o);
+        if (o.kind != OBJECT_CAMERA && sh == NULL)
+            continue; // nothing to hit
 
         Vector3 c = o.transform.position;
         Vector3 s = o.transform.scale;
@@ -299,7 +303,7 @@ RayHit Mge_RaycastObjects(Ray ray, const Object* objects, int count)
         if (o.kind == OBJECT_CAMERA) {
             h = Mge_RaycastBox(ray, c, (Vector3){ 0.7f, 0.5f, 0.5f }, r); // the marker body
         } else {
-            switch (o.primitive) {
+            switch (sh->primitive) {
             case PRIM_SPHERE:
                 h = Mge_RaycastSphere(ray, c, s.x * 0.5f);
                 break;
@@ -310,7 +314,7 @@ RayHit Mge_RaycastObjects(Ray ray, const Object* objects, int count)
                 h = raycast_object_arrow(ray, c, s, r);
                 break;
             case PRIM_POLYGON:
-                h = raycast_object_polygon(ray, &o);
+                h = raycast_object_polygon(ray, &o, sh);
                 break;
             case PRIM_CUBE:
             default:

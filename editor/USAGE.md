@@ -133,13 +133,23 @@ A scene's `.c` files compile into a **module** (a shared library) exporting:
 void MgeScene_Init(MgeSceneCtx* ctx);
 void MgeScene_Update(MgeSceneCtx* ctx, float dt);
 void MgeScene_Shutdown(MgeSceneCtx* ctx);
+void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera);  // optional
 ```
 
 `New Scene` scaffolds a starter `<name>.c` (a demo that spins every object).
 `MgeSceneCtx` points at the editor's live storage — `ctx->objects` /
 `*ctx->objectCount` (grow within `ctx->maxObjects`), `ctx->lights`,
-`ctx->camera`, `ctx->selected` — so a rebuild never loses state. The module
-links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`, `Mge_Load*`, etc.
+`ctx->camera`, `ctx->selected`, `ctx->sceneName` — so a rebuild never loses
+state. The module links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`,
+`Mge_Load*`, etc.
+
+- **`MgeScene_Draw`** (optional) runs after the scene is drawn — open your own
+  `Mge_BeginMode3D` and issue `Draw_*` calls for geometry the module owns and
+  that isn't an Object (game boards, actors — no `SCENE_MAX_OBJECTS` limit).
+- **`ctx->requestedScene`** — write a scene name and the game switches scenes.
+  Works in the **built game** (Build Bundle → `mgeplayer`, where every scene's
+  module is pre-built); in the editor's Play mode a request only logs to the
+  Console (Play runs one scene). See `../test project/scenes/map1..map5/snake.c`.
 
 **Editing the scripts** — the engine headers aren't in the project, so on New /
 Open / Save Project the editor writes a `compile_flags.txt` at the project root
@@ -240,6 +250,7 @@ render
   exposure 1
   bloom 0
   msaa 1
+  showColliders 0          # editor: draw every collider wireframe (written only when set)
   skybox "res/skybox"      # project-root-relative folder of 6 faces
   mainCamera 4             # index of the OBJECT_CAMERA that runs the game, or -1
 
@@ -249,7 +260,10 @@ object "GameCam"
   rotation 0 0.38 0 0.92    # orientation quaternion x y z w (identity looks -Z)
 
 object "Floor"
-  primitive plane          # cube | sphere | plane | arrow | polygon
+  # component lines only appear for components the object has; a bare object
+  # block (no shape/material line) round-trips as an empty node.
+  shape plane              # Shape component. cube | sphere | plane | arrow | polygon
+  # primitive plane        # legacy alias for `shape` -- still read
   # wireframe 1            # (written only when set) draw as an outline
   # polyStrip 0           # polygon: 0 = triangle fan, 1 = strip
   # point x y z           # polygon: one line per local vertex
@@ -258,6 +272,9 @@ object "Floor"
   # rotation omitted -> identity. Written as `rotation x y z w` (quaternion) when
   # it isn't; a legacy 3-value `rotation <deg> <deg> <deg>` still reads as euler.
   scale 24 0.2 24
+  collider box 0 0 0 24 0.2 24 0    # Collider: kind, offset xyz, size xyz, isTrigger
+  # rigidbody 1 0.3 1              # RigidBody: mass, restitution, useGravity
+  material                 # Material component marker; the keys below need it
   shininess 32
   tiling 1 1
   offset 0 0
@@ -365,7 +382,7 @@ The current selection's fields, live:
 | selection | fields |
 | --- | --- |
 | **Environment** | sun (`lights[0]`) direction / colour / ambient / diffuse / specular; skybox (`choose folder...` / `use engine default` / `reload`); **main camera** combo |
-| **Object** | **active** toggle, **primitive** dropdown, a **wireframe** checkbox, the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo; for a **polygon**: a fan/strip toggle + an editable `p0…pN` point list with `+ point` / `- point`; then `shininess`; **tiling** / **offset**; a **triplanar** toggle (+ scale); then one **group per material map** (drop an image from Resources on the thumbnail to assign it) |
+| **Object** | **active** toggle + the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo — always; then **one section per present component**, each with an `x` to remove it, and a **+ Add Component** menu listing the ones it lacks. **Shape**: primitive dropdown, wireframe checkbox, and for a polygon a fan/strip toggle + editable `p0…pN` list (`+ point` / `- point`). **Material**: `shininess`, **tiling** / **offset**, a **triplanar** toggle (+ scale), then one **group per material map** (drop an image from Resources on the thumbnail to assign it). **Collider**: box/sphere kind, `offset`, extents/`radius`, `trigger`. **RigidBody**: `mass` (0 = static), `restitution`, `use gravity`, and a read-only velocity readout |
 | **Camera** | active, position, rotation (euler °); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
 | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 

@@ -31,33 +31,27 @@ static bool g_msaa = true;
 bool Mge_IsMSAAEnabled(void) { return g_msaa; }
 void Mge_SetMSAAEnabled(bool e) { g_msaa = e; }
 
-static Material default_material(void)
-{
-    Material m = { 0 };
-    m.shininess = 32.0f;
-    m.tiling = (Vector2){ 1.0f, 1.0f };
-    m.triplanarScale = 1.0f;
-    for (int i = 0; i < MATERIAL_MAP_COUNT; i++) {
-        m.maps[i].color = (Color){ 255, 255, 255, 255 };
-        m.maps[i].value = (i == MATERIAL_MAP_NORMAL || i == MATERIAL_MAP_HEIGHT) ? 1.0f : 1.0f;
-    }
-    return m;
-}
-
+// the real component accessors + Mge_DefaultMaterial are linked in (mge_component.c
+// + mge_material.c); only Mge_MakeShape3D itself is reimplemented here.
 Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color)
 {
     Object o = { 0 };
     o.kind = OBJECT_3D;
     o.active = true;
-    o.primitive = primitive;
     o.transform.position = position;
     o.transform.rotation = Quaternion_Identity();
     o.transform.scale = size;
     o.transform.parent = -1;
-    o.material = default_material();
-    o.material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    Shape* sh = Mge_AddComponent(&o, COMPONENT_SHAPE);
+    sh->primitive = primitive;
+    Material* m = Mge_AddComponent(&o, COMPONENT_MATERIAL);
+    m->maps[MATERIAL_MAP_DIFFUSE].color = color;
     return o;
 }
+
+// shorthand for the round-trip assertions
+static Shape* shp(Object* o) { return Mge_GetShapeComponent(o); }
+static Material* mtl(Object* o) { return Mge_GetMaterialComponent(o); }
 
 Light Mge_MakePointLight(Vector3 position, Vector3 color)
 {
@@ -193,9 +187,9 @@ static void build_scene(Scene* s)
     s->objects[1] = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 2.5f, 1.0f, -0.5f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 80, 80, 255 });
     s->objects[1].transform.rotation = ball_rot();
     s->objects[1].active = false;
-    s->objects[1].material.shininess = 64.0f;
-    s->objects[1].material.triplanar = true;
-    s->objects[1].material.tiling = (Vector2){ 2, 3 };
+    mtl(&s->objects[1])->shininess = 64.0f;
+    mtl(&s->objects[1])->triplanar = true;
+    mtl(&s->objects[1])->tiling = (Vector2){ 2, 3 };
     strcpy(s->objectNames[1], "Ball");
     strcpy(s->texPath[1][MATERIAL_MAP_DIFFUSE], "res/ball_albedo.png");
     s->texWrap[1][MATERIAL_MAP_DIFFUSE] = 2;
@@ -249,8 +243,8 @@ TEST(scene_mge_round_trip)
     CHECK(b.objectCount == 3);
     CHECK(strcmp(b.objectNames[0], "Floor") == 0);
     CHECK(strcmp(b.objectNames[1], "Ball") == 0);
-    CHECK(b.objects[0].primitive == PRIM_PLANE);
-    CHECK(b.objects[1].primitive == PRIM_SPHERE);
+    CHECK(shp(&b.objects[0])->primitive == PRIM_PLANE);
+    CHECK(shp(&b.objects[1])->primitive == PRIM_SPHERE);
 
     CHECK(b.objects[0].kind == OBJECT_3D);
     CHECK(b.objects[2].kind == OBJECT_CAMERA);
@@ -265,10 +259,10 @@ TEST(scene_mge_round_trip)
     CHECK(Quaternion_Approx(b.objects[1].transform.rotation, ball_rot()));
     CHECK(Quaternion_Approx(b.objects[0].transform.rotation, Quaternion_Identity())); // no line -> identity
     CHECK_F(b.objects[1].transform.scale.z, 1.5f);
-    CHECK_F(b.objects[1].material.shininess, 64.0f);
-    CHECK(b.objects[1].material.triplanar == true);
-    CHECK_F(b.objects[1].material.tiling.y, 3.0f);
-    CHECK(b.objects[0].material.maps[MATERIAL_MAP_DIFFUSE].color.r == 90);
+    CHECK_F(mtl(&b.objects[1])->shininess, 64.0f);
+    CHECK(mtl(&b.objects[1])->triplanar == true);
+    CHECK_F(mtl(&b.objects[1])->tiling.y, 3.0f);
+    CHECK(mtl(&b.objects[0])->maps[MATERIAL_MAP_DIFFUSE].color.r == 90);
     CHECK(strcmp(b.texPath[1][MATERIAL_MAP_DIFFUSE], "res/ball_albedo.png") == 0);
     CHECK(b.texWrap[1][MATERIAL_MAP_DIFFUSE] == 2);
 
@@ -318,6 +312,7 @@ TEST(legacy_euler_rotation_line)
     CHECK(s.objectCount == 1);
     Quaternion want = Quaternion_FromEuler((Vector3){ 0.0f, 90.0f * DEG2RAD, 0.0f });
     CHECK(Quaternion_Approx(s.objects[0].transform.rotation, want));
+    CHECK(shp(&s.objects[0]) != NULL && shp(&s.objects[0])->primitive == PRIM_CUBE); // legacy `primitive` => Shape
 
     remove(path);
     remove("scene_io_tmp/legacy.c");
@@ -436,19 +431,22 @@ TEST(shape_variants_round_trip)
     Scene a;
     memset(&a, 0, sizeof(a));
     a.objects[0] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
-    a.objects[0].wireframe = true;
+    shp(&a.objects[0])->wireframe = true;
     strcpy(a.objectNames[0], "Box 1");
 
     a.objects[1] = Mge_MakeShape3D(PRIM_ARROW, (Vector3){ 2, 0, 0 }, (Vector3){ 2, 1, 1 }, WHITE);
     strcpy(a.objectNames[1], "Arrow 1");
 
     a.objects[2] = Mge_MakeShape3D(PRIM_POLYGON, (Vector3){ -2, 0, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
-    a.objects[2].polyStrip = true;
-    a.objects[2].poly[0] = (Vector3){ -1, -1, 0 };
-    a.objects[2].poly[1] = (Vector3){ 1, -1, 0 };
-    a.objects[2].poly[2] = (Vector3){ -1, 1, 0 };
-    a.objects[2].poly[3] = (Vector3){ 1, 1, 0.5f };
-    a.objects[2].polyCount = 4;
+    {
+        Shape* p = shp(&a.objects[2]);
+        p->polyStrip = true;
+        p->poly[0] = (Vector3){ -1, -1, 0 };
+        p->poly[1] = (Vector3){ 1, -1, 0 };
+        p->poly[2] = (Vector3){ -1, 1, 0 };
+        p->poly[3] = (Vector3){ 1, 1, 0.5f };
+        p->polyCount = 4;
+    }
     strcpy(a.objectNames[2], "Polygon 1");
     a.objectCount = 3;
 
@@ -458,16 +456,71 @@ TEST(shape_variants_round_trip)
     Scene b;
     CHECK(Scene_Load(&b, path, NULL));
     CHECK(b.objectCount == 3);
-    CHECK(b.objects[0].primitive == PRIM_CUBE && b.objects[0].wireframe);
-    CHECK(b.objects[1].primitive == PRIM_ARROW && !b.objects[1].wireframe);
-    CHECK(b.objects[2].primitive == PRIM_POLYGON);
-    CHECK(b.objects[2].polyStrip);
-    CHECK(b.objects[2].polyCount == 4);
-    CHECK_F(b.objects[2].poly[3].x, 1.0f);
-    CHECK_F(b.objects[2].poly[3].z, 0.5f);
+    CHECK(shp(&b.objects[0])->primitive == PRIM_CUBE && shp(&b.objects[0])->wireframe);
+    CHECK(shp(&b.objects[1])->primitive == PRIM_ARROW && !shp(&b.objects[1])->wireframe);
+    CHECK(shp(&b.objects[2])->primitive == PRIM_POLYGON);
+    CHECK(shp(&b.objects[2])->polyStrip);
+    CHECK(shp(&b.objects[2])->polyCount == 4);
+    CHECK_F(shp(&b.objects[2])->poly[3].x, 1.0f);
+    CHECK_F(shp(&b.objects[2])->poly[3].z, 0.5f);
 
     remove(path);
     remove("scene_io_tmp/shapes.c");
+}
+
+// Collider + RigidBody components survive the .mgscene round-trip
+TEST(physics_components_round_trip)
+{
+    Path_MakeDirs("scene_io_tmp");
+    const char* path = "scene_io_tmp/phys.mgscene";
+
+    Scene a;
+    memset(&a, 0, sizeof(a));
+    a.objects[0] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 0, 3, 0 }, (Vector3){ 2, 2, 2 }, WHITE);
+    strcpy(a.objectNames[0], "Crate");
+    Collider* col = Mge_AddComponent(&a.objects[0], COMPONENT_COLLIDER);
+    col->kind = COLLIDER_SPHERE;
+    col->offset = (Vector3){ 0.1f, 0.2f, 0.3f };
+    col->size = (Vector3){ 1.5f, 0, 0 };
+    col->isTrigger = true;
+    RigidBody* rb = Mge_AddComponent(&a.objects[0], COMPONENT_RIGIDBODY);
+    rb->mass = 4.0f;
+    rb->restitution = 0.25f;
+    rb->useGravity = false;
+
+    // a component-less object still round-trips as an empty node
+    a.objects[1] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
+    Mge_RemoveComponent(&a.objects[1], COMPONENT_SHAPE);
+    Mge_RemoveComponent(&a.objects[1], COMPONENT_MATERIAL);
+    strcpy(a.objectNames[1], "Empty");
+    a.objectCount = 2;
+    a.showColliders = true;
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 60.0f };
+    CHECK(Scene_Save(&a, path, cam, NULL));
+
+    Scene b;
+    CHECK(Scene_Load(&b, path, NULL));
+    CHECK(b.objectCount == 2);
+    CHECK(b.showColliders);
+
+    Collider* bc = Mge_GetColliderComponent(&b.objects[0]);
+    RigidBody* br = Mge_GetRigidBodyComponent(&b.objects[0]);
+    CHECK(bc != NULL && br != NULL);
+    CHECK(bc->kind == COLLIDER_SPHERE);
+    CHECK_F(bc->offset.z, 0.3f);
+    CHECK_F(bc->size.x, 1.5f);
+    CHECK(bc->isTrigger);
+    CHECK_F(br->mass, 4.0f);
+    CHECK_F(br->restitution, 0.25f);
+    CHECK(!br->useGravity);
+
+    CHECK(!Mge_HasComponent(&b.objects[1], COMPONENT_SHAPE));
+    CHECK(!Mge_HasComponent(&b.objects[1], COMPONENT_MATERIAL));
+    CHECK(strcmp(b.objectNames[1], "Empty") == 0);
+
+    remove(path);
+    remove("scene_io_tmp/phys.c");
 }
 
 int main(void)
@@ -481,6 +534,7 @@ int main(void)
     RUN(canonical_scene_file_takes_its_name_from_the_folder);
     RUN(save_keeps_res_paths_and_imports_only_outside_files);
     RUN(shape_variants_round_trip);
+    RUN(physics_components_round_trip);
 
     RMDIR("scene_io_tmp/res"); // best-effort tidy-up
     RMDIR("scene_io_tmp");

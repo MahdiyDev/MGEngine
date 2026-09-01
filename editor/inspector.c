@@ -161,6 +161,97 @@ static bool parent_combo(Scene* s)
     return false;
 }
 
+static bool shape_section(Object* o)
+{
+    static const char* prims[PRIM_KIND_COUNT] = { "cube", "sphere", "plane", "arrow", "polygon" };
+    Shape* sh = Mge_GetShapeComponent(o);
+    bool ch = false;
+
+    int prim = sh->primitive;
+    if (Mge_GuiCombo("primitive", &prim, prims, PRIM_KIND_COUNT)) {
+        sh->primitive = (PrimitiveKind)prim;
+        if (sh->primitive == PRIM_POLYGON && sh->polyCount < 2) { // seed a triangle
+            sh->poly[0] = (Vector3){ 0.0f, 1.0f, 0.0f };
+            sh->poly[1] = (Vector3){ -1.0f, -1.0f, 0.0f };
+            sh->poly[2] = (Vector3){ 1.0f, -1.0f, 0.0f };
+            sh->polyCount = 3;
+        }
+        ch = true;
+    }
+    if (sh->primitive != PRIM_ARROW)
+        ch |= Mge_GuiCheckbox("wireframe", &sh->wireframe);
+
+    if (sh->primitive == PRIM_POLYGON) {
+        Mge_GuiLabel("points");
+        ch |= Mge_GuiCheckbox("strip (else fan)", &sh->polyStrip);
+        for (int k = 0; k < sh->polyCount; k++) {
+            char lbl[16];
+            snprintf(lbl, sizeof(lbl), "p%d", k);
+            ch |= Mge_GuiInputVec3(lbl, &sh->poly[k]);
+        }
+        if (sh->polyCount < MGE_MAX_POLY_POINTS && Mge_GuiButton("+ point")) {
+            sh->poly[sh->polyCount] = sh->poly[sh->polyCount - 1]; // clone the last
+            sh->polyCount++;
+            ch = true;
+        }
+        Mge_GuiSameLine();
+        if (sh->polyCount > 2 && Mge_GuiButton("- point")) {
+            sh->polyCount--;
+            ch = true;
+        }
+    }
+    return ch;
+}
+
+static bool material_section(Scene* s, Object* o, const char* root)
+{
+    Material* mt = Mge_GetMaterialComponent(o);
+    unsigned char* wrap = s->texWrap[s->selIndex];
+    char (*tex)[SCENE_TEXPATH_LEN] = s->texPath[s->selIndex];
+    bool ch = false;
+
+    ch |= Mge_GuiInputFloat("shininess", &mt->shininess);
+    ch |= Mge_GuiInputVec2("tiling", &mt->tiling);
+    ch |= Mge_GuiInputVec2("offset", &mt->offset);
+    ch |= Mge_GuiCheckbox("triplanar", &mt->triplanar);
+    if (mt->triplanar)
+        ch |= Mge_GuiInputFloat("triplanar scale", &mt->triplanarScale);
+    ch |= material_slot(mt, MATERIAL_MAP_DIFFUSE, &wrap[MATERIAL_MAP_DIFFUSE], tex[MATERIAL_MAP_DIFFUSE], "diffuse map", "diffuse", true, 2.0f, "gain", root);
+    ch |= material_slot(mt, MATERIAL_MAP_SPECULAR, &wrap[MATERIAL_MAP_SPECULAR], tex[MATERIAL_MAP_SPECULAR], "specular map", "specular", true, 1.0f, "strength", root);
+    ch |= material_slot(mt, MATERIAL_MAP_NORMAL, &wrap[MATERIAL_MAP_NORMAL], tex[MATERIAL_MAP_NORMAL], "normal map", "normal", false, 4.0f, "strength", root);
+    ch |= material_slot(mt, MATERIAL_MAP_HEIGHT, &wrap[MATERIAL_MAP_HEIGHT], tex[MATERIAL_MAP_HEIGHT], "height map (parallax)", "height", false, 0.2f, "scale", root);
+    return ch;
+}
+
+static bool collider_section(Object* o)
+{
+    static const char* kinds[2] = { "box", "sphere" };
+    Collider* c = Mge_GetColliderComponent(o);
+    bool ch = false;
+    int k = c->kind;
+    if (Mge_GuiCombo("kind", &k, kinds, 2)) { c->kind = (ColliderKind)k; ch = true; }
+    ch |= Mge_GuiInputVec3("offset", &c->offset);
+    if (c->kind == COLLIDER_SPHERE)
+        ch |= Mge_GuiInputFloat("radius", &c->size.x);
+    else
+        ch |= Mge_GuiInputVec3("extents", &c->size);
+    ch |= Mge_GuiCheckbox("trigger", &c->isTrigger);
+    return ch;
+}
+
+static bool rigidbody_section(Object* o)
+{
+    RigidBody* b = Mge_GetRigidBodyComponent(o);
+    bool ch = false;
+    ch |= Mge_GuiInputFloat("mass (0 = static)", &b->mass);
+    ch |= Mge_GuiSliderFloat("restitution", &b->restitution, 0.0f, 1.0f);
+    ch |= Mge_GuiCheckbox("use gravity", &b->useGravity);
+    char v[48];
+    snprintf(v, sizeof(v), "velocity  %.2f %.2f %.2f", (double)b->velocity.x, (double)b->velocity.y, (double)b->velocity.z);
+    Mge_GuiLabel(v);
+    return ch;
+}
+
 static bool inspect_object(Scene* s, Project* proj)
 {
     Object* o = &s->objects[s->selIndex];
@@ -169,9 +260,6 @@ static bool inspect_object(Scene* s, Project* proj)
 
     char root[512];
     Project_Root(proj, root, sizeof(root));
-
-    unsigned char* wrap = s->texWrap[s->selIndex];
-    char (*tex)[SCENE_TEXPATH_LEN] = s->texPath[s->selIndex];
     bool ch = false;
 
     if (s->selExtraCount > 0) {
@@ -181,63 +269,44 @@ static bool inspect_object(Scene* s, Project* proj)
         Mge_GuiSeparator();
     }
 
-    static const char* prims[PRIM_KIND_COUNT] = { "cube", "sphere", "plane", "arrow", "polygon" };
     ch |= Mge_GuiCheckbox("active", &o->active);
-    if (o->kind == OBJECT_3D) {
-        int prim = o->primitive;
-        if (Mge_GuiCombo("primitive", &prim, prims, PRIM_KIND_COUNT)) {
-            o->primitive = (PrimitiveKind)prim;
-            if (o->primitive == PRIM_POLYGON && o->polyCount < 2) { // seed a triangle
-                o->poly[0] = (Vector3){ 0.0f, 1.0f, 0.0f };
-                o->poly[1] = (Vector3){ -1.0f, -1.0f, 0.0f };
-                o->poly[2] = (Vector3){ 1.0f, -1.0f, 0.0f };
-                o->polyCount = 3;
-            }
-            ch = true;
-        }
-        if (o->primitive != PRIM_ARROW)
-            ch |= Mge_GuiCheckbox("wireframe", &o->wireframe);
-    } else {
-        Mge_GuiLabel("rect (2D)");
-    }
     ch |= Mge_GuiInputVec3("position", &o->transform.position);
     ch |= euler_edit(&o->transform.rotation, s->selKind, s->selIndex);
     ch |= Mge_GuiInputVec3("size", &o->transform.scale);
     ch |= parent_combo(s);
 
-    if (o->kind == OBJECT_3D && o->primitive == PRIM_POLYGON) {
+    // one section per present component
+    for (int t = 0; t < COMPONENT_TYPE_COUNT; t++) {
+        if (!Mge_HasComponent(o, (ComponentType)t))
+            continue;
         Mge_GuiSeparator();
-        Mge_GuiLabel("polygon points");
-        ch |= Mge_GuiCheckbox("strip (else fan)", &o->polyStrip);
-        for (int k = 0; k < o->polyCount; k++) {
-            char lbl[16];
-            snprintf(lbl, sizeof(lbl), "p%d", k);
-            ch |= Mge_GuiInputVec3(lbl, &o->poly[k]);
-        }
-        if (o->polyCount < MGE_MAX_POLY_POINTS && Mge_GuiButton("+ point")) {
-            o->poly[o->polyCount] = o->poly[o->polyCount - 1]; // clone the last
-            o->polyCount++;
+        Mge_GuiLabel(Mge_ComponentName((ComponentType)t));
+        char rm[16];
+        snprintf(rm, sizeof(rm), "x##rmc%d", t);
+        if (Mge_GuiRowButton(rm)) {
+            Mge_RemoveComponent(o, (ComponentType)t);
             ch = true;
+            continue;
         }
-        Mge_GuiSameLine();
-        if (o->polyCount > 2 && Mge_GuiButton("- point")) {
-            o->polyCount--;
-            ch = true;
+        switch (t) {
+        case COMPONENT_SHAPE:     ch |= shape_section(o); break;
+        case COMPONENT_MATERIAL:  ch |= material_section(s, o, root); break;
+        case COMPONENT_COLLIDER:  ch |= collider_section(o); break;
+        case COMPONENT_RIGIDBODY: ch |= rigidbody_section(o); break;
+        default: break;
         }
     }
-    Mge_GuiSeparator();
 
-    Mge_GuiLabel("material");
-    ch |= Mge_GuiInputFloat("shininess", &o->material.shininess);
-    ch |= Mge_GuiInputVec2("tiling", &o->material.tiling);   // uv * tiling + offset -- repeat without scaling
-    ch |= Mge_GuiInputVec2("offset", &o->material.offset);
-    ch |= Mge_GuiCheckbox("triplanar", &o->material.triplanar); // project diffuse from world XYZ
-    if (o->material.triplanar)
-        ch |= Mge_GuiInputFloat("triplanar scale", &o->material.triplanarScale);
-    ch |= material_slot(&o->material, MATERIAL_MAP_DIFFUSE, &wrap[MATERIAL_MAP_DIFFUSE], tex[MATERIAL_MAP_DIFFUSE], "diffuse map", "diffuse", true, 2.0f, "gain", root);
-    ch |= material_slot(&o->material, MATERIAL_MAP_SPECULAR, &wrap[MATERIAL_MAP_SPECULAR], tex[MATERIAL_MAP_SPECULAR], "specular map", "specular", true, 1.0f, "strength", root);
-    ch |= material_slot(&o->material, MATERIAL_MAP_NORMAL, &wrap[MATERIAL_MAP_NORMAL], tex[MATERIAL_MAP_NORMAL], "normal map", "normal", false, 4.0f, "strength", root);
-    ch |= material_slot(&o->material, MATERIAL_MAP_HEIGHT, &wrap[MATERIAL_MAP_HEIGHT], tex[MATERIAL_MAP_HEIGHT], "height map (parallax)", "height", false, 0.2f, "scale", root);
+    Mge_GuiSeparator();
+    if (Mge_GuiBeginMenu("+ Add Component")) {
+        for (int t = 0; t < COMPONENT_TYPE_COUNT; t++)
+            if (!Mge_HasComponent(o, (ComponentType)t) &&
+                Mge_GuiMenuItem(Mge_ComponentName((ComponentType)t))) {
+                Mge_AddComponent(o, (ComponentType)t);
+                ch = true;
+            }
+        Mge_GuiEndMenu();
+    }
 
     return ch;
 }

@@ -146,6 +146,7 @@ int main(void)
         Mge_BeginDrawing();
 
         bool gizmoBusy = Scene_Draw(&scene, view, interact, !playing); // no editor markers in Play
+        Play_Draw(&play, &scene, view); // the playing module's own geometry, on top of the scene
         if (gizmoBusy) {
             History_Record(&hist);
             scene.dirty = true;

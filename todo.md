@@ -415,6 +415,65 @@ phases so the app keeps working the whole way.
       pins `x` flush-right. **Delete** key now also removes a selected light
       (immediately; never the Sun), matching the row button.
 
+## Component system + colliders + linear rigid-body physics   [DONE]
+
+- [x] `Object` holds `Component components[COMPONENT_TYPE_COUNT]` (a tagged union,
+      indexed by `ComponentType`: SHAPE / MATERIAL / COLLIDER / RIGIDBODY),
+      reached only through `source/mge_component.c` accessors -- `Mge_HasComponent`
+      / `Mge_GetComponent` / typed `Mge_Get*Component` (NULL if absent) /
+      `Mge_AddComponent` (seeds a default) / `Mge_RemoveComponent` /
+      `Mge_ComponentName`. `Object` stays POD so snapshot undo + Play/Stop are
+      unaffected. `primitive` / `poly*` / `wireframe` / `material` left `Object`
+      for the Shape + Material components; `Mge_MakeShape3D` / `Mge_MakeObject2D`
+      attach them.
+- [x] `source/mge_body.c`: `Collider` (box / sphere, `offset`, `size`,
+      `isTrigger`) + `RigidBody` (`velocity`, `mass`, `restitution`,
+      `useGravity`; mass 0 or Collider-only = static). `Mge_SetGravity` /
+      `Mge_GetGravity`, `Mge_ObjectsOverlap` (box/box + box/sphere + sphere/sphere,
+      AABB for boxes -- rotation not yet in the contact solver), `Mge_CheckCollisions`,
+      `Mge_StepPhysics` (semi-implicit Euler integrate + inverse-mass positional
+      correction + restitution impulse, triggers report only), `Draw_ColliderWires`.
+- [x] Editor: Inspector draws one section per present component + an `x` remove +
+      a **+ Add Component** menu; adding a Collider auto-fits `size` to the scale.
+      Selected object's collider drawn green; **Render > colliders** shows all.
+      The host steps physics -- editor Play + `runtime/player.c` both call
+      `Mge_StepPhysics` each frame after the module's update (a no-op without
+      Collider+RigidBody); editor Stop discards it with the snapshot. `.mgscene`
+      writes `shape` / `material` / `collider` / `rigidbody` lines only for
+      present components (legacy `primitive` still read); `showColliders` in the
+      render block.
+- [x] `test/test_component.c` (new), `test_physics.c` (overlap + one-step
+      integration / bounce / trigger), `test_scene_io.c` (Collider + RigidBody +
+      component-less object round-trip), `render_smoke` `scene_physics`,
+      `test project/scenes/untitled` collision demo, USAGE.md "Components" +
+      "Physics: colliders & the rigid-body step", editor/USAGE.md.
+- [x] restitution fix: a static collider (Collider, no RigidBody) counted as
+      `restitution 0`, killing every bounce off level geometry -- now counts as 1
+      so `fminf` yields the dynamic body's bounciness. `test_physics.c`
+      `step_bounces_off_collider_only_floor`.
+- [ ] follow-up: angular / rotational dynamics, friction, sleeping, rotated-box
+      (OBB) contact manifolds.
+
+## Scene modules: draw hook + scene switch by name   [DONE]
+
+- [x] Optional 4th module export `MgeScene_Draw(MgeSceneCtx*, Camera3D)` --
+      resolved in `SceneRuntime_Load` (NULL when absent), run by the host after
+      `Scene_Draw` inside `Mge_BeginDrawing` (`runtime/player.c` always, editor
+      `main.c` while playing via `Play_Draw`). For game geometry the module owns
+      that isn't an Object -- dodges the `SCENE_MAX_OBJECTS` cap.
+- [x] `MgeSceneCtx` += `const char* sceneName` (read-only) + `char requestedScene[64]`
+      (module writes a scene name -> host switches). `runtime/player.c` acts on it:
+      `load_scene(idx)` helper (unload module, `Scene_Load` + textures + skybox +
+      module), resolved through an `mlib/hashmap` (`DEFINE_HASHMAP_STR`) of the
+      project scene list. Editor Play only logs the request (one scene at a time).
+      `MGE_PLAYER_SHOT_AT` env overrides the headless screenshot frame.
+- [x] Snake game in `test project/`: 5 scenes `map1..map5`, one `snake.c` copied
+      into each folder (map-agnostic; keyed on `ctx->sceneName`), `MgeScene_Draw`
+      board / snake / food, arrow/WASD steer, Space start/restart, 5 food ->
+      `requestedScene` = next map (wraps 5->1). Interior walls are authored Wall
+      Objects read off `ctx->objects`. `MGE_SNAKE_AUTO` self-plays (smoke test).
+      Replaced the 4 placeholder scenes; `project.mgproject` startupScene = map1.
+
 ## Debug/Release engine builds + structured dist/   [DONE]
 
 - [x] `make` (debug) and `make release` coexist -- separate object caches and

@@ -97,9 +97,9 @@ int main(void)
 
         Mge_BeginMode3D(camera);
         Mge_BeginLighting3D(sun, camera);
-        planeA.material = stretched;
-        planeB.material = tiled;
-        box.material = projected;
+        *Mge_GetMaterialComponent(&planeA) = stretched;
+        *Mge_GetMaterialComponent(&planeB) = tiled;
+        *Mge_GetMaterialComponent(&box) = projected;
         Mge_DrawObject(planeA);
         Mge_DrawObject(planeB);
         Mge_DrawObject(box);

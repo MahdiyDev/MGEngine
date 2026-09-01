@@ -7,6 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+// one material-map slot of object `i`, or NULL when it has no Material component
+static MaterialMap* obj_map(Scene* s, int i, int m)
+{
+    Material* mat = Mge_GetMaterialComponent(&s->objects[i]);
+    return mat != NULL ? &mat->maps[m] : NULL;
+}
+
 // A bare OBJECT_CAMERA: a transform (position + orientation), no geometry or
 // material. Identity orientation looks toward -Z.
 static Object make_camera(Vector3 pos, Quaternion rot)
@@ -61,8 +68,10 @@ static Cubemap try_cubemap(const char* dir)
 static void reset_data(Scene* s)
 {
     for (int i = 0; i < s->objectCount; i++)
-        for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
-            Mge_UnloadTexture(s->objects[i].material.maps[m].texture);
+        for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+            MaterialMap* mm = obj_map(s, i, m);
+            if (mm != NULL) Mge_UnloadTexture(mm->texture);
+        }
 
     memset(s->objects, 0, sizeof(s->objects));
     memset(s->objectNames, 0, sizeof(s->objectNames));
@@ -175,7 +184,8 @@ void Scene_New(Scene* s)
 static void load_material_slot(Scene* s, int i, int m, const char* root)
 {
     const char* rel = s->texPath[i][m];
-    if (rel[0] == '\0')
+    MaterialMap* mm = obj_map(s, i, m);
+    if (rel[0] == '\0' || mm == NULL)
         return;
 
     char full[1024];
@@ -187,7 +197,7 @@ static void load_material_slot(Scene* s, int i, int m, const char* root)
     Texture2D t = Mge_LoadTextureEx(full, m == MATERIAL_MAP_DIFFUSE);
     if (t.id == 0 && !Path_IsAbsolute(rel)) // fall back to a cwd-relative path
         t = Mge_LoadTextureEx(rel, m == MATERIAL_MAP_DIFFUSE);
-    s->objects[i].material.maps[m].texture = t;
+    mm->texture = t;
     if (t.id != 0)
         Mge_SetTextureWrap(t, s->texWrap[i][m]);
 }
@@ -198,8 +208,11 @@ void Scene_LoadMaterialTextures(Scene* s, const char* projectRoot)
 
     for (int i = 0; i < s->objectCount; i++) {
         for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
-            Mge_UnloadTexture(s->objects[i].material.maps[m].texture);
-            s->objects[i].material.maps[m].texture = (Texture2D){ 0 };
+            MaterialMap* mm = obj_map(s, i, m);
+            if (mm != NULL) {
+                Mge_UnloadTexture(mm->texture);
+                mm->texture = (Texture2D){ 0 };
+            }
             load_material_slot(s, i, m, root);
         }
     }
@@ -208,8 +221,10 @@ void Scene_LoadMaterialTextures(Scene* s, const char* projectRoot)
 void Scene_Shutdown(Scene* s)
 {
     for (int i = 0; i < s->objectCount; i++)
-        for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
-            Mge_UnloadTexture(s->objects[i].material.maps[m].texture);
+        for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+            MaterialMap* mm = obj_map(s, i, m);
+            if (mm != NULL) Mge_UnloadTexture(mm->texture);
+        }
 
     Mge_UnloadShadowMap(&s->shadow);
     Mge_UnloadCubemap(s->sky);
@@ -261,7 +276,7 @@ void Scene_AddShape(Scene* s, PrimitiveKind primitive, bool wireframe)
     if (i < 0)
         return;
     s->objects[i] = Mge_MakeShape3D(primitive, (Vector3){ 0.0f, 0.0f, 0.0f }, size, (Color){ 200, 200, 205, 255 });
-    s->objects[i].wireframe = wireframe;
+    Mge_GetShapeComponent(&s->objects[i])->wireframe = wireframe;
 }
 
 void Scene_AddPolygon(Scene* s, int mode, bool wireframe)
@@ -270,9 +285,9 @@ void Scene_AddPolygon(Scene* s, int mode, bool wireframe)
     if (i < 0)
         return;
 
-    Object* o = &s->objects[i];
-    *o = Mge_MakeShape3D(PRIM_POLYGON, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f },
+    s->objects[i] = Mge_MakeShape3D(PRIM_POLYGON, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f },
         (Color){ 200, 200, 205, 255 });
+    Shape* o = Mge_GetShapeComponent(&s->objects[i]);
 
     // local points on the XY plane (Z = 0), run through the transform on draw
     if (mode == POLY_LINE) {
@@ -355,8 +370,10 @@ void Scene_DeleteObject(Scene* s, int index)
     if (index < 0 || index >= s->objectCount)
         return;
 
-    for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
-        Mge_UnloadTexture(s->objects[index].material.maps[m].texture);
+    for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+        MaterialMap* mm = obj_map(s, index, m);
+        if (mm != NULL) Mge_UnloadTexture(mm->texture);
+    }
 
     for (int i = index; i < s->objectCount - 1; i++) {
         s->objects[i] = s->objects[i + 1];
@@ -582,8 +599,10 @@ int Scene_DuplicateSelectedObjects(Scene* s)
         s->objects[dst].transform.position.x += 0.6f;
         s->objects[dst].transform.position.z += 0.6f;
         s->objects[dst].transform.parent = -1;
-        for (int m = 0; m < MATERIAL_MAP_COUNT; m++)
-            s->objects[dst].material.maps[m].texture = (Texture2D){ 0 }; // caller reloads
+        for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
+            MaterialMap* mm = obj_map(s, dst, m);
+            if (mm != NULL) mm->texture = (Texture2D){ 0 }; // caller reloads
+        }
         memcpy(s->texWrap[dst], s->texWrap[src], sizeof(s->texWrap[dst]));
         memcpy(s->texPath[dst], s->texPath[src], sizeof(s->texPath[dst]));
         char srcName[24];
@@ -615,7 +634,8 @@ void Scene_RestoreSnapshot(Scene* s, const Scene* snap, const char* projectRoot)
     int haveCount = s->objectCount;
     for (int i = 0; i < haveCount; i++)
         for (int m = 0; m < MATERIAL_MAP_COUNT; m++) {
-            have[i][m] = s->objects[i].material.maps[m].texture;
+            MaterialMap* mm = obj_map(s, i, m);
+            have[i][m] = mm != NULL ? mm->texture : (Texture2D){ 0 };
             memcpy(havePath[i][m], s->texPath[i][m], SCENE_TEXPATH_LEN);
             used[i][m] = false;
         }
@@ -649,7 +669,8 @@ void Scene_RestoreSnapshot(Scene* s, const Scene* snap, const char* projectRoot)
                             break;
                         }
             }
-            s->objects[i].material.maps[m].texture = t;
+            MaterialMap* mm = obj_map(s, i, m);
+            if (mm != NULL) mm->texture = t;
             if (t.id != 0)
                 Mge_SetTextureWrap(t, s->texWrap[i][m]);
             else
@@ -789,6 +810,11 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers)
         for (int i = 0; i < s->objectCount; i++)
             if (s->objects[i].kind == OBJECT_CAMERA)
                 Mge_DrawObject(s->objects[i]);
+        // collider bounds: all when toggled, else just the selection
+        for (int i = 0; i < s->objectCount; i++)
+            if (Mge_HasComponent(&s->objects[i], COMPONENT_COLLIDER) &&
+                (s->showColliders || Scene_IsObjectSelected(s, i)))
+                Draw_ColliderWires(s->objects[i], (Color){ 90, 230, 120, 255 });
     }
 
     if (s->sky.size != 0)
