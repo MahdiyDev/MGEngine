@@ -217,6 +217,30 @@ long Path_MTime(const char* path)
     return (stat(path, &st) == 0) ? (long)st.st_mtime : 0;
 }
 
+#if !defined(_WIN32)
+    #include <unistd.h>
+#endif
+
+void Path_ExeDir(char* out, size_t outSize)
+{
+    char buf[1024] = { 0 };
+#if defined(_WIN32)
+    DWORD n = GetModuleFileNameA(NULL, buf, (DWORD)sizeof(buf)); // windows.h: incl above
+    if (n == 0 || n >= sizeof(buf)) {
+        out[0] = '\0';
+        return;
+    }
+#else
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) {
+        out[0] = '\0';
+        return;
+    }
+    buf[n] = '\0';
+#endif
+    Path_Dir(buf, out, outSize); // also normalises '\\' -> '/'
+}
+
 bool Path_NextLine(char** cur, char* out, int outSize)
 {
     char* p = *cur;

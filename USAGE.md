@@ -144,9 +144,11 @@ compiled on its own), links them into `build/libmgengine.dll` with `g++`
 (`-static-libgcc -static-libstdc++ -static`, so the DLL carries the C/C++ runtime
 and GLFW / Assimp / Dear ImGui are already inside), then builds `editor/*.c`
 against it with plain `gcc -Isource -lmgengine`.
-`make_build_dir` stages `assets/` (and `shaders/`) into the config's own dir, and
-the DLL sits next to `editor.exe` / `mgeplayer.exe` there, so each config runs
-from its own folder (`build/` or `build/release/`).
+`make_build_dir` stages `assets/` (and `shaders/`) plus the public headers
+(`source/*.h` -> `<conf>/include/`) into the config's own dir, and the DLL sits
+next to `editor.exe` / `mgeplayer.exe` there, so each config runs from its own
+folder (`build/` or `build/release/`). The staged headers let an editor project
+point its `compile_flags.txt` at `<conf>/include` for scene-script IntelliSense.
 
 Your own app is the same one-liner: `gcc yours.c -Isource -Lbuild -lmgengine`
 plus `libmgengine.dll` on the path (or beside the exe). The `examples/` still

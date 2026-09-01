@@ -14,7 +14,7 @@ A scene editor built on top of the engine library — see
 | `scene.c` / `scene.h` | `Scene`: name / path / dirty flag, objects (incl. `OBJECT_CAMERA`), lights, selection (`SEL_OBJECT` / `SEL_LIGHT` / `SEL_ENV`), `skyDir` + `mainCamera`, picking, `Scene_AddShape` / `Scene_AddLight` / `Scene_AddCamera` / `Scene_Delete*` / `Scene_New`, `Scene_LoadMaterialTextures` / `Scene_LoadSkybox` / `Scene_MainCamera`, and the render passes (shadow + lit + skybox + editor markers + gizmo) |
 | `scene_io.c` / `.h` | `.mgscene` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
 | `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `Equal` / `MakeDirs` / `CopyFile` / `List` / `MTime` — small path + fs helpers |
-| `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; New Script; Quit) with the unsaved-changes confirm modal + the name-entry modal |
+| `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; New Script; Quit) with the unsaved-changes confirm modal + the name-entry modal; also seeds `res/skybox/` + a `compile_flags.txt` (scene-script header paths) on New / Open / Save Project |
 | `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog`. `SceneBuild_Compile` blocks; `SceneBuild_Start` / `_Poll` / `_Clear` (`SceneBuildJob`) run the compiler as a detached process the editor polls each frame |
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
 | `history.c` / `.h` | `History`: undo / redo as whole-`Scene` snapshots. `History_Record` at each mutation site (coalesced per edit burst), `History_Rest` refreshes the baseline when idle, `Scene_RestoreSnapshot` puts a snapshot back — reusing already-loaded material textures / the skybox by source path so an undo re-reads no files |
@@ -140,6 +140,14 @@ void MgeScene_Shutdown(MgeSceneCtx* ctx);
 `*ctx->objectCount` (grow within `ctx->maxObjects`), `ctx->lights`,
 `ctx->camera`, `ctx->selected` — so a rebuild never loses state. The module
 links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`, `Mge_Load*`, etc.
+
+**Editing the scripts** — the engine headers aren't in the project, so on New /
+Open / Save Project the editor writes a `compile_flags.txt` at the project root
+pointing clangd / ccls at the header set `make` stages next to the editor
+(`<editorDir>/include`, i.e. `build/include` or `build/release/include`;
+refreshed each time, so a moved editor self-heals — an old build without the
+staged headers falls back to `<sdk>/source`). Add your own `-I` / `-D` flags in a
+sibling `.clangd`. `compile_flags.txt` holds an absolute path — git-ignore it.
 
 | top-bar button | |
 | --- | --- |

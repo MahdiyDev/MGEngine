@@ -116,6 +116,54 @@ static void copy_default_skybox(const char* root)
                         "Set one with Environment > choose folder.\n", copied);
 }
 
+// Drop a compile_flags.txt at the project root so a language server (clangd,
+// ccls) resolves <mge.h> & co. while the user edits scene scripts. `make` stages
+// the public headers as <editorDir>/include/, so that's what we point at (an old
+// build without them falls back to the SDK's source/). Refreshed on Open / Save /
+// New Project so a moved editor self-heals. Kept comment-free for older clangd /
+// ccls; the editor owns this file, so custom flags go in a sibling `.clangd`.
+static void seed_compile_flags(const char* root)
+{
+    char inc[1100] = { 0 };
+
+    char exeDir[1024];
+    Path_ExeDir(exeDir, sizeof(exeDir));
+    if (exeDir[0] != '\0') {
+        Path_Join(exeDir, "include", inc, sizeof(inc));
+        if (!Path_IsDir(inc))
+            inc[0] = '\0';
+    }
+    if (inc[0] == '\0') { // headers not staged next to the editor -> the SDK tree
+        char sdk[1024];
+        if (!SceneBuild_FindSDK(sdk, sizeof(sdk)))
+            return;
+        Path_Join(sdk, "source", inc, sizeof(inc));
+    }
+
+    char want[1400];
+    snprintf(want, sizeof(want), "-std=c11\n-DPLATFORM_DESKTOP\n-I%s\n", inc);
+
+    char path[600];
+    Path_Join(root, "compile_flags.txt", path, sizeof(path));
+
+    // already current? leave it -- don't churn the mtime (clangd would reindex)
+    FILE* f = fopen(path, "rb");
+    if (f != NULL) {
+        char cur[1500];
+        size_t n = fread(cur, 1, sizeof(cur) - 1, f);
+        fclose(f);
+        cur[n] = '\0';
+        if (strcmp(cur, want) == 0)
+            return;
+    }
+
+    f = fopen(path, "wb");
+    if (f != NULL) {
+        fputs(want, f);
+        fclose(f);
+    }
+}
+
 // ---- the actions ----
 
 static void do_new_project(Project* p, Scene* s, EditorCamera* cam)
@@ -153,6 +201,7 @@ static void do_new_project(Project* p, Scene* s, EditorCamera* cam)
     Project_ResDir(p, resDir, sizeof(resDir));
     Path_MakeDirs(resDir); // the project's single shared resource root
     copy_default_skybox(root); // <root>/res/skybox/*.jpg
+    seed_compile_flags(root);  // <root>/compile_flags.txt for scene-script editing
 
     Scene_New(s);
     save_active_scene(p, s, cam->cam); // writes scenes/untitled/{scene.mgscene,untitled.c}
@@ -165,10 +214,14 @@ static void do_open_project(Project* p, Scene* s, EditorCamera* cam)
     if (pick == NULL)
         return;
 
-    if (Project_Load(p, pick))
+    if (Project_Load(p, pick)) {
+        char root[512];
+        Project_Root(p, root, sizeof(root));
+        seed_compile_flags(root); // keep scene-script header paths resolvable
         load_active_scene(p, s, cam, p->activeScene >= 0 ? p->activeScene : 0);
-    else
+    } else {
         fprintf(stderr, "[editor] project load failed: %s\n", pick);
+    }
     free(pick);
 }
 
@@ -181,6 +234,9 @@ static void do_save_project(Project* p, Scene* s, EditorCamera* cam)
     save_active_scene(p, s, cam->cam);
     if (!Project_Save(p, p->path))
         fprintf(stderr, "[editor] project save failed: %s\n", p->path);
+    char root[512];
+    Project_Root(p, root, sizeof(root));
+    seed_compile_flags(root);
 }
 
 static void do_add_scene(Project* p, Scene* s, EditorCamera* cam)

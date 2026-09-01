@@ -70,6 +70,7 @@ ifeq ($(OS),Windows_NT)
     APP_LIBS := -L$(CONF_DIR) -lmgengine
     MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
     CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
+    CPHDR = copy /Y "$(subst /,\,$1)\*.h" "$(subst /,\,$2)\" >nul
     RMDIR = if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
 else
     LIB_LINKS := -lglfw3 -lassimp -lzlibstatic -lGL -lm -lpthread -ldl -lX11
@@ -81,6 +82,7 @@ else
     APP_LIBS := -L$(CONF_DIR) -lmgengine -Wl,-rpath,'$$ORIGIN'
     MKDIR = mkdir -p $1
     CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
+    CPHDR = cp $1/*.h "$2"/
     RMDIR = rm -rf $1
 endif
 
@@ -124,9 +126,13 @@ lib: make_build_dir $(ENGINE_LIB)
 release:
 	$(MAKE) all RELEASE=1
 
-# create <conf>/obj and stage runtime data so the app can run from its own dir
+# create <conf>/obj, stage runtime data + the public headers next to the app so
+# it runs -- and so an editor project can point its compile_flags.txt here for
+# scene-script IntelliSense -- straight from <conf>/
 make_build_dir:
 	$(call MKDIR,$(BUILD_OBJ_DIR))
+	$(call MKDIR,$(CONF_DIR)/include)
+	$(call CPHDR,$(SOURCE_DIR),$(CONF_DIR)/include)
 	$(call CPDIR,shaders,$(CONF_DIR)/shaders)
 	$(call CPDIR,assets,$(CONF_DIR)/assets)
 

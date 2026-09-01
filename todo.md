@@ -434,6 +434,12 @@ phases so the app keeps working the whole way.
 - [x] `runtime/player.c` mounts `packs/data` first (fixed name), then reads
       `project.mgproject` + scenes out of the pak, and loads
       `scenes/scene.<startupIndex>.dll`. Flat loose layout still works for dev.
+- [x] `make` stages the public headers next to the editor (`<conf>/include/` =
+      `build/include`, `build/release/include`). The editor writes
+      `<projectRoot>/compile_flags.txt` (`-I<editorDir>/include`, via new
+      `Path_ExeDir`) on New / Open / Save Project so clangd / ccls resolve
+      `<mge.h>` while editing scene scripts -- no `source/` tree needed.
+      Falls back to `<sdk>/source`; comment-free; no-op when unchanged.
 
 ## Later / optional
 

@@ -47,6 +47,10 @@ int Path_List(const char* dir, const char* ext, bool wantDirs, char (*out)[128],
 // Last-modified time of `path` as a Unix timestamp, or 0 if it can't be stat'd.
 long Path_MTime(const char* path);
 
+// Directory holding the running executable (separators normalised to '/', no
+// trailing slash). `out` is set to "" if it can't be determined.
+void Path_ExeDir(char* out, size_t outSize);
+
 // true if `path` exists and is a directory.
 bool Path_IsDir(const char* path);
 
