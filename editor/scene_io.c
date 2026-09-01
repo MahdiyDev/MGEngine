@@ -91,7 +91,9 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
 
     const char* root = (projectRoot != NULL) ? projectRoot : "";
 
-    // copy any outside textures into <root>/res/ and store them root-relative
+    // import textures picked from OUTSIDE the project into <root>/res/ and store
+    // them root-relative. A path already under res/ (e.g. dropped from the
+    // Resources panel, subfolders included) is left exactly where it is.
     if (root[0] != '\0') {
         char res[600];
         Path_Join(root, "res", res, sizeof(res));
@@ -102,6 +104,14 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
                 char* stored = s->texPath[i][m];
                 if (stored[0] == '\0')
                     continue;
+
+                if (!Path_IsAbsolute(stored) &&
+                    (strncmp(stored, "res/", 4) == 0 || strncmp(stored, "res\\", 4) == 0)) {
+                    for (char* c = stored; *c != '\0'; c++)
+                        if (*c == '\\')
+                            *c = '/'; // .mgscene uses '/'
+                    continue;         // already a project resource -- keep as-is
+                }
 
                 char src[1024];
                 resolve_tex(stored, root, src, sizeof(src));

@@ -441,6 +441,11 @@ phases so the app keeps working the whole way.
       `<mge.h>` while editing scene scripts -- no `source/` tree needed.
       Falls back to `<sdk>/source`; comment-free; no-op when unchanged.
 
+- [x] `Scene_Save` no longer flattens + copies textures that are already under
+      the project `res/` (a Resources-panel drop, subfolders included) into
+      `res/` root -- it keeps them in place. Only a path from *outside* `res/`
+      (the file picker) is still imported. `test_scene_io` covers both.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view

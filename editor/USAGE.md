@@ -274,9 +274,10 @@ light "Sun"
   ...
 ```
 
-Texture references are stored as `res/<file>`, **relative to the project root** —
-on save, any texture whose source lies outside the project `res/` is copied in
-and the path rewritten. `Scene_Load` fills the data only;
+Texture references are stored **relative to the project root**. A texture already
+under `res/` (assigned from the Resources panel, subfolders included) is kept
+exactly where it is; only one picked from *outside* the project `res/` is copied
+in on save and its path rewritten to `res/<file>`. `Scene_Load` fills the data only;
 `Scene_LoadMaterialTextures(s, projectRoot)` then brings the textures onto the
 GPU. `#` starts a comment.
 

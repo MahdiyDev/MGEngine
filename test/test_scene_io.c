@@ -391,6 +391,42 @@ TEST(canonical_scene_file_takes_its_name_from_the_folder)
     RMDIR("scene_io_tmp/scenes");
 }
 
+// Textures the user assigns come either from the Resources panel (a
+// "res/..."-relative path, subfolders allowed) or the file picker (a path
+// outside res/). On save, only the latter is imported into res/ root; a path
+// already under res/ is left exactly where it is -- no flatten, no copy.
+TEST(save_keeps_res_paths_and_imports_only_outside_files)
+{
+    Path_MakeDirs("scene_io_tmp/res/textures");
+    FILE* f = fopen("scene_io_tmp/res/textures/wall.png", "wb");
+    CHECK(f != NULL); fputs("PNG", f); fclose(f);
+
+    Path_MakeDirs("scene_io_tmp/loose");
+    f = fopen("scene_io_tmp/loose/pick.png", "wb");
+    CHECK(f != NULL); fputs("PNG", f); fclose(f);
+
+    Scene a;
+    build_scene(&a);
+    strcpy(a.texPath[0][MATERIAL_MAP_DIFFUSE], "res/textures/wall.png"); // subfolder -> keep
+    strcpy(a.texPath[2][MATERIAL_MAP_NORMAL], "loose/pick.png");         // outside res/ -> import
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 60.0f };
+    CHECK(Scene_Save(&a, "scene_io_tmp/keep.mgscene", cam, "scene_io_tmp"));
+
+    CHECK(strcmp(a.texPath[0][MATERIAL_MAP_DIFFUSE], "res/textures/wall.png") == 0);
+    CHECK(Path_MTime("scene_io_tmp/res/wall.png") == 0);  // NOT flattened into res/ root
+    CHECK(strcmp(a.texPath[2][MATERIAL_MAP_NORMAL], "res/pick.png") == 0);
+    CHECK(Path_MTime("scene_io_tmp/res/pick.png") != 0);  // imported
+
+    remove("scene_io_tmp/keep.mgscene");
+    remove("scene_io_tmp/keep.c");
+    remove("scene_io_tmp/res/textures/wall.png");
+    remove("scene_io_tmp/res/pick.png");
+    remove("scene_io_tmp/loose/pick.png");
+    RMDIR("scene_io_tmp/res/textures");
+    RMDIR("scene_io_tmp/loose");
+}
+
 int main(void)
 {
     RUN(path_helpers);
@@ -400,6 +436,7 @@ int main(void)
     RUN(legacy_camera_euler_keeps_its_aim);
     RUN(load_rejects_a_non_scene_file);
     RUN(canonical_scene_file_takes_its_name_from_the_folder);
+    RUN(save_keeps_res_paths_and_imports_only_outside_files);
 
     RMDIR("scene_io_tmp/res"); // best-effort tidy-up
     RMDIR("scene_io_tmp");
