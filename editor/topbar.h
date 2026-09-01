@@ -18,7 +18,7 @@ typedef enum {
     TOPBAR_SCENE_SWITCH,    // `arg` = target scene index
     TOPBAR_SCENE_REVERT,    // reload the active scene from disk, dropping edits
     TOPBAR_BUILD,        // compile the active scene's code
-    TOPBAR_BUILD_RELEASE, // compile every scene release + pak + stage dist/
+    TOPBAR_BUILD_RELEASE, // compile every scene + pak + stage dist/ (Debug or Release cfg)
     TOPBAR_PLAY,         // build (if needed), load + run the scene module
     TOPBAR_STOP,         // shut down + unload the module, restore the scene
     TOPBAR_QUIT,         // never returned by Topbar_Draw; main.c uses it for the close guard
@@ -30,7 +30,8 @@ typedef struct {
 } TopbarResult;
 
 // Draws the bar and returns the menu item the user clicked this frame (or
-// TOPBAR_NONE). `editMode` and `showConsole` are owned by main.c (this toggles
-// them); `playing` is read to label the Play/Stop button.
+// TOPBAR_NONE). `editMode`, `showConsole` and `buildRelease` are owned by main.c
+// (this toggles them); `playing` is read to label the Play/Stop button.
+// `buildRelease` picks which engine config "Build Bundle" ships (Debug/Release).
 TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s,
-    bool* editMode, bool playing, bool* showConsole);
+    bool* editMode, bool playing, bool* showConsole, bool* buildRelease);

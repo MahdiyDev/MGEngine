@@ -61,7 +61,7 @@ editor/                THE APP -- project / scene editor (docked panel shell aro
   scene_build.c/.h     compile a scene's *.c -> hot-reloadable .dll; BuildLog
   scene_runtime.c/.h   load / hot-reload a compiled scene module (SceneRuntime)
   play.c/.h            Play / Stop / Build + the build console
-  release.c/.h         "Build Release": compile every scene + pak + stage dist/
+  release.c/.h         "Build Bundle": compile every scene + pak all data (project.mgproject too) -> dist/packs/data.pak.NNN; scene modules -> dist/scenes/scene.N.dll
   fileops.c/.h         Project + Scene menu actions + the unsaved-changes / name modals
   topbar.c/.h          top strip: Project menu, Scene dropdown, Play/Build/Console, mode, gizmo, Render
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
@@ -69,7 +69,7 @@ editor/                THE APP -- project / scene editor (docked panel shell aro
   resources.c/.h       bottom panel: project res/ browser (import / rename / delete / assign)
   USAGE.md             editor docs
 runtime/
-  player.c             standalone project runner -- reuses the editor data layer; what Build Release ships
+  player.c             standalone project runner -- reuses the editor data layer; what Build Bundle ships
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h
@@ -113,18 +113,19 @@ once (needs `cmake` + `ninja`):
 
 ```sh
 make vendor        # builds GLFW + Assimp -> vendor/*/lib + vendor/*/include
-make               # -> build/libmgengine.(dll|so)  and  build/mgengine  (the app)
-make release       # same, but a PRODUCTION build (see below)
-make lib           # -> just the library
+make               # debug   -> build/{libmgengine.(dll|so),editor,mgeplayer}
+make release       # release -> build/release/{...}  (PRODUCTION build, see below)
+make lib           # -> just the library (of the current config)
 ```
 
 `make` is a **debug** build: `-O0 -g`, assertions on — handy while developing,
 but noticeably slow. `make release` rebuilds every object with `-O2 -DNDEBUG`,
 strips symbols and lets the linker drop unused code — this is the one to run for
 real (typically several times the frame rate of the debug build, ~40 % smaller
-binaries). The object cache doesn't track flags, so `make release` wipes
-`build/obj` first; a plain `make` afterwards puts the debug objects back.
-Override per-invocation instead with e.g. `make CFLAGS="-O3 -march=native"`.
+binaries). The two configs have **separate object caches and output dirs**
+(`build/` vs `build/release/`), so `make` and `make release` coexist — run both
+to keep a debug and a release set side by side. Override flags per-invocation
+with e.g. `make CFLAGS="-O3 -march=native"` (lands in `build/`).
 
 The compiler writes `.d` dep files (`-MMD -MP`), so editing a header —
 `source/mge.h` especially, since it fixes struct sizes — rebuilds every
@@ -143,8 +144,9 @@ compiled on its own), links them into `build/libmgengine.dll` with `g++`
 (`-static-libgcc -static-libstdc++ -static`, so the DLL carries the C/C++ runtime
 and GLFW / Assimp / Dear ImGui are already inside), then builds `editor/*.c`
 against it with plain `gcc -Isource -lmgengine`.
-`make_build_dir` stages `assets/` (and `shaders/`) plus, on Windows, the DLL
-sits next to `build/editor.exe`, so the app runs from `build/`.
+`make_build_dir` stages `assets/` (and `shaders/`) into the config's own dir, and
+the DLL sits next to `editor.exe` / `mgeplayer.exe` there, so each config runs
+from its own folder (`build/` or `build/release/`).
 
 Your own app is the same one-liner: `gcc yours.c -Isource -Lbuild -lmgengine`
 plus `libmgengine.dll` on the path (or beside the exe). The `examples/` still

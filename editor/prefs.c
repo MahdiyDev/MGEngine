@@ -28,6 +28,7 @@ void Prefs_Load(EditorPrefs* p)
     p->leftW = PREFS_LEFT;
     p->rightW = PREFS_RIGHT;
     p->bottomH = PREFS_BOTTOM;
+    p->buildRelease = 0;
 
     char path[1024];
     prefs_path(path, sizeof(path));
@@ -46,6 +47,7 @@ void Prefs_Load(EditorPrefs* p)
         else if (strcmp(key, "leftW") == 0) p->leftW = v;
         else if (strcmp(key, "rightW") == 0) p->rightW = v;
         else if (strcmp(key, "bottomH") == 0) p->bottomH = v;
+        else if (strcmp(key, "buildRelease") == 0) p->buildRelease = (v != 0.0f);
     }
     fclose(f);
 
@@ -69,7 +71,9 @@ void Prefs_Save(const EditorPrefs* p)
         "winH = %d\n"
         "leftW = %.0f\n"
         "rightW = %.0f\n"
-        "bottomH = %.0f\n",
-        p->winW, p->winH, (double)p->leftW, (double)p->rightW, (double)p->bottomH);
+        "bottomH = %.0f\n"
+        "buildRelease = %d\n",
+        p->winW, p->winH, (double)p->leftW, (double)p->rightW, (double)p->bottomH,
+        p->buildRelease);
     fclose(f);
 }

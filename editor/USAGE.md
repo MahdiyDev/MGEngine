@@ -19,8 +19,8 @@ A scene editor built on top of the engine library — see
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
 | `history.c` / `.h` | `History`: undo / redo as whole-`Scene` snapshots. `History_Record` at each mutation site (coalesced per edit burst), `History_Rest` refreshes the baseline when idle, `Scene_RestoreSnapshot` puts a snapshot back — reusing already-loaded material textures / the skybox by source path so an undo re-reads no files |
 | `play.c` / `.h` | Play mode: snapshot the scene, compile (async) + load the module, run `MgeScene_Update` each frame with `p->viewCam`, hot-reload on change, restore on Stop; the play-mode overlay strip + the build console |
-| `release.c` / `.h` | **Build Release**: compile every scene `-O2 -DNDEBUG -s`, `Mge_PakWrite` the data, stage `<root>/dist/` with a copy of the standalone player |
-| `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
+| `release.c` / `.h` | **Build Bundle**: compile every scene (Debug or Release cflags), `Mge_PakWrite` all project data (incl. `project.mgproject`) into `dist/packs/data.pak.NNN`, stage `dist/` — player + engine DLL at the root, scene modules as `dist/scenes/scene.<index>.dll` (no names) |
+| `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Debug\|Release** toggle / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights. `+ add` menu, per-row select (ctrl-click = multi), **double-click to rename**, active toggle, `x` to delete, **drag to reorder** / Shift-drop to parent (children shown indented) |
 | `inspector.c` / `.h` | the **right** panel: type-aware inspector — Environment (sun + skybox + main camera), Object (active, primitive, transform, **parent** combo, material slots — drop an image on a thumbnail to assign it), Camera, Light. A multi-selection edits the primary + notes "group move only" |
 | `resources.c` / `.h` | the **bottom** panel: the project `res/` tree — Import / New Folder / Rename / Delete / **Copy** / **Paste**, ctrl-click multi-select, right-click context menu, **drag rows** onto folders (or the `res/` header) to move. Image thumbnails; drag one onto an inspector thumbnail to assign it |
@@ -29,7 +29,8 @@ A scene editor built on top of the engine library — see
 make            # from the repo root -> build/editor(.exe)
 ```
 
-`build/libmgengine.dll` sits next to the executable, so run it from `build/`.
+`build/libmgengine.dll` sits next to the executable, so run it from `build/`
+(`make release` builds a second, stripped set under `build/release/`).
 The editor calls `Mge_SetMSAA(4)` before `Mge_InitWindow` (4x anti-aliasing).
 
 ## The docked shell
@@ -103,7 +104,7 @@ myproject/
 | **New Project...** | native save dialog → choose a location + name; creates a folder `<name>/` and writes `project.mgproject` + `res/` + `scenes/untitled/` inside it |
 | **Open Project...** | pick a `project.mgproject`; loads it and opens its `startupScene` |
 | **Save Project** | write `project.mgproject` + the active scene's `scene.mgscene` |
-| **Build Release...** | compile every scene with the project's release cflags, pack the data, stage a runnable `<projectRoot>/dist/` — see below |
+| **Build Bundle (Debug/Release)...** | compile every scene (cflags per the top-bar Debug\|Release toggle), pack the data, stage a runnable `<projectRoot>/dist/` — see below |
 
 **Scene** dropdown (labelled `Scene: <active> *`):
 
@@ -143,6 +144,7 @@ links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`, `Mge_Load*`, etc
 | top-bar button | |
 | --- | --- |
 | **Build** | compile the active scene → `scenes/<name>/build/<name>_debug.dll` as a **separate process** (the editor keeps drawing); output goes to the **Console** panel |
+| **Debug / Release** | which engine config **Build Bundle** ships (scene cflags + the staged `libmgengine.dll` / player). Persisted in `~/.mgeeditor.ini`. Does not affect **Build** / Play, which always use debug for fast iteration |
 | **Play** / **Stop** | see **Play mode** below |
 | **Console** | toggle the build-log panel (replaces Resources at the bottom) |
 
@@ -171,24 +173,39 @@ error just shows in the console and the old module keeps running.
 
 The compiler is `$CC` (default `gcc`) and must be on `PATH`. The editor finds the
 engine SDK via `$MGE_ENGINE`, else by searching upward from the working directory
-for a folder with `source/mge.h` + `build/libmgengine`.
+for a folder with `source/mge.h` + a built `build/libmgengine` **or**
+`build/release/libmgengine`.
 
-### Build Release
+### Build Bundle
 
-**Project ▸ Build Release** stages `<projectRoot>/dist/`:
+**Project ▸ Build Bundle** stages `<projectRoot>/dist/`:
 
 ```
 dist/
-  <project>.exe        a copy of the standalone player (runtime/player.c)
-  libmgengine.dll
-  <scene>.dll ...      each scene's module, compiled -O2 -DNDEBUG -s
-  <project>.pak.001…   project.mgproject + scenes/*.mgscene + res/, one archive
-  project.mgproject    also loose (the player reads it to learn the pak name)
+  <project>.exe          a copy of the standalone player (runtime/player.c)
+  libmgengine.dll        from build/ or build/release/ per the Debug|Release toggle
+  scenes/
+    scene.0.dll …        one per scene, named by index into project.scenes[]
+  packs/
+    data.pak.001…        project.mgproject + scenes/*.mgscene + res/, one archive
 ```
 
-Run `dist/<project>.exe`: it `chdir`s to its own folder, loads the project,
-mounts the pak, opens the `startupScene` (data + textures from the pak), loads
-that scene's `.dll`, and runs `MgeScene_Init` + `MgeScene_Update` each frame. The
+Everything project-specific is **inside the pak** — `project.mgproject`, the
+`.mgscene` data, `res/`. Nothing is staged loose and the scene modules carry no
+names, so the shipped folder gives away only the project + scene *count*. The pak
+has a fixed name (`data.pak.NNN`) so the player can mount it before it has read
+anything.
+
+The engine DLL and player come from the SDK's matching config — run `make`
+(debug) and/or `make release` in the SDK first; the bundle build reports which
+one is missing.
+
+Run `dist/<project>.exe`: it `chdir`s to its own folder, mounts
+`packs/data.pak.NNN`, reads `project.mgproject` + the `startupScene` (data +
+textures) from it, loads `scenes/scene.<startupIndex>.dll`, and runs
+`MgeScene_Init` + `MgeScene_Update` each frame. (A flat loose layout —
+`data.pak.NNN` + `<scene>.dll` + `project.mgproject` next to the exe — is still
+accepted as a fallback, which is also how a plain loose-file dev run works.) The
 view comes from the scene's **main camera** object (`Scene.mainCamera`) — a scene
 module moves that object to move the camera. There is no fly-camera or cursor
 grab in the shipped game; the debug fly-cam only appears when a scene has no main

@@ -21,6 +21,7 @@ typedef struct Play {
     Scene snapshot; // whole-Scene copy taken on Play; restored (minus GPU handles) on Stop
 
     Camera3D viewCam;    // the camera the module sees as ctx.camera -- set each frame by main.c
+    bool releaseCfg;     // Build Bundle config (set each frame by main.c): false = debug
 
     SceneBuildJob job;   // in-flight compile (runs as a separate process)
     int  jobPurpose;     // JOB_* -- what to do when the compile finishes

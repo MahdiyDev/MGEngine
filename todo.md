@@ -415,6 +415,26 @@ phases so the app keeps working the whole way.
       pins `x` flush-right. **Delete** key now also removes a selected light
       (immediately; never the Sun), matching the row button.
 
+## Debug/Release engine builds + structured dist/   [DONE]
+
+- [x] `make` (debug) and `make release` coexist -- separate object caches and
+      output dirs (`build/` vs `build/release/`), no more `clean-obj` wipe. The
+      Makefile picks `CONF_DIR` on `RELEASE`; `test/` + `examples/` still read the
+      debug `build/obj/`.
+- [x] Editor top bar: a **Debug|Release** toggle (persisted in `~/.mgeeditor.ini`
+      as `buildRelease`) that picks which engine config **Build Bundle** ships --
+      scene cflags + the staged `libmgengine.dll` / player. `Build` / Play stay
+      on debug. `is_sdk` accepts either config's import lib; release scene
+      compiles link `-L<sdk>/build/release`.
+- [x] `Release_Build(proj, release, log)` stages `dist/` organised: player +
+      engine DLL at the root, scene modules as `dist/scenes/scene.<index>.dll`
+      (no names shipped), everything else -- **`project.mgproject` included** --
+      packed into `dist/packs/data.pak.NNN` (fixed name). Nothing project-specific
+      is staged loose / editable.
+- [x] `runtime/player.c` mounts `packs/data` first (fixed name), then reads
+      `project.mgproject` + scenes out of the pak, and loads
+      `scenes/scene.<startupIndex>.dll`. Flat loose layout still works for dev.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view

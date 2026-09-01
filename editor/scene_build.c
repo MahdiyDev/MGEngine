@@ -81,12 +81,19 @@ static bool is_sdk(const char* dir)
 {
     char a[1024], b[1024];
     Path_Join(dir, "source/mge.h", a, sizeof(a));
-    Path_Join(dir, "build/libmgengine.dll.a", b, sizeof(b));
-    if (file_exists(a) && file_exists(b))
-        return true;
-    // POSIX import-lib-less
-    Path_Join(dir, "build/libmgengine.so", b, sizeof(b));
-    return file_exists(a) && file_exists(b);
+    if (!file_exists(a))
+        return false;
+    // recognised by the presence of a built engine lib in either config
+    const char* libs[] = {
+        "build/libmgengine.dll.a", "build/libmgengine.so",
+        "build/release/libmgengine.dll.a", "build/release/libmgengine.so",
+    };
+    for (size_t i = 0; i < sizeof(libs) / sizeof(libs[0]); i++) {
+        Path_Join(dir, libs[i], b, sizeof(b));
+        if (file_exists(b))
+            return true;
+    }
+    return false;
 }
 
 bool SceneBuild_FindSDK(char* out, int outSize)
@@ -161,15 +168,16 @@ static bool build_command(const Project* proj, const char* sceneName, bool relea
         cc = "gcc";
     const char* cflags = release ? proj->cflagsRelease : proj->cflagsDebug;
 
-    // gcc <cflags> -shared -std=c11 -I<sdk>/source <scene>/*.c -o <dll> -L<sdk>/build -lmgengine
+    // gcc <cflags> -shared -std=c11 -I<sdk>/source <scene>/*.c -o <dll> -L<sdk>/build[/release] -lmgengine
     // (the compiler name is left unquoted so cmd.exe doesn't strip the first "path" quote)
+    const char* libDir = release ? "build/release" : "build";
     int n = snprintf(cmd, (size_t)cmdSize,
         "%s %s -shared -std=c11 -DPLATFORM_DESKTOP -I\"%s/source\"",
         cc, cflags, sdk);
     for (int i = 0; i < nc && n < cmdSize - 300; i++)
         n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s/%s\"", sceneDir, names[i]);
     n += snprintf(cmd + n, (size_t)cmdSize - n,
-        " -o \"%s\" -L\"%s/build\" -lmgengine", outDll, sdk);
+        " -o \"%s\" -L\"%s/%s\" -lmgengine", outDll, sdk, libDir);
     return true;
 }
 

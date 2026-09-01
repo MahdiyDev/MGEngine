@@ -161,7 +161,7 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s)
         if (p->playing)
             Play_Action(p, TOPBAR_STOP, proj, s);
         cancel_job(p);
-        Release_Build(proj, &p->log); // synchronous: ships every scene at once
+        Release_Build(proj, p->releaseCfg, &p->log); // synchronous: ships every scene at once
         p->showConsole = true;
         return true;
 

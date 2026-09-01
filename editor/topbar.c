@@ -62,7 +62,7 @@ static void render_menu(Scene* s)
     Mge_GuiEndMenu();
 }
 
-static TopbarResult project_menu(const Project* proj)
+static TopbarResult project_menu(const Project* proj, bool buildRelease)
 {
     TopbarResult r = { TOPBAR_NONE, 0 };
     if (!Mge_GuiBeginMenu("Project"))
@@ -72,7 +72,8 @@ static TopbarResult project_menu(const Project* proj)
     if (Mge_GuiMenuItem(proj->path[0] ? "Save Project" : "Save Project...")) r.action = TOPBAR_PROJECT_SAVE;
     if (proj->path[0]) {
         Mge_GuiSeparator();
-        if (Mge_GuiMenuItem("Build Release...")) r.action = TOPBAR_BUILD_RELEASE;
+        const char* item = buildRelease ? "Build Bundle (Release)..." : "Build Bundle (Debug)...";
+        if (Mge_GuiMenuItem(item)) r.action = TOPBAR_BUILD_RELEASE;
     }
     Mge_GuiEndMenu();
     return r;
@@ -112,14 +113,14 @@ static TopbarResult scene_menu(const Project* proj, const Scene* s)
 }
 
 TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s,
-    bool* editMode, bool playing, bool* showConsole)
+    bool* editMode, bool playing, bool* showConsole, bool* buildRelease)
 {
     if (!Mge_GuiBeginPanel("##topbar", rect.x, rect.y, rect.width, rect.height)) {
         Mge_GuiEndPanel();
         return (TopbarResult){ TOPBAR_NONE, 0 };
     }
 
-    TopbarResult r = project_menu(proj);
+    TopbarResult r = project_menu(proj, *buildRelease);
     Mge_GuiSameLine();
 
     char proj_title[80];
@@ -138,6 +139,10 @@ TopbarResult Topbar_Draw(Rectangle rect, Project* proj, Scene* s,
     Mge_GuiSameLine();
     if (Mge_GuiButton("Build"))
         r.action = TOPBAR_BUILD;
+    Mge_GuiSameLine();
+    // which engine config "Build Bundle" ships (Project menu)
+    if (Mge_GuiButton(*buildRelease ? "Release" : "Debug"))
+        *buildRelease = !*buildRelease;
     Mge_GuiSameLine();
     if (Mge_GuiButton(*showConsole ? "[Console]" : "Console"))
         *showConsole = !*showConsole;

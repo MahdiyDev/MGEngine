@@ -59,17 +59,25 @@ int main(int argc, char** argv)
 
     const char* projPath = (argc > 1) ? argv[1] : "project.mgproject";
 
+    // mount the data pak FIRST, under a fixed name, so everything below -- the
+    // project file included -- resolves out of it. A staged bundle keeps it in
+    // packs/; loose-file dev runs have no pak (ok to miss).
+    char projDir[512], pakStem[700], packsDir[600];
+    Path_Dir(projPath, projDir, sizeof(projDir));
+    const char* base = projDir[0] ? projDir : ".";
+    Path_Join(base, "packs", packsDir, sizeof(packsDir));
+    Path_Join(packsDir, "data", pakStem, sizeof(pakStem));
+    if (!Mge_MountPak(pakStem)) {
+        Path_Join(base, "data", pakStem, sizeof(pakStem)); // flat fallback
+        Mge_MountPak(pakStem);
+    }
+
+    // project.mgproject: from the pak in a shipped bundle, loose on disk in dev
     Project project;
     if (!Project_Load(&project, projPath)) {
         fprintf(stderr, "player: cannot load %s\n", projPath);
         return 1;
     }
-
-    // mount <projectDir>/<name>.pak.NNN (ok to miss -- loose-file dev run)
-    char projDir[512], pakStem[700];
-    Path_Dir(projPath, projDir, sizeof(projDir));
-    Path_Join(projDir[0] ? projDir : ".", project.name, pakStem, sizeof(pakStem));
-    Mge_MountPak(pakStem);
 
     Mge_SetMSAA(project.msaa);
     Mge_InitWindow((uint32_t)(project.windowW > 0 ? project.windowW : 1280),
@@ -109,10 +117,18 @@ int main(int argc, char** argv)
     else
         EnableCursor();
 
-    // the scene module is staged flat next to this exe as <scene>.dll
-    char dll[700];
-    Path_Join(projDir[0] ? projDir : ".", sceneName, dll, sizeof(dll));
+    // the scene module: a staged bundle keeps it as scenes/scene.<index>.dll
+    // (index into project.scenes[] -- names aren't shipped); a loose dev run
+    // keeps it flat as <scene>.dll next to the exe
+    char dll[700], scenesDir[600], modName[32];
+    snprintf(modName, sizeof(modName), "scene.%d", idx);
+    Path_Join(base, "scenes", scenesDir, sizeof(scenesDir));
+    Path_Join(scenesDir, modName, dll, sizeof(dll));
     strncat(dll, ".dll", sizeof(dll) - strlen(dll) - 1);
+    if (Path_MTime(dll) == 0) {
+        Path_Join(base, sceneName, dll, sizeof(dll)); // flat loose fallback
+        strncat(dll, ".dll", sizeof(dll) - strlen(dll) - 1);
+    }
 
     SceneRuntime rt = { 0 };
     MgeSceneCtx ctx = make_ctx(&scene);

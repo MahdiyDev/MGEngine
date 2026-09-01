@@ -7,6 +7,7 @@
 typedef struct EditorPrefs {
     int   winW, winH;               // last window size
     float leftW, rightW, bottomH;   // panel split positions (px)
+    int   buildRelease;             // Build Bundle config: 0 = debug, 1 = release
 } EditorPrefs;
 
 // Fill `p` with defaults, then override from the ini file if it exists.

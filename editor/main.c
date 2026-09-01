@@ -67,6 +67,7 @@ int main(void)
     Scene_Init(&scene, prefs.winW, prefs.winH); // GPU resources + the default "untitled" scene data
 
     float leftW = prefs.leftW, rightW = prefs.rightW, bottomH = prefs.bottomH;
+    bool buildRelease = prefs.buildRelease != 0; // Build Bundle config toggle (top bar)
     int prevW = Mge_GetScreenWidth(), prevH = Mge_GetScreenHeight();
 
     FileOps ops = { 0 };
@@ -132,6 +133,7 @@ int main(void)
             view = camera.cam;
         }
         play.viewCam = view;
+        play.releaseCfg = buildRelease;
 
         Play_Frame(&play, &project, &scene); // runs the module; may move the game camera
 
@@ -182,7 +184,7 @@ int main(void)
             if (play.showConsole)
                 Play_DrawConsole(&play, rBottom);
         } else {
-            tr = Topbar_Draw(rTop, &project, &scene, &editMode, play.playing, &play.showConsole);
+            tr = Topbar_Draw(rTop, &project, &scene, &editMode, play.playing, &play.showConsole, &buildRelease);
             if (Hierarchy_Draw(rLeft, &scene, &hist))
                 wantDeletePopup = true;
             Inspector_Draw(rRight, &scene, &project, &hist);
@@ -279,6 +281,7 @@ int main(void)
     prefs.leftW = leftW;
     prefs.rightW = rightW;
     prefs.bottomH = bottomH;
+    prefs.buildRelease = buildRelease;
     Prefs_Save(&prefs);
 
     History_Free(&hist);

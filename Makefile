@@ -3,16 +3,18 @@
 # The engine is a shared library; `editor/` is a separate app (the scene editor)
 # that links against it through the public headers in `source/`.
 #
-#   make              -> build/libmgengine.(dll|so) + build/editor (the app)
+#   make              -> build/{libmgengine.(dll|so),editor,mgeplayer}
 #                        DEBUG build: -O0 -g, assertions on
-#   make release      -> same targets, PRODUCTION build: -O2 -DNDEBUG, stripped,
-#                        dead code removed. Use this one for actual runs.
-#   make lib          -> just the engine library
+#   make release      -> build/release/{...}  PRODUCTION build: -O2 -DNDEBUG,
+#                        stripped, dead code removed. Separate object cache, so
+#                        `make` and `make release` coexist -- run both to
+#                        keep a debug and a release set side by side.
+#   make lib          -> just the engine library (of the current config)
 #   make vendor       build GLFW + Assimp from source (needs cmake + ninja)
 #   make vendor-glfw / make vendor-assimp   build just one
 #   make vendor-clean remove built vendor artifacts (keeps the source trees)
 #   make test         build+run the unit tests (no window/GL needed)
-#   make clean-obj    drop the object cache only (used to switch debug <-> release)
+#   make clean-obj    drop the object cache of the current config
 #   make clean        remove build/ (leaves vendor/ -- use vendor-clean for that)
 #
 # On Windows use `mingw32-make`.
@@ -45,7 +47,14 @@ LINK      = g++
 
 SOURCE_DIR    = source
 BUILD_DIR     = build
-BUILD_OBJ_DIR = $(BUILD_DIR)/obj
+# debug lands in build/ ; `make release` (RELEASE=1) lands in build/release/ --
+# separate object caches, so the two configs coexist without a wipe.
+ifdef RELEASE
+    CONF_DIR := $(BUILD_DIR)/release
+else
+    CONF_DIR := $(BUILD_DIR)
+endif
+BUILD_OBJ_DIR = $(CONF_DIR)/obj
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -54,11 +63,11 @@ ifeq ($(OS),Windows_NT)
     EXE  := .exe
     PICFLAG :=
     LIB_NAME := libmgengine.dll
-    IMPLIB   := $(BUILD_DIR)/libmgengine.dll.a
+    IMPLIB   := $(CONF_DIR)/libmgengine.dll.a
     # bake the C/C++/pthread runtimes into the DLL so the app needs only
     # libmgengine.dll + system DLLs at run time
     SHAREDFLAGS := -shared -static -static-libgcc -static-libstdc++ -Wl,--out-implib,$(IMPLIB)
-    APP_LIBS := -L$(BUILD_DIR) -lmgengine
+    APP_LIBS := -L$(CONF_DIR) -lmgengine
     MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
     CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
     RMDIR = if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
@@ -69,14 +78,18 @@ else
     LIB_NAME := libmgengine.so
     IMPLIB   :=
     SHAREDFLAGS := -shared
-    APP_LIBS := -L$(BUILD_DIR) -lmgengine -Wl,-rpath,'$$ORIGIN'
+    APP_LIBS := -L$(CONF_DIR) -lmgengine -Wl,-rpath,'$$ORIGIN'
     MKDIR = mkdir -p $1
     CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
     RMDIR = rm -rf $1
 endif
 
-# set by the `release` target (via a recursive $(MAKE) ... RELEASE=1)
+# set by the `release` target (via a recursive $(MAKE) ... RELEASE=1). Picks the
+# production flags here so the object cache under build/release/obj/ is built
+# with them -- no shared cache, no wipe.
 ifdef RELEASE
+    CFLAGS      := $(RELEASE_CFLAGS)
+    CXXFLAGS    := $(RELEASE_CXXFLAGS)
     SHAREDFLAGS += -s -Wl,--gc-sections
     APP_EXTRA   := -s -Wl,--gc-sections
 else
@@ -96,27 +109,26 @@ COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) \
            $(patsubst $(SOURCE_DIR)/%.cpp,$(BUILD_OBJ_DIR)/%.o,$(CXXSOURCES)) \
            $(IMGUI_OBJ) $(BUILD_OBJ_DIR)/glad.o
 
-ENGINE_LIB = $(BUILD_DIR)/$(LIB_NAME)
-APP        = $(BUILD_DIR)/editor$(EXE)
-PLAYER     = $(BUILD_DIR)/mgeplayer$(EXE)
+ENGINE_LIB = $(CONF_DIR)/$(LIB_NAME)
+APP        = $(CONF_DIR)/editor$(EXE)
+PLAYER     = $(CONF_DIR)/mgeplayer$(EXE)
 
 .PHONY: all lib release clean clean-obj vendor vendor-glfw vendor-assimp vendor-clean test make_build_dir
 
 all: make_build_dir $(APP) $(PLAYER)
 lib: make_build_dir $(ENGINE_LIB)
 
-# production build: rebuild every object with -O2 -DNDEBUG and strip the result.
-# The object cache is flag-agnostic, so wipe it first (a plain `make` afterwards
-# rebuilds it back as debug).
+# production build: -O2 -DNDEBUG, stripped, dead code removed. Its own object
+# cache + outputs under build/release/, so `make` (debug) and `make release`
+# coexist -- run both to have both.
 release:
-	$(MAKE) clean-obj
-	$(MAKE) all CFLAGS="$(RELEASE_CFLAGS)" CXXFLAGS="$(RELEASE_CXXFLAGS)" RELEASE=1
+	$(MAKE) all RELEASE=1
 
-# create build/obj and stage runtime data so the app can run from build/
+# create <conf>/obj and stage runtime data so the app can run from its own dir
 make_build_dir:
 	$(call MKDIR,$(BUILD_OBJ_DIR))
-	$(call CPDIR,shaders,$(BUILD_DIR)/shaders)
-	$(call CPDIR,assets,$(BUILD_DIR)/assets)
+	$(call CPDIR,shaders,$(CONF_DIR)/shaders)
+	$(call CPDIR,assets,$(CONF_DIR)/assets)
 
 # --- engine library ---
 $(ENGINE_LIB): $(COBJECTS)
