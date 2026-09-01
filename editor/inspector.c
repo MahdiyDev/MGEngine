@@ -181,14 +181,22 @@ static bool inspect_object(Scene* s, Project* proj)
         Mge_GuiSeparator();
     }
 
-    static const char* prims[3] = { "cube", "sphere", "plane" };
+    static const char* prims[PRIM_KIND_COUNT] = { "cube", "sphere", "plane", "arrow", "polygon" };
     ch |= Mge_GuiCheckbox("active", &o->active);
     if (o->kind == OBJECT_3D) {
         int prim = o->primitive;
-        if (Mge_GuiCombo("primitive", &prim, prims, 3)) {
+        if (Mge_GuiCombo("primitive", &prim, prims, PRIM_KIND_COUNT)) {
             o->primitive = (PrimitiveKind)prim;
+            if (o->primitive == PRIM_POLYGON && o->polyCount < 2) { // seed a triangle
+                o->poly[0] = (Vector3){ 0.0f, 1.0f, 0.0f };
+                o->poly[1] = (Vector3){ -1.0f, -1.0f, 0.0f };
+                o->poly[2] = (Vector3){ 1.0f, -1.0f, 0.0f };
+                o->polyCount = 3;
+            }
             ch = true;
         }
+        if (o->primitive != PRIM_ARROW)
+            ch |= Mge_GuiCheckbox("wireframe", &o->wireframe);
     } else {
         Mge_GuiLabel("rect (2D)");
     }
@@ -196,6 +204,27 @@ static bool inspect_object(Scene* s, Project* proj)
     ch |= euler_edit(&o->transform.rotation, s->selKind, s->selIndex);
     ch |= Mge_GuiInputVec3("size", &o->transform.scale);
     ch |= parent_combo(s);
+
+    if (o->kind == OBJECT_3D && o->primitive == PRIM_POLYGON) {
+        Mge_GuiSeparator();
+        Mge_GuiLabel("polygon points");
+        ch |= Mge_GuiCheckbox("strip (else fan)", &o->polyStrip);
+        for (int k = 0; k < o->polyCount; k++) {
+            char lbl[16];
+            snprintf(lbl, sizeof(lbl), "p%d", k);
+            ch |= Mge_GuiInputVec3(lbl, &o->poly[k]);
+        }
+        if (o->polyCount < MGE_MAX_POLY_POINTS && Mge_GuiButton("+ point")) {
+            o->poly[o->polyCount] = o->poly[o->polyCount - 1]; // clone the last
+            o->polyCount++;
+            ch = true;
+        }
+        Mge_GuiSameLine();
+        if (o->polyCount > 2 && Mge_GuiButton("- point")) {
+            o->polyCount--;
+            ch = true;
+        }
+    }
     Mge_GuiSeparator();
 
     Mge_GuiLabel("material");

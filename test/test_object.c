@@ -21,6 +21,13 @@ void Draw_Plane(Vector3 a, float w, float l, Color c) { (void)a; (void)w; (void)
 void Draw_Arrow(Vector2 a, Vector2 b, float s, Color c) { (void)a; (void)b; (void)s; (void)c; }
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
 void Draw_CameraFrustum(Camera3D cam, float a, float n, float f, Color c) { (void)cam; (void)a; (void)n; (void)f; (void)c; }
+void Draw_CubeWiresEx(Vector3 a, Vector3 b, Quaternion q, Color c) { (void)a; (void)b; (void)q; (void)c; }
+void Draw_SphereWiresEx(Vector3 a, float r, int ri, int sl, Color c) { (void)a; (void)r; (void)ri; (void)sl; (void)c; }
+void Draw_Line3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
+void Draw_Quad3D(Vector3 a, Vector2 s, Quaternion q, Color c) { (void)a; (void)s; (void)q; (void)c; }
+void Draw_Quad3DWires(Vector3 a, Vector2 s, Quaternion q, Color c) { (void)a; (void)s; (void)q; (void)c; }
+void Draw_Polygon3D(const Vector3* p, int n, bool st, Color c) { (void)p; (void)n; (void)st; (void)c; }
+void Draw_Polygon3DWires(const Vector3* p, int n, bool cl, Color c) { (void)p; (void)n; (void)cl; (void)c; }
 void Mge_DrawObjectOutline(Object o, float t, Color c) { (void)o; (void)t; (void)c; }
 
 // lighting backend (mge_light.c is not linked here; mge_material.c provides the

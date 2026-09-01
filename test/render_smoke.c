@@ -786,6 +786,43 @@ static void scene_camera_frustum(void)
     Mge_EndDrawing();
 }
 
+// the new shape primitives: wire box, wire sphere, a rotated plane (rectangle),
+// an arrow, a filled triangle, a fan polygon
+static void scene_shape_gallery(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 4.0f, 3.5f, 9.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0.3f, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.5f;
+
+    Object box = Mge_MakeObject3D((Vector3){ -4.0f, 0, 0 }, (Vector3){ 1.4f, 1.4f, 1.4f }, (Color){ 200, 120, 120, 255 });
+    box.wireframe = true;
+    Object ball = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ -2.0f, 0, 0 }, (Vector3){ 1.6f, 1.6f, 1.6f }, (Color){ 120, 200, 140, 255 });
+    ball.wireframe = true;
+    Object rect = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0.0f, 0, 0 }, (Vector3){ 1.6f, 0.2f, 1.6f }, (Color){ 140, 160, 220, 255 });
+    rect.transform.rotation = Quaternion_FromAxisAngle((Vector3){ 1, 0, 0 }, 90.0f * DEG2RAD);
+    Object arrow = Mge_MakeShape3D(PRIM_ARROW, (Vector3){ 2.0f, -0.6f, 0 }, (Vector3){ 2.0f, 1, 1 }, (Color){ 240, 220, 120, 255 });
+    Object tri = Mge_MakeShape3D(PRIM_POLYGON, (Vector3){ 3.8f, 0, 0 }, (Vector3){ 1, 1, 1 }, (Color){ 220, 140, 220, 255 });
+    tri.poly[0] = (Vector3){ 0, 1, 0 };
+    tri.poly[1] = (Vector3){ -1, -1, 0 };
+    tri.poly[2] = (Vector3){ 1, -1, 0 };
+    tri.polyCount = 3;
+
+    Object objs[5] = { box, ball, rect, arrow, tri };
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 22, 24, 30, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    for (int i = 0; i < 5; i++)
+        Mge_DrawObject(objs[i]);
+    Mge_EndLighting3D();
+    Mge_EndMode3D();
+    check("shape_gallery");
+    Mge_EndDrawing();
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -822,6 +859,7 @@ int main(void)
     scene_scripted_rotate();
     scene_raycast();
     scene_camera_frustum();
+    scene_shape_gallery();
     scene_screenshot();
 
     Mge_CloseWindow();

@@ -8,7 +8,7 @@
 
 // ------------------------------------------------------------------ helpers
 
-static const char* PRIM_NAMES[3] = { "cube", "sphere", "plane" };
+static const char* PRIM_NAMES[PRIM_KIND_COUNT] = { "cube", "sphere", "plane", "arrow", "polygon" };
 static const char* LIGHT_NAMES[3] = { "directional", "point", "spot" };
 
 static int name_index(const char* s, const char* const* table, int count, int fallback)
@@ -167,7 +167,16 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
         fprintf(f, "object \"%s\"\n", s->objectNames[i]);
         if (o->kind == OBJECT_CAMERA)
             fprintf(f, "  kind camera\n"); // a transform-only view camera (no primitive / material)
-        fprintf(f, "  primitive %s\n", PRIM_NAMES[o->primitive % 3]);
+        fprintf(f, "  primitive %s\n",
+            PRIM_NAMES[(o->primitive >= 0 && o->primitive < PRIM_KIND_COUNT) ? o->primitive : PRIM_CUBE]);
+        if (o->wireframe)
+            wi(f, "wireframe", 1);
+        if (o->primitive == PRIM_POLYGON) {
+            wi(f, "polyStrip", o->polyStrip ? 1 : 0);
+            for (int k = 0; k < o->polyCount && k < MGE_MAX_POLY_POINTS; k++)
+                fprintf(f, "  point %g %g %g\n",
+                    (double)o->poly[k].x, (double)o->poly[k].y, (double)o->poly[k].z);
+        }
         wi(f, "active", o->active ? 1 : 0);
         wv3(f, "position", o->transform.position);
         if (!quat_identity(o->transform.rotation))
@@ -373,7 +382,14 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
             if (strcmp(key, "kind") == 0)
                 obj->kind = (strcmp(rest, "camera") == 0) ? OBJECT_CAMERA : OBJECT_3D;
             else if (strcmp(key, "primitive") == 0)
-                obj->primitive = (PrimitiveKind)name_index(rest, PRIM_NAMES, 3, PRIM_CUBE);
+                obj->primitive = (PrimitiveKind)name_index(rest, PRIM_NAMES, PRIM_KIND_COUNT, PRIM_CUBE);
+            else if (strcmp(key, "wireframe") == 0)
+                obj->wireframe = atoi(rest) != 0;
+            else if (strcmp(key, "polyStrip") == 0)
+                obj->polyStrip = atoi(rest) != 0;
+            else if (strcmp(key, "point") == 0 && obj->polyCount < MGE_MAX_POLY_POINTS &&
+                     sscanf(rest, "%f %f %f", &x, &y, &z) == 3)
+                obj->poly[obj->polyCount++] = (Vector3){ x, y, z };
             else if (strcmp(key, "active") == 0)
                 obj->active = atoi(rest) != 0;
             else if (strcmp(key, "position") == 0 && sscanf(rest, "%f %f %f", &x, &y, &z) == 3)

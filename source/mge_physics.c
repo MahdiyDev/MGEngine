@@ -232,6 +232,56 @@ static RayHit raycast_object_plane(Ray ray, Vector3 center, Vector3 size, Quater
     return h;
 }
 
+// an arrow primitive: from `center` along local +X for `size.x`; picked as a
+// slightly fat OBB along its axis
+static RayHit raycast_object_arrow(Ray ray, Vector3 center, Vector3 size, Quaternion rot)
+{
+    Vector3 dir = Quaternion_RotateVector3(rot, (Vector3){ 1.0f, 0.0f, 0.0f });
+    Vector3 mid = v3add(center, v3scale(dir, size.x * 0.5f));
+    float th = 0.35f;
+    return Mge_RaycastBox(ray, mid, (Vector3){ size.x, th, th }, rot);
+}
+
+// a polygon primitive: local points (Object.poly[] * scale), reoriented by
+// rotation. >=3 points -> the fan/strip triangles; 2 points -> a fat AABB.
+static RayHit raycast_object_polygon(Ray ray, const Object* o)
+{
+    Vector3 c = o->transform.position, s = o->transform.scale;
+    Quaternion q = has_rotation(o->transform.rotation) ? Quaternion_Normalize(o->transform.rotation)
+                                                       : Quaternion_Identity();
+    Quaternion inv = Quaternion_Conjugate(q);
+
+    int n = o->polyCount;
+    if (n > MGE_MAX_POLY_POINTS)
+        n = MGE_MAX_POLY_POINTS;
+    Vector3 lp[MGE_MAX_POLY_POINTS];
+    for (int k = 0; k < n; k++)
+        lp[k] = (Vector3){ o->poly[k].x * s.x, o->poly[k].y * s.y, o->poly[k].z * s.z };
+
+    Ray local;
+    local.position = Quaternion_RotateVector3(inv, v3sub(ray.position, c));
+    local.direction = Quaternion_RotateVector3(inv, v3norm(ray.direction));
+
+    RayHit h = RAYHIT_MISS;
+    if (n >= 3) {
+        for (int i = 2; i < n; i++) {
+            RayHit t = o->polyStrip ? Mge_RaycastTriangle(local, lp[i - 2], lp[i - 1], lp[i])
+                                    : Mge_RaycastTriangle(local, lp[0], lp[i - 1], lp[i]);
+            if (t.hit && (!h.hit || t.distance < h.distance))
+                h = t;
+        }
+    } else if (n == 2) {
+        Vector3 lo = { fminf(lp[0].x, lp[1].x) - 0.15f, fminf(lp[0].y, lp[1].y) - 0.15f, fminf(lp[0].z, lp[1].z) - 0.15f };
+        Vector3 hi = { fmaxf(lp[0].x, lp[1].x) + 0.15f, fmaxf(lp[0].y, lp[1].y) + 0.15f, fmaxf(lp[0].z, lp[1].z) + 0.15f };
+        h = Mge_RaycastAABB(local, lo, hi);
+    }
+    if (!h.hit)
+        return h;
+    h.point = v3add(c, Quaternion_RotateVector3(q, h.point));
+    h.normal = Quaternion_RotateVector3(q, h.normal);
+    return h;
+}
+
 RayHit Mge_RaycastObjects(Ray ray, const Object* objects, int count)
 {
     RayHit best = RAYHIT_MISS;
@@ -255,6 +305,12 @@ RayHit Mge_RaycastObjects(Ray ray, const Object* objects, int count)
                 break;
             case PRIM_PLANE:
                 h = raycast_object_plane(ray, c, s, r);
+                break;
+            case PRIM_ARROW:
+                h = raycast_object_arrow(ray, c, s, r);
+                break;
+            case PRIM_POLYGON:
+                h = raycast_object_polygon(ray, &o);
                 break;
             case PRIM_CUBE:
             default:

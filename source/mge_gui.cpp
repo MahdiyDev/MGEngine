@@ -291,6 +291,18 @@ void Mge_GuiEndMenu(void)
     ImGui::PopID();
 }
 
+// A cascading submenu, valid inside an open Mge_GuiBeginMenu popup. Call
+// Mge_GuiEndSubmenu only when this returns true.
+bool Mge_GuiBeginSubmenu(const char* label)
+{
+    return s_inFrame && ImGui::BeginMenu(label);
+}
+void Mge_GuiEndSubmenu(void)
+{
+    if (s_inFrame)
+        ImGui::EndMenu();
+}
+
 void Mge_GuiOpenPopup(const char* id)
 {
     if (s_inFrame)

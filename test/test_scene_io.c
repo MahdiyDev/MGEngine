@@ -427,6 +427,49 @@ TEST(save_keeps_res_paths_and_imports_only_outside_files)
     RMDIR("scene_io_tmp/loose");
 }
 
+// wireframe flag, the new primitives and a polygon's point list round-trip
+TEST(shape_variants_round_trip)
+{
+    Path_MakeDirs("scene_io_tmp");
+    const char* path = "scene_io_tmp/shapes.mgscene";
+
+    Scene a;
+    memset(&a, 0, sizeof(a));
+    a.objects[0] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
+    a.objects[0].wireframe = true;
+    strcpy(a.objectNames[0], "Box 1");
+
+    a.objects[1] = Mge_MakeShape3D(PRIM_ARROW, (Vector3){ 2, 0, 0 }, (Vector3){ 2, 1, 1 }, WHITE);
+    strcpy(a.objectNames[1], "Arrow 1");
+
+    a.objects[2] = Mge_MakeShape3D(PRIM_POLYGON, (Vector3){ -2, 0, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
+    a.objects[2].polyStrip = true;
+    a.objects[2].poly[0] = (Vector3){ -1, -1, 0 };
+    a.objects[2].poly[1] = (Vector3){ 1, -1, 0 };
+    a.objects[2].poly[2] = (Vector3){ -1, 1, 0 };
+    a.objects[2].poly[3] = (Vector3){ 1, 1, 0.5f };
+    a.objects[2].polyCount = 4;
+    strcpy(a.objectNames[2], "Polygon 1");
+    a.objectCount = 3;
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 60.0f };
+    CHECK(Scene_Save(&a, path, cam, NULL)); // no project root -> no texture import
+
+    Scene b;
+    CHECK(Scene_Load(&b, path, NULL));
+    CHECK(b.objectCount == 3);
+    CHECK(b.objects[0].primitive == PRIM_CUBE && b.objects[0].wireframe);
+    CHECK(b.objects[1].primitive == PRIM_ARROW && !b.objects[1].wireframe);
+    CHECK(b.objects[2].primitive == PRIM_POLYGON);
+    CHECK(b.objects[2].polyStrip);
+    CHECK(b.objects[2].polyCount == 4);
+    CHECK_F(b.objects[2].poly[3].x, 1.0f);
+    CHECK_F(b.objects[2].poly[3].z, 0.5f);
+
+    remove(path);
+    remove("scene_io_tmp/shapes.c");
+}
+
 int main(void)
 {
     RUN(path_helpers);
@@ -437,6 +480,7 @@ int main(void)
     RUN(load_rejects_a_non_scene_file);
     RUN(canonical_scene_file_takes_its_name_from_the_folder);
     RUN(save_keeps_res_paths_and_imports_only_outside_files);
+    RUN(shape_variants_round_trip);
 
     RMDIR("scene_io_tmp/res"); // best-effort tidy-up
     RMDIR("scene_io_tmp");

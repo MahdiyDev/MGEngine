@@ -249,7 +249,10 @@ object "GameCam"
   rotation 0 0.38 0 0.92    # orientation quaternion x y z w (identity looks -Z)
 
 object "Floor"
-  primitive plane          # cube | sphere | plane
+  primitive plane          # cube | sphere | plane | arrow | polygon
+  # wireframe 1            # (written only when set) draw as an outline
+  # polyStrip 0           # polygon: 0 = triangle fan, 1 = strip
+  # point x y z           # polygon: one line per local vertex
   active 1
   position 0 -1.1 0
   # rotation omitted -> identity. Written as `rotation x y z w` (quaternion) when
@@ -321,10 +324,21 @@ deletes it (objects ask first) — the **Delete** key does the same to the curre
 selection. Neither touches the directional **Sun** (light 0), which the shadow
 pass depends on.
 
-`+ add` opens a menu: **Cube / Sphere / Plane** (`Scene_AddShape`), **Light**
-(`Scene_AddLight`), or **Camera** (`Scene_AddCamera`) — spawned, named, and
-selected. Objects (shapes *and* cameras) share `SCENE_MAX_OBJECTS` (8); lights
-`SCENE_MAX_LIGHTS` (4).
+`+ add` opens a cascading menu grouped by shape family:
+
+| group | items |
+| --- | --- |
+| **Box** / **Sphere** | Solid / Wireframe (`Scene_AddShape(prim, wireframe)`) |
+| **Plane** | a flat XZ quad |
+| **Rectangle** | Solid / Outline — a `PRIM_PLANE` you stand up and rotate |
+| **Triangle** | Solid / Outline / Fan / Strip (`Scene_AddPolygon(mode, wire)`) |
+| **Line**, **Arrow** | a 2-point polygon; a `PRIM_ARROW` |
+| **Light** | Point / Spot / Directional (`Scene_AddLight(type)`) |
+| **Camera** | `Scene_AddCamera` |
+
+Every add spawns at the origin, names + selects the object. Solid vs wireframe is
+also an **Inspector checkbox**, editable after the fact. Objects (shapes *and*
+cameras) share `SCENE_MAX_OBJECTS` (8); lights `SCENE_MAX_LIGHTS` (4).
 
 **Ctrl-click** a row to build a multi-selection. **Drag** a row onto another to
 **reorder** it there (`Scene_MoveObject` fixes up every stored object index);
@@ -351,7 +365,7 @@ The current selection's fields, live:
 | selection | fields |
 | --- | --- |
 | **Environment** | sun (`lights[0]`) direction / colour / ambient / diffuse / specular; skybox (`choose folder...` / `use engine default` / `reload`); **main camera** combo |
-| **Object** | **active** toggle, **primitive** dropdown, the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo; `shininess`; **tiling** / **offset**; a **triplanar** toggle (+ scale); then one **group per material map** (drop an image from Resources on the thumbnail to assign it) |
+| **Object** | **active** toggle, **primitive** dropdown, a **wireframe** checkbox, the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo; for a **polygon**: a fan/strip toggle + an editable `p0…pN` point list with `+ point` / `- point`; then `shininess`; **tiling** / **offset**; a **triplanar** toggle (+ scale); then one **group per material map** (drop an image from Resources on the thumbnail to assign it) |
 | **Camera** | active, position, rotation (euler °); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
 | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 

@@ -86,13 +86,21 @@ void Mge_GuiLogBox(const char* id, const char* text);
 
 // A button that opens a popup menu. Wrap the items between Begin/End; BeginMenu
 // returns true only while the popup is open. Mge_GuiMenuItem is a clickable row.
+// Mge_GuiBeginSubmenu (call Mge_GuiEndSubmenu only when it returns true) nests a
+// cascading submenu -- use it inside an open Mge_GuiBeginMenu.
 //   if (Mge_GuiBeginMenu("+ add")) {
 //       if (Mge_GuiMenuItem("Cube"))  ...;
+//       if (Mge_GuiBeginSubmenu("Light")) {
+//           if (Mge_GuiMenuItem("Point")) ...;
+//           Mge_GuiEndSubmenu();
+//       }
 //       Mge_GuiEndMenu();
 //   }
 bool Mge_GuiBeginMenu(const char* label);
 bool Mge_GuiMenuItem(const char* label);
 void Mge_GuiEndMenu(void);
+bool Mge_GuiBeginSubmenu(const char* label);
+void Mge_GuiEndSubmenu(void);
 
 // Modal popups. Call Mge_GuiOpenPopup(id) once to trigger; then every frame call
 // Mge_GuiBeginPopup(id) -- it returns true only while open, wrap the body and

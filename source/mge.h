@@ -409,12 +409,20 @@ typedef enum {
 } ObjectKind;
 
 // 3D object shape (ignored for OBJECT_2D). `size` is the full extents: for a
-// sphere the diameter is size.x; for a plane it is the width (x) and length (z).
+// sphere the diameter is size.x; for a plane it is the width (x) and length (z);
+// for an arrow the length (x).
 typedef enum {
 	PRIM_CUBE = 0,
 	PRIM_SPHERE,
-	PRIM_PLANE
+	PRIM_PLANE,      // flat quad on local XZ (rotation reorients it; "Rectangle" is one stood up)
+	PRIM_ARROW,      // 3D arrow along local +X, length = scale.x
+	PRIM_POLYGON,    // line / triangle / fan / strip from Object.poly[] (local points)
+	PRIM_KIND_COUNT
 } PrimitiveKind;
+
+#ifndef MGE_MAX_POLY_POINTS
+	#define MGE_MAX_POLY_POINTS 16
+#endif
 
 // --- Lighting (Phong: ambient + diffuse + specular) ---
 //
@@ -633,11 +641,15 @@ typedef struct Transform {
 
 typedef struct Object {
 	ObjectKind kind;
-	PrimitiveKind primitive; // 3D shape: cube / sphere / plane (ignored for 2D)
+	PrimitiveKind primitive; // 3D shape (ignored for 2D)
 	Transform transform;
 	Material material;  // surface response: diffuse/specular/normal maps + tint.
 	                    // The diffuse map colour is the object's base colour
 	                    // (2D rects draw with it too).
+	Vector3 poly[MGE_MAX_POLY_POINTS]; // PRIM_POLYGON: local points, run through transform
+	int  polyCount;    // PRIM_POLYGON: 2..MGE_MAX_POLY_POINTS; 0 otherwise
+	bool polyStrip;    // PRIM_POLYGON: false = triangle fan, true = strip
+	bool wireframe;    // draw the primitive as wire / outline instead of solid
 	int id;
 	bool active;       // false -> not drawn / not outlined
 	bool selected;
@@ -1108,7 +1120,17 @@ void Draw_CubeEx(Vector3 center, Vector3 size, Quaternion rotation, Color color)
 void Draw_CubeWiresEx(Vector3 center, Vector3 size, Quaternion rotation, Color color);
 void Draw_Sphere(Vector3 center, float radius, Color color);                       // UV sphere (8x14)
 void Draw_SphereEx(Vector3 center, float radius, int rings, int slices, Color color);
+void Draw_SphereWiresEx(Vector3 center, float radius, int rings, int slices, Color color); // lat/long wire
 void Draw_Plane(Vector3 center, float width, float length, Color color);           // flat quad on XZ, normal +Y
+// The following are all "inside Mge_BeginMode3D". Quad = a flat rectangle on
+// local XY (normal +Z), `rotation` reorients it. Polygon draws `pts[0..count)`:
+// count 2 = a segment, 3 = a triangle, more = a fan (or `strip`); the Wires form
+// is the outline (`closed` joins last->first).
+void Draw_Line3D(Vector3 start, Vector3 end, Color color);
+void Draw_Quad3D(Vector3 center, Vector2 size, Quaternion rotation, Color color);
+void Draw_Quad3DWires(Vector3 center, Vector2 size, Quaternion rotation, Color color);
+void Draw_Polygon3D(const Vector3 *pts, int count, bool strip, Color color);
+void Draw_Polygon3DWires(const Vector3 *pts, int count, bool closed, Color color);
 
 // Camera / projection helpers (3D)
 Matrix Mge_GetCameraViewMatrix(Camera3D camera);
@@ -1174,6 +1196,7 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color);
 Object Mge_MakeShape3D(PrimitiveKind primitive, Vector3 position, Vector3 size, Color color);
 void   Mge_DrawObject(Object obj); // respects obj.primitive + obj.transform.rotation; skips !obj.active
 void   Mge_DrawPrimitive(Object obj, Color color); // just the 3D primitive geometry, one colour
+bool   Mge_PrimitiveIsSolid(Object obj); // true = filled surface (casts shadow, gets a stencil outline)
 
 // Unit forward vector for an OBJECT_CAMERA: its orientation applied to local -Z
 // (identity looks toward -Z). Pair with Quaternion_LookRotation to aim one.

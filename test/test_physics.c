@@ -225,6 +225,28 @@ TEST(raycast_objects_finite_plane)
     CHECK(!out.hit);
 }
 
+TEST(raycast_objects_arrow_and_polygon)
+{
+    // an arrow from origin along +X, length 4 -> a ray crossing its middle hits
+    Object arrow = shape(PRIM_ARROW, (Vector3){ 0, 0, 0 }, (Vector3){ 4, 1, 1 });
+    RayHit a = Mge_RaycastObjects(ray_from((Vector3){ 2, 3, 0 }, (Vector3){ 0, -1, 0 }), &arrow, 1);
+    CHECK(a.hit);
+    RayHit amiss = Mge_RaycastObjects(ray_from((Vector3){ 9, 3, 0 }, (Vector3){ 0, -1, 0 }), &arrow, 1);
+    CHECK(!amiss.hit);
+
+    // a triangle polygon on the local XY plane (Z=0), scale 1
+    Object tri = shape(PRIM_POLYGON, (Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 });
+    tri.poly[0] = (Vector3){ 0, 1, 0 };
+    tri.poly[1] = (Vector3){ -1, -1, 0 };
+    tri.poly[2] = (Vector3){ 1, -1, 0 };
+    tri.polyCount = 3;
+    RayHit t = Mge_RaycastObjects(ray_from((Vector3){ 0, 0, -5 }, (Vector3){ 0, 0, 1 }), &tri, 1);
+    CHECK(t.hit);
+    CHECK_F(t.distance, 5.0f);
+    RayHit tmiss = Mge_RaycastObjects(ray_from((Vector3){ 3, 3, -5 }, (Vector3){ 0, 0, 1 }), &tri, 1);
+    CHECK(!tmiss.hit);
+}
+
 static Camera3D test_cam(void)
 {
     Camera3D c = { 0 };
@@ -310,6 +332,7 @@ int main(void)
     RUN(raycast_objects_all_miss);
     RUN(raycast_objects_skips_2d_and_hits_camera_markers);
     RUN(raycast_objects_finite_plane);
+    RUN(raycast_objects_arrow_and_polygon);
     RUN(screen_ray_centre_points_forward);
     RUN(screen_ray_edges_tilt_correctly);
     RUN(screen_ray_hits_object_under_centre);

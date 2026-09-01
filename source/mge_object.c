@@ -63,6 +63,31 @@ Object Mge_MakeObject3D(Vector3 position, Vector3 size, Color color)
 
 // ----- drawing -----
 
+// PRIM_POLYGON local points -> world space (position + rotation*(point*scale)).
+// Returns the point count actually written (clamped).
+static int poly_world(const Object* o, Vector3 out[MGE_MAX_POLY_POINTS])
+{
+    int n = o->polyCount;
+    if (n > MGE_MAX_POLY_POINTS)
+        n = MGE_MAX_POLY_POINTS;
+    for (int k = 0; k < n; k++) {
+        Vector3 local = Vector3_Multiply(o->poly[k], o->transform.scale);
+        out[k] = Vector3_Add(o->transform.position, Quaternion_RotateVector3(o->transform.rotation, local));
+    }
+    return n;
+}
+
+// true when the primitive draws as a filled surface (gets a shadow + a stencil
+// selection shell); false for wireframe / arrow / line / polygon-outline.
+bool Mge_PrimitiveIsSolid(Object obj)
+{
+    if (obj.kind != OBJECT_3D || obj.wireframe || obj.primitive == PRIM_ARROW)
+        return false;
+    if (obj.primitive == PRIM_POLYGON)
+        return obj.polyCount >= 3;
+    return true;
+}
+
 // The geometry for a 3D object's primitive, in a chosen colour. Shared by the
 // lit draw and (via Mge_DrawObjectOutline) the stencil outline.
 void Mge_DrawPrimitive(Object obj, Color color)
@@ -70,16 +95,41 @@ void Mge_DrawPrimitive(Object obj, Color color)
     if (obj.kind == OBJECT_CAMERA)
         return; // a camera marker has no solid geometry (no shadow, no lit pass)
     const Vector3 p = obj.transform.position, s = obj.transform.scale;
+    const Quaternion r = obj.transform.rotation;
+    const bool wire = obj.wireframe;
     switch (obj.primitive) {
     case PRIM_SPHERE:
-        Draw_SphereEx(p, s.x * 0.5f, 16, 24, color);
+        if (wire)
+            Draw_SphereWiresEx(p, s.x * 0.5f, 8, 14, color);
+        else
+            Draw_SphereEx(p, s.x * 0.5f, 16, 24, color);
         break;
     case PRIM_PLANE:
-        Draw_Plane(p, s.x, s.z, color);
+        if (wire)
+            Draw_Quad3DWires(p, (Vector2){ s.x, s.z }, r, color);
+        else
+            Draw_Quad3D(p, (Vector2){ s.x, s.z }, r, color);
         break;
+    case PRIM_ARROW: {
+        Vector3 dir = Quaternion_RotateVector3(r, (Vector3){ 1.0f, 0.0f, 0.0f });
+        Draw_Arrow3D(p, Vector3_Add(p, Vector3_Scale(dir, s.x)), color);
+        break;
+    }
+    case PRIM_POLYGON: {
+        Vector3 w[MGE_MAX_POLY_POINTS];
+        int n = poly_world(&obj, w);
+        if (wire || n < 3)
+            Draw_Polygon3DWires(w, n, n >= 3, color);
+        else
+            Draw_Polygon3D(w, n, obj.polyStrip, color);
+        break;
+    }
     case PRIM_CUBE:
     default:
-        Draw_CubeEx(p, s, obj.transform.rotation, color);
+        if (wire)
+            Draw_CubeWiresEx(p, s, r, color);
+        else
+            Draw_CubeEx(p, s, r, color);
         break;
     }
 }
@@ -121,8 +171,13 @@ void Mge_DrawObject(Object obj)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_2D, MGE_SELECT_OUTLINE_COLOR);
     } else {
         Mge_SetMaterial(obj.material); // no-op unless Mge_BeginLighting3D is active
-        Mge_DrawPrimitive(obj, obj.material.maps[MATERIAL_MAP_DIFFUSE].color);
-        if (obj.selected)
+        bool solid = Mge_PrimitiveIsSolid(obj);
+        // wire / arrow / line have no fillable interior for a stencil shell --
+        // just recolour them when selected (like the camera marker)
+        Color c = (obj.selected && !solid) ? MGE_SELECT_OUTLINE_COLOR
+                                           : obj.material.maps[MATERIAL_MAP_DIFFUSE].color;
+        Mge_DrawPrimitive(obj, c);
+        if (obj.selected && solid)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_3D, MGE_SELECT_OUTLINE_COLOR);
     }
 }

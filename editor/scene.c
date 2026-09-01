@@ -227,28 +227,79 @@ void Scene_Resize(Scene* s, int width, int height)
     s->bloom = Mge_LoadBloom(width, height);
 }
 
-void Scene_AddShape(Scene* s, PrimitiveKind primitive)
+static const char* PRIM_NOUNS[PRIM_KIND_COUNT] = {
+    "Cube", "Sphere", "Plane", "Arrow", "Polygon"
+};
+
+// bump objectCount, name the new slot "<noun> N" (N = count of same-named ones),
+// select it. Returns the new index, or -1 when the scene is full.
+static int add_object_slot(Scene* s, const char* noun)
 {
     if (s->objectCount >= SCENE_MAX_OBJECTS)
-        return;
-
-    static const char* nouns[3] = { "Cube", "Sphere", "Plane" };
-    Vector3 size = (primitive == PRIM_PLANE) ? (Vector3){ 4.0f, 0.2f, 4.0f }
-                                             : (Vector3){ 1.5f, 1.5f, 1.5f };
-
+        return -1;
     int i = s->objectCount++;
-    s->objects[i] = Mge_MakeShape3D(primitive, (Vector3){ 0.0f, 0.0f, 0.0f }, size, (Color){ 200, 200, 205, 255 });
-
-    // number it after the existing shapes of the same kind
     int n = 1;
     for (int k = 0; k < i; k++)
-        if (s->objects[k].kind == OBJECT_3D && s->objects[k].primitive == primitive)
+        if (strncmp(s->objectNames[k], noun, strlen(noun)) == 0)
             n++;
-    snprintf(s->objectNames[i], sizeof(s->objectNames[i]), "%s %d", nouns[primitive], n);
-
+    snprintf(s->objectNames[i], sizeof(s->objectNames[i]), "%s %d", noun, n);
     s->selKind = SEL_OBJECT;
     s->selIndex = i;
+    s->selExtraCount = 0;
     s->dirty = true;
+    return i;
+}
+
+void Scene_AddShape(Scene* s, PrimitiveKind primitive, bool wireframe)
+{
+    const char* noun = (primitive < PRIM_KIND_COUNT) ? PRIM_NOUNS[primitive] : "Shape";
+    Vector3 size = (primitive == PRIM_PLANE)  ? (Vector3){ 4.0f, 0.2f, 4.0f }
+        : (primitive == PRIM_ARROW)           ? (Vector3){ 2.0f, 1.0f, 1.0f }
+                                              : (Vector3){ 1.5f, 1.5f, 1.5f };
+
+    int i = add_object_slot(s, noun);
+    if (i < 0)
+        return;
+    s->objects[i] = Mge_MakeShape3D(primitive, (Vector3){ 0.0f, 0.0f, 0.0f }, size, (Color){ 200, 200, 205, 255 });
+    s->objects[i].wireframe = wireframe;
+}
+
+void Scene_AddPolygon(Scene* s, int mode, bool wireframe)
+{
+    int i = add_object_slot(s, (mode == POLY_LINE) ? "Line" : (mode == POLY_TRIANGLE) ? "Triangle" : "Polygon");
+    if (i < 0)
+        return;
+
+    Object* o = &s->objects[i];
+    *o = Mge_MakeShape3D(PRIM_POLYGON, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f },
+        (Color){ 200, 200, 205, 255 });
+
+    // local points on the XY plane (Z = 0), run through the transform on draw
+    if (mode == POLY_LINE) {
+        o->poly[0] = (Vector3){ -1.0f, 0.0f, 0.0f };
+        o->poly[1] = (Vector3){ 1.0f, 0.0f, 0.0f };
+        o->polyCount = 2;
+        o->wireframe = true;
+    } else if (mode == POLY_TRIANGLE) {
+        o->poly[0] = (Vector3){ 0.0f, 1.0f, 0.0f };
+        o->poly[1] = (Vector3){ -1.0f, -1.0f, 0.0f };
+        o->poly[2] = (Vector3){ 1.0f, -1.0f, 0.0f };
+        o->polyCount = 3;
+    } else if (mode == POLY_FAN) {
+        o->poly[0] = (Vector3){ 0.0f, 0.0f, 0.0f };
+        for (int k = 1; k < 5; k++) {
+            float a = 3.14159265f * (float)(k - 1) / 3.0f; // a 120-degree fan
+            o->poly[k] = (Vector3){ cosf(a), sinf(a), 0.0f };
+        }
+        o->polyCount = 5;
+    } else { // POLY_STRIP
+        for (int k = 0; k < 6; k++)
+            o->poly[k] = (Vector3){ (float)k * 0.6f - 1.5f, (k & 1) ? 0.6f : -0.6f, 0.0f };
+        o->polyCount = 6;
+        o->polyStrip = true;
+    }
+    if (wireframe)
+        o->wireframe = true;
 }
 
 void Scene_AddCamera(Scene* s)
@@ -277,17 +328,25 @@ void Scene_AddCamera(Scene* s)
     s->dirty = true;
 }
 
-void Scene_AddLight(Scene* s)
+void Scene_AddLight(Scene* s, int type)
 {
     if (s->lightCount >= SCENE_MAX_LIGHTS)
         return;
 
     int i = s->lightCount++;
-    s->lights[i] = Mge_MakePointLight((Vector3){ 0.0f, 4.0f, 0.0f }, (Vector3){ 1.0f, 1.0f, 1.0f });
+    Vector3 pos = { 0.0f, 4.0f, 0.0f };
+    Vector3 col = { 1.0f, 1.0f, 1.0f };
+    if (type == LIGHT_DIRECTIONAL)
+        s->lights[i] = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.3f }, col);
+    else if (type == LIGHT_SPOT)
+        s->lights[i] = Mge_MakeSpotLight(pos, (Vector3){ 0.0f, -1.0f, 0.0f }, col, 20.0f, 30.0f);
+    else
+        s->lights[i] = Mge_MakePointLight(pos, col);
     snprintf(s->lightNames[i], sizeof(s->lightNames[i]), "Light %d", i);
 
     s->selKind = SEL_LIGHT;
     s->selIndex = i;
+    s->selExtraCount = 0;
     s->dirty = true;
 }
 
@@ -700,7 +759,7 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers)
     if (s->shadowsOn) {
         Mge_BeginShadowPass(&s->shadow, s->lights[0], s->shadowCenter, s->shadowRadius);
         for (int i = 0; i < s->objectCount; i++)
-            if (s->objects[i].active)
+            if (s->objects[i].active && Mge_PrimitiveIsSolid(s->objects[i]))
                 Mge_DrawPrimitive(s->objects[i], (Color){ 255, 255, 255, 255 });
         Mge_EndShadowPass();
     }

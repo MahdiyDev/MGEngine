@@ -75,10 +75,15 @@ void Scene_LoadMaterialTextures(Scene* s, const char* projectRoot);
 
 // Spawn a primitive at the origin, name it, and select it. No-op when the scene
 // is full (SCENE_MAX_OBJECTS).
-void Scene_AddShape(Scene* s, PrimitiveKind primitive);
+void Scene_AddShape(Scene* s, PrimitiveKind primitive, bool wireframe);
 
-// Add a point light above the origin, name it, and select it. No-op when full.
-void Scene_AddLight(Scene* s);
+// Spawn a PRIM_POLYGON with a default point set for `mode`.
+enum { POLY_LINE = 0, POLY_TRIANGLE, POLY_FAN, POLY_STRIP };
+void Scene_AddPolygon(Scene* s, int mode, bool wireframe);
+
+// Add a light of `type` (LIGHT_POINT / LIGHT_SPOT / LIGHT_DIRECTIONAL) above the
+// origin, name it, and select it. No-op when full.
+void Scene_AddLight(Scene* s, int type);
 
 // Add an OBJECT_CAMERA (position + look direction), name it, select it. If the
 // scene has no main camera yet, this one becomes it.

@@ -451,6 +451,29 @@ phases so the app keeps working the whole way.
       draws it for an `OBJECT_CAMERA` marker (60 deg / 16:9) in place of the plain
       forward arrow. `render_smoke` `scene_camera_frustum`.
 
+## More shape primitives + grouped "+ add" menu   [DONE]
+
+- [x] `PrimitiveKind` += `PRIM_ARROW` (3D arrow along local +X), `PRIM_POLYGON`
+      (line / triangle / fan / strip from `Object.poly[]` local points) +
+      `PRIM_KIND_COUNT`. `Object` += `poly[16]` / `polyCount` / `polyStrip` /
+      `wireframe` (all zero-safe). `PRIM_PLANE` now respects rotation.
+- [x] Engine draw helpers: `Draw_Line3D`, `Draw_Quad3D[Wires]`,
+      `Draw_SphereWiresEx`, `Draw_Polygon3D[Wires]`; `Mge_PrimitiveIsSolid`.
+      `Mge_DrawPrimitive` dispatches all of them keyed on `wireframe`;
+      non-solid objects skip the shadow pass + stencil shell (recoloured when
+      selected instead).
+- [x] `Mge_RaycastObjects` picks arrows (axis OBB) + polygons (fan/strip
+      triangles, or a fat AABB for a 2-point line).
+- [x] `Mge_GuiBeginSubmenu` / `Mge_GuiEndSubmenu` (real `ImGui::BeginMenu`) --
+      the Hierarchy `+ add` menu is now grouped: Box/Sphere ▸ Solid|Wireframe,
+      Rectangle ▸ Solid|Outline, Triangle ▸ Solid|Outline|Fan|Strip, Line, Arrow,
+      Light ▸ Point|Spot|Directional, Camera.
+- [x] `Scene_AddShape(prim, wireframe)`, new `Scene_AddPolygon(mode, wireframe)`,
+      `Scene_AddLight(type)`. Inspector: `wireframe` checkbox + a polygon point
+      editor (fan/strip toggle, `p0…pN`, `+ point` / `- point`).
+- [x] `.mgscene` round-trips `wireframe` / `polyStrip` / `point` lines;
+      `test_scene_io` + `test_physics` + `render_smoke` `scene_shape_gallery` cover it.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view

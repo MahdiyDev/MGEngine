@@ -419,6 +419,151 @@ void Draw_Sphere(Vector3 center, float radius, Color color)
     Draw_SphereEx(center, radius, 8, 14, color);
 }
 
+void Draw_Line3D(Vector3 start, Vector3 end, Color color)
+{
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    MgeGL_Vertex3f(start.x, start.y, start.z);
+    MgeGL_Vertex3f(end.x, end.y, end.z);
+    MgeGL_End();
+}
+
+// quad on local XZ (normal +Y), reoriented by `rotation` about `center`.
+// `size` = { width along local X, length along local Z }.
+static void quad3d_corners(Vector3 center, Vector2 size, Quaternion rotation, Vector3 out[4], Vector3* normal)
+{
+    float hx = size.x * 0.5f, hz = size.y * 0.5f;
+    Vector3 off[4] = { { -hx, 0, hz }, { hx, 0, hz }, { hx, 0, -hz }, { -hx, 0, -hz } };
+    Vector3 n = { 0.0f, 1.0f, 0.0f };
+    if (has_rotation(rotation)) {
+        Quaternion q = Quaternion_Normalize(rotation);
+        for (int i = 0; i < 4; i++)
+            off[i] = Quaternion_RotateVector3(q, off[i]);
+        n = Quaternion_RotateVector3(q, n);
+    }
+    for (int i = 0; i < 4; i++)
+        out[i] = Vector3_Add(center, off[i]);
+    if (normal != NULL)
+        *normal = n;
+}
+
+void Draw_Quad3D(Vector3 center, Vector2 size, Quaternion rotation, Color color)
+{
+    Vector3 v[4], n;
+    quad3d_corners(center, size, rotation, v, &n);
+
+    const int tri[6] = { 0, 1, 2, 0, 2, 3 };
+    const float uv[4][2] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    MgeGL_Normal3f(n.x, n.y, n.z);
+    for (int i = 0; i < 6; i++) {
+        int k = tri[i];
+        MgeGL_TexCoord2f(uv[k][0], uv[k][1]);
+        MgeGL_Vertex3f(v[k].x, v[k].y, v[k].z);
+    }
+    MgeGL_TexCoord2f(0.0f, 0.0f);
+    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
+    MgeGL_End();
+}
+
+void Draw_Quad3DWires(Vector3 center, Vector2 size, Quaternion rotation, Color color)
+{
+    Vector3 v[4];
+    quad3d_corners(center, size, rotation, v, NULL);
+
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    for (int i = 0; i < 4; i++) {
+        int j = (i + 1) & 3;
+        MgeGL_Vertex3f(v[i].x, v[i].y, v[i].z);
+        MgeGL_Vertex3f(v[j].x, v[j].y, v[j].z);
+    }
+    MgeGL_End();
+}
+
+void Draw_SphereWiresEx(Vector3 center, float radius, int rings, int slices, Color color)
+{
+    if (rings < 2)
+        rings = 2;
+    if (slices < 3)
+        slices = 3;
+
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+
+    for (int i = 1; i < rings; i++) { // parallels
+        float lat = PI * (-0.5f + (float)i / (float)rings);
+        float y = sinf(lat), cr = cosf(lat);
+        for (int j = 0; j < slices; j++) {
+            float a0 = 2.0f * PI * (float)j / (float)slices;
+            float a1 = 2.0f * PI * (float)(j + 1) / (float)slices;
+            MgeGL_Vertex3f(center.x + cosf(a0) * cr * radius, center.y + y * radius, center.z + sinf(a0) * cr * radius);
+            MgeGL_Vertex3f(center.x + cosf(a1) * cr * radius, center.y + y * radius, center.z + sinf(a1) * cr * radius);
+        }
+    }
+    for (int j = 0; j < slices; j++) { // meridians
+        float a = 2.0f * PI * (float)j / (float)slices;
+        float cx = cosf(a), sz = sinf(a);
+        for (int i = 0; i < rings; i++) {
+            float l0 = PI * (-0.5f + (float)i / (float)rings);
+            float l1 = PI * (-0.5f + (float)(i + 1) / (float)rings);
+            MgeGL_Vertex3f(center.x + cx * cosf(l0) * radius, center.y + sinf(l0) * radius, center.z + sz * cosf(l0) * radius);
+            MgeGL_Vertex3f(center.x + cx * cosf(l1) * radius, center.y + sinf(l1) * radius, center.z + sz * cosf(l1) * radius);
+        }
+    }
+    MgeGL_End();
+}
+
+void Draw_Polygon3D(const Vector3* pts, int count, bool strip, Color color)
+{
+    if (pts == NULL || count < 3)
+        return;
+
+    Vector3 n = Vector3Normalize(Vector3Cross(Vector3_Subtract(pts[1], pts[0]), Vector3_Subtract(pts[2], pts[0])));
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    MgeGL_Normal3f(n.x, n.y, n.z);
+    if (strip) {
+        for (int i = 2; i < count; i++) {
+            const Vector3* a = &pts[i - 2];
+            const Vector3* b = &pts[i - 1];
+            const Vector3* c = &pts[i];
+            if (i & 1) { const Vector3* t = a; a = b; b = t; } // keep a consistent winding
+            MgeGL_Vertex3f(a->x, a->y, a->z);
+            MgeGL_Vertex3f(b->x, b->y, b->z);
+            MgeGL_Vertex3f(c->x, c->y, c->z);
+        }
+    } else {
+        for (int i = 1; i < count - 1; i++) {
+            MgeGL_Vertex3f(pts[0].x, pts[0].y, pts[0].z);
+            MgeGL_Vertex3f(pts[i].x, pts[i].y, pts[i].z);
+            MgeGL_Vertex3f(pts[i + 1].x, pts[i + 1].y, pts[i + 1].z);
+        }
+    }
+    MgeGL_Normal3f(0.0f, 0.0f, 1.0f);
+    MgeGL_End();
+}
+
+void Draw_Polygon3DWires(const Vector3* pts, int count, bool closed, Color color)
+{
+    if (pts == NULL || count < 2)
+        return;
+
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    for (int i = 0; i < count - 1; i++) {
+        MgeGL_Vertex3f(pts[i].x, pts[i].y, pts[i].z);
+        MgeGL_Vertex3f(pts[i + 1].x, pts[i + 1].y, pts[i + 1].z);
+    }
+    if (closed && count > 2) {
+        MgeGL_Vertex3f(pts[count - 1].x, pts[count - 1].y, pts[count - 1].z);
+        MgeGL_Vertex3f(pts[0].x, pts[0].y, pts[0].z);
+    }
+    MgeGL_End();
+}
+
 void Draw_Plane(Vector3 center, float width, float length, Color color)
 {
     float x = width * 0.5f, z = length * 0.5f;

@@ -133,10 +133,40 @@ static void add_menu(Scene* s, History* h)
 {
     if (!Mge_GuiBeginMenu("+ add"))
         return;
-    if (Mge_GuiMenuItem("Cube")) { History_Record(h); Scene_AddShape(s, PRIM_CUBE); }
-    if (Mge_GuiMenuItem("Sphere")) { History_Record(h); Scene_AddShape(s, PRIM_SPHERE); }
-    if (Mge_GuiMenuItem("Plane")) { History_Record(h); Scene_AddShape(s, PRIM_PLANE); }
-    if (Mge_GuiMenuItem("Light")) { History_Record(h); Scene_AddLight(s); }
+
+    if (Mge_GuiBeginSubmenu("Box")) {
+        if (Mge_GuiMenuItem("Solid"))     { History_Record(h); Scene_AddShape(s, PRIM_CUBE, false); }
+        if (Mge_GuiMenuItem("Wireframe")) { History_Record(h); Scene_AddShape(s, PRIM_CUBE, true); }
+        Mge_GuiEndSubmenu();
+    }
+    if (Mge_GuiBeginSubmenu("Sphere")) {
+        if (Mge_GuiMenuItem("Solid"))     { History_Record(h); Scene_AddShape(s, PRIM_SPHERE, false); }
+        if (Mge_GuiMenuItem("Wireframe")) { History_Record(h); Scene_AddShape(s, PRIM_SPHERE, true); }
+        Mge_GuiEndSubmenu();
+    }
+    if (Mge_GuiMenuItem("Plane")) { History_Record(h); Scene_AddShape(s, PRIM_PLANE, false); }
+    if (Mge_GuiBeginSubmenu("Rectangle")) {
+        if (Mge_GuiMenuItem("Solid"))   { History_Record(h); Scene_AddShape(s, PRIM_PLANE, false); }
+        if (Mge_GuiMenuItem("Outline")) { History_Record(h); Scene_AddShape(s, PRIM_PLANE, true); }
+        Mge_GuiEndSubmenu();
+    }
+    if (Mge_GuiBeginSubmenu("Triangle")) {
+        if (Mge_GuiMenuItem("Solid"))   { History_Record(h); Scene_AddPolygon(s, POLY_TRIANGLE, false); }
+        if (Mge_GuiMenuItem("Outline")) { History_Record(h); Scene_AddPolygon(s, POLY_TRIANGLE, true); }
+        if (Mge_GuiMenuItem("Fan"))     { History_Record(h); Scene_AddPolygon(s, POLY_FAN, false); }
+        if (Mge_GuiMenuItem("Strip"))   { History_Record(h); Scene_AddPolygon(s, POLY_STRIP, false); }
+        Mge_GuiEndSubmenu();
+    }
+    if (Mge_GuiMenuItem("Line"))  { History_Record(h); Scene_AddPolygon(s, POLY_LINE, true); }
+    if (Mge_GuiMenuItem("Arrow")) { History_Record(h); Scene_AddShape(s, PRIM_ARROW, false); }
+
+    Mge_GuiSeparator();
+    if (Mge_GuiBeginSubmenu("Light")) {
+        if (Mge_GuiMenuItem("Point"))       { History_Record(h); Scene_AddLight(s, LIGHT_POINT); }
+        if (Mge_GuiMenuItem("Spot"))        { History_Record(h); Scene_AddLight(s, LIGHT_SPOT); }
+        if (Mge_GuiMenuItem("Directional")) { History_Record(h); Scene_AddLight(s, LIGHT_DIRECTIONAL); }
+        Mge_GuiEndSubmenu();
+    }
     if (Mge_GuiMenuItem("Camera")) { History_Record(h); Scene_AddCamera(s); }
     Mge_GuiEndMenu();
 }
