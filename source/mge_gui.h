@@ -53,9 +53,15 @@ void Mge_GuiSameLine(void);                                // lay the next widge
 void Mge_GuiSetNextItemWidth(float width);                 // width for the next input / combo (<=0 resets)
 bool Mge_GuiButton(const char* label);                    // true the frame it is clicked
 bool Mge_GuiSelectable(const char* label, bool selected);  // list row; true when clicked
-// Like Mge_GuiSelectable, but also reports a double-click on the row (for
-// rename-in-place). `doubleClicked` may be NULL.
+// Like Mge_GuiSelectable, but spans the full row width, also reports a
+// double-click on the row (for rename-in-place, `doubleClicked` may be NULL),
+// and tolerates a trailing Mge_GuiRowButton overlapping its right edge.
 bool Mge_GuiSelectableEx(const char* label, bool selected, bool* doubleClicked);
+
+// A small button pinned flush to the right edge of the current row. Draw it
+// right after a Mge_GuiSelectableEx to get a trailing per-row action (e.g. a
+// delete "x") that doesn't collide with the row's selection hit area.
+bool Mge_GuiRowButton(const char* label);
 
 // A collapsible tree node. Returns true while expanded -- draw the children then,
 // and call Mge_GuiTreePop. `id` must be unique among siblings. `selected` draws

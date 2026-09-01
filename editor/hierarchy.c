@@ -83,10 +83,9 @@ static void object_row(Scene* s, History* h, int i, int* del)
         }
     }
 
-    Mge_GuiSameLine();
     char b[40];
     snprintf(b, sizeof(b), "x%s", id);
-    if (Mge_GuiButton(b))
+    if (Mge_GuiRowButton(b))
         *del = i;
 }
 
@@ -123,10 +122,9 @@ static void light_row(Scene* s, History* h, int i, int* del)
         begin_rename(SEL_LIGHT, i, s->lightNames[i]);
 
     if (s->lights[i].type != LIGHT_DIRECTIONAL) {
-        Mge_GuiSameLine();
         char b[40];
         snprintf(b, sizeof(b), "x%s", id);
-        if (Mge_GuiButton(b))
+        if (Mge_GuiRowButton(b))
             *del = i;
     }
 }

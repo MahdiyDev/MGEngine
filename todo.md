@@ -410,6 +410,10 @@ phases so the app keeps working the whole way.
       `Scene_Pick` both go through `Mge_GetMouseRay` + `Mge_RaycastObjects`
       (lights picked as a 0.4 sphere). `Mge_RaycastObjects` skips `OBJECT_2D`
       and tests an `OBJECT_CAMERA` as its marker box.
+- [x] Hierarchy rows: the delete `x` no longer overlaps the row's select area --
+      `Mge_GuiSelectableEx` spans the row (AllowOverlap) and new `Mge_GuiRowButton`
+      pins `x` flush-right. **Delete** key now also removes a selected light
+      (immediately; never the Sun), matching the row button.
 
 ## Later / optional
 

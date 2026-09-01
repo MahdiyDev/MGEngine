@@ -62,12 +62,12 @@ on exit and restored next launch.
 | **TAB** / top-bar button | switch between **VIEW** mode (fly-camera, cursor locked) and **EDIT** mode (cursor free) |
 | VIEW / fly-camera | **WASD** move, mouse look |
 | EDIT — camera | hold **RIGHT mouse** to look; **WASD** flies while it is held |
-| EDIT — select | **left-click** an object or a light; **Shift-click** adds to the selection; click empty space to deselect |
+| EDIT — select | **left-click** an object or a light — a ray from the cursor picks the nearest one it actually hits; **Shift-click** adds to the selection; click empty space to deselect |
 | EDIT — gizmo | drag a handle to **move / rotate / scale** (switch mode in the top bar). Hold **Ctrl** to snap to the increments in the top-bar **Gizmo** menu. A multi-selection moves as a group about its centroid |
 | **Ctrl+S** | save the active scene (prompts for a location if the project is new) |
 | **Ctrl+Z** / **Ctrl+Y** / **Ctrl+Shift+Z** | undo / redo / redo |
 | **Ctrl+D** | duplicate the selected object(s) just off the originals |
-| **Delete** | remove the selected object(s) — asks first |
+| **Delete** | remove the selection — object(s) ask first; a light goes immediately (never the Sun) |
 | **Build** | compile the active scene's module as a separate process — the editor keeps drawing; output lands in the Console |
 | **Play** / **Stop** (or **Esc**) | enter / leave **Play mode** — panels hide, the scene runs through its main camera with real input, Stop restores it (see below) |
 | **F12** | save `editor_screenshot.png` next to the executable (`Mge_TakeScreenshot`) |
@@ -290,8 +290,10 @@ while that's open.
 Every object and light as a row. The leading checkbox is the object's `active`
 flag (inactive = not drawn / not outlined) or the light's `enabled` flag.
 Single-click a row to select it, **ctrl-click** to multi-select; **double-click**
-the name to rename it in place (`ok` commits). `x` deletes (asks first) — except the
-directional **Sun** (light 0), which the shadow pass depends on.
+the name to rename it in place (`ok` commits). The `x` at the row's right edge
+deletes it (objects ask first) — the **Delete** key does the same to the current
+selection. Neither touches the directional **Sun** (light 0), which the shadow
+pass depends on.
 
 `+ add` opens a menu: **Cube / Sphere / Plane** (`Scene_AddShape`), **Light**
 (`Scene_AddLight`), or **Camera** (`Scene_AddCamera`) — spawned, named, and

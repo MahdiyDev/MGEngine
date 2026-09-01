@@ -181,10 +181,26 @@ bool Mge_GuiSelectableEx(const char* label, bool selected, bool* doubleClicked)
 {
     if (!s_inFrame)
         return false;
-    bool clicked = ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick);
+    // span the rest of the row so the selection target is unambiguous, and allow
+    // a trailing widget (Mge_GuiRowButton) to overlap it without stealing clicks
+    float rowW = ImGui::GetContentRegionAvail().x;
+    bool clicked = ImGui::Selectable(label, selected,
+        ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_AllowOverlap,
+        ImVec2(rowW, 0.0f));
     if (doubleClicked != nullptr)
         *doubleClicked = clicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
     return clicked;
+}
+
+bool Mge_GuiRowButton(const char* label)
+{
+    if (!s_inFrame)
+        return false;
+    const ImGuiStyle& st = ImGui::GetStyle();
+    float w = ImGui::CalcTextSize(label, nullptr, true).x + st.FramePadding.x * 2.0f;
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - w); // flush right
+    return ImGui::Button(label);
 }
 
 bool Mge_GuiInputText(const char* label, char* buf, int bufSize)

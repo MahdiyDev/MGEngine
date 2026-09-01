@@ -7,7 +7,8 @@
 //     left-click         select an object / a light  (Shift-click = add to selection)
 //     drag a gizmo       move / rotate / scale it (hold Ctrl to snap)
 //   Ctrl+S  save scene   Ctrl+Z / Ctrl+Y  undo / redo   Ctrl+D  duplicate
-//   Delete  remove the selection (asks first)          F12  screenshot
+//   Delete  remove the selection (objects ask first; a light goes at once)
+//   F12  screenshot
 //   Play / Stop          a third mode: panels hide, the scene runs through its
 //                        main camera with real input; Esc or Stop returns and
 //                        restores the pre-Play scene
@@ -220,8 +221,14 @@ int main(void)
                     Scene_LoadMaterialTextures(&scene, root);
                 }
             }
-            if (keysFree && IsKeyPressed(KEY_DELETE) && scene.selKind == SEL_OBJECT)
-                wantDeletePopup = true;
+            if (keysFree && IsKeyPressed(KEY_DELETE)) {
+                if (scene.selKind == SEL_OBJECT) {
+                    wantDeletePopup = true; // objects: confirm first
+                } else if (scene.selKind == SEL_LIGHT) {
+                    History_Record(&hist);
+                    Scene_DeleteLight(&scene, scene.selIndex); // no-op on the sun (light 0)
+                }
+            }
 
             if (wantDeletePopup) {
                 Mge_GuiOpenPopup(DELETE_ID);
