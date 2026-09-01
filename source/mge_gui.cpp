@@ -358,6 +358,39 @@ void Mge_GuiEndContextMenu(void)
         ImGui::EndPopup();
 }
 
+float Mge_GuiSplitter(const char* id, float x, float y, float w, float h, bool vertical)
+{
+    if (!s_inFrame)
+        return 0.0f;
+
+    char win[80];
+    snprintf(win, sizeof(win), "##split_%s", id);
+    ImGui::SetNextWindowPos(ImVec2(x, y));
+    ImGui::SetNextWindowSize(ImVec2(w, h));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav;
+
+    float delta = 0.0f;
+    if (ImGui::Begin(win, nullptr, flags)) {
+        ImGui::InvisibleButton("hit", ImVec2(w, h));
+        bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+        if (hot)
+            ImGui::SetMouseCursor(vertical ? ImGuiMouseCursor_ResizeEW : ImGuiMouseCursor_ResizeNS);
+        if (hot) {
+            ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            ImU32 col = ImGui::GetColorU32(ImGui::IsItemActive() ? ImGuiCol_SeparatorActive : ImGuiCol_SeparatorHovered);
+            ImGui::GetWindowDrawList()->AddRectFilled(mn, mx, col);
+        }
+        if (ImGui::IsItemActive())
+            delta = vertical ? ImGui::GetIO().MouseDelta.x : ImGui::GetIO().MouseDelta.y;
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+    return delta;
+}
+
 bool Mge_GuiCheckbox(const char* label, bool* value)
 {
     return s_inFrame && ImGui::Checkbox(label, value);

@@ -31,9 +31,15 @@ static float Get_Frame_Time(void);
 
 CoreData CORE = { 0 };
 
+// window creation flags read by the platform layer (see Mge_Set* below)
+static bool s_windowResizable = false;
+
 #if defined(PLATFORM_DESKTOP)
     #include "platforms/mge_code_desktop.c"
 #endif
+
+void Mge_SetWindowResizable(bool resizable) { s_windowResizable = resizable; }
+bool Mge_GetWindowResizable(void) { return s_windowResizable; }
 
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title)
 {

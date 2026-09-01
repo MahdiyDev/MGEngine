@@ -61,6 +61,10 @@ typedef struct Scene {
 void Scene_Init(Scene* s, int width, int height);
 void Scene_Shutdown(Scene* s);
 
+// Recreate the framebuffer-sized render targets (HDR pass + bloom) for a new
+// window size. Call when Mge_GetScreenWidth/Height changes.
+void Scene_Resize(Scene* s, int width, int height);
+
 // Reset to a fresh default scene (floor + sun + lamp), name "untitled", no path.
 void Scene_New(Scene* s);
 

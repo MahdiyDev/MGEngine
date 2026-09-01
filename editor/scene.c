@@ -217,6 +217,16 @@ void Scene_Shutdown(Scene* s)
     Mge_UnloadBloom(&s->bloom);
 }
 
+void Scene_Resize(Scene* s, int width, int height)
+{
+    if (width <= 0 || height <= 0)
+        return;
+    Mge_UnloadRenderTexture(s->hdrRT);
+    s->hdrRT = Mge_LoadRenderTextureHDR(width, height);
+    Mge_UnloadBloom(&s->bloom);
+    s->bloom = Mge_LoadBloom(width, height);
+}
+
 void Scene_AddShape(Scene* s, PrimitiveKind primitive)
 {
     if (s->objectCount >= SCENE_MAX_OBJECTS)

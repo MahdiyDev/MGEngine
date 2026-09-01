@@ -699,6 +699,16 @@ int  Mge_GetMSAA(void);              // effective sample count (0 = none / disab
 int  Mge_GetRequestedMSAA(void);     // internal: what the platform layer should request
 void Mge_SetMSAAEnabled(bool enabled); // toggle the multisample resolve at runtime; call AFTER Mge_InitWindow
 bool Mge_IsMSAAEnabled(void);
+// Let the OS resize the window (default off). Call BEFORE Mge_InitWindow. When on,
+// Mge_GetScreenWidth/Height and the GL viewport track the window; an app that owns
+// framebuffer-sized render targets must recreate them on a size change.
+void Mge_SetWindowResizable(bool resizable);
+bool Mge_GetWindowResizable(void); // internal: read by the platform layer
+
+// Resize the window from code (clamped to the min size when resizable). Fires the
+// same path as an OS resize -- Mge_GetScreenWidth/Height update, viewport resets.
+void Mge_SetWindowSize(int width, int height);
+
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
 void Mge_SetWindowShouldClose(bool value); // set/clear the close flag -- e.g. cancel a quit to prompt "save first?"

@@ -514,6 +514,17 @@ while (!Mge_WindowShouldClose()) {
 }
 ```
 
+### A resizable window
+
+The window is a fixed size by default. Call `Mge_SetWindowResizable(true)` **before**
+`Mge_InitWindow` to let the OS resize it (min 640x400); `Mge_SetWindowSize(w, h)`
+resizes it from code. Either way `Mge_GetScreenWidth/Height` and the GL viewport
+follow the window, so 2D layout and `Mge_BeginMode3D`'s aspect stay correct.
+Anything **you** sized to the framebuffer — a `RenderTexture` for a post-fx pass,
+a `BloomFX` — must be recreated when the size changes (`editor/main.c` compares
+the size each frame and calls `Scene_Resize`). `editor/prefs.c` shows persisting
+the window size across runs.
+
 ### Screenshots
 
 `Mge_TakeScreenshot("shot.png")` reads the window framebuffer back and writes a
@@ -1396,6 +1407,7 @@ Mge_GuiEndFrame();                           // renders on top of the framebuffe
 | modals | `Mge_GuiOpenPopup` (trigger) + `Mge_GuiBeginPopup` / `Mge_GuiEndPopup` (every frame) + `Mge_GuiClosePopup` (dismiss from inside) |
 | inputs | `Mge_GuiCheckbox`, `Mge_GuiCombo` (dropdown), `Mge_GuiInputText`, `Mge_GuiInputInt/Float`, `Mge_GuiSliderFloat`, `Mge_GuiInputVec2/Vec3`, `Mge_GuiInputColor` (8-bit RGBA), `Mge_GuiInputColorRGB` (0..1 linear, e.g. `Light.color`) |
 | drag & drop | `Mge_GuiDragSource(payload, label)` after a draggable widget, `Mge_GuiDropTarget(out, n)` after a drop target (string payloads); `Mge_GuiBeginContextMenu` / `Mge_GuiEndContextMenu` (right-click menu on the last widget) |
+| layout | `Mge_GuiSplitter(id, x, y, w, h, vertical)` — an invisible draggable strip; returns the pixel drag delta along the split axis (for a resizable docked shell) |
 
 Every input returns `true` the frame its value changes; `Mge_GuiSelectable` /
 `Mge_GuiButton` return `true` on click. Gate your own picking and camera on

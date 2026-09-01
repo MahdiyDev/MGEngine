@@ -31,6 +31,7 @@ static void Error_Callback(int error, const char* description);
 static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void MouseCursorPosCallback(GLFWwindow* window, double x, double y);
 static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+static void Framebuffer_Size_Callback(GLFWwindow* window, int w, int h);
 
 // GLFW3 Error Callback, runs on GLFW3 error
 static void Error_Callback(int error, const char* description)
@@ -49,7 +50,7 @@ void InitPlatform(void)
     }
     TRACE_LOG(LOG_INFO, "GLFW: Initialized successfully");
 
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, Mge_GetWindowResizable() ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -101,6 +102,9 @@ void InitPlatform(void)
     glfwSetKeyCallback(platform.window, KeyCallback);
     glfwSetCursorPosCallback(platform.window, MouseCursorPosCallback);
     glfwSetMouseButtonCallback(platform.window, MouseButtonCallback);
+    glfwSetFramebufferSizeCallback(platform.window, Framebuffer_Size_Callback);
+    if (Mge_GetWindowResizable())
+        glfwSetWindowSizeLimits(platform.window, 640, 400, GLFW_DONT_CARE, GLFW_DONT_CARE);
 }
 
 double Platform_GetTime(void)
@@ -153,6 +157,13 @@ void Mge_SetWindowShouldClose(bool value)
         glfwSetWindowShouldClose(platform.window, value ? GLFW_TRUE : GLFW_FALSE);
 }
 
+void Mge_SetWindowSize(int width, int height)
+{
+    if (platform.window == NULL || width <= 0 || height <= 0)
+        return;
+    glfwSetWindowSize(platform.window, width, height); // -> Framebuffer_Size_Callback
+}
+
 void Close_Platform(void)
 {
     glfwDestroyWindow(platform.window);
@@ -201,6 +212,21 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
     if (button < 0 || button >= MAX_MOUSE_BUTTONS)
         return;
     CORE.Input.Mouse.currentButtonState[button] = (action == GLFW_PRESS) ? 1 : 0;
+}
+
+// window / framebuffer resized (only fires when the window is resizable). Fires
+// from glfwPollEvents, which the engine calls at the end of Mge_EndDrawing -- so
+// no batch is open and it is safe to reset the viewport here.
+static void Framebuffer_Size_Callback(GLFWwindow* window, int w, int h)
+{
+    (void)window;
+    if (w <= 0 || h <= 0) // minimised
+        return;
+    CORE.Window.screen.width = (uint32_t)w;
+    CORE.Window.screen.height = (uint32_t)h;
+    CORE.Window.render.width = (uint32_t)w;
+    CORE.Window.render.height = (uint32_t)h;
+    SetupViewport((uint32_t)w, (uint32_t)h);
 }
 
 void ShowCursor(void)

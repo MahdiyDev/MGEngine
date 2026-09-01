@@ -118,6 +118,12 @@ bool Mge_GuiDropTarget(char* out, int outSize);
 bool Mge_GuiBeginContextMenu(const char* id);
 void Mge_GuiEndContextMenu(void);
 
+// A draggable splitter: an invisible hit-strip at `bar` (screen pixels). While
+// the user drags it, returns the pixel delta along the split axis (x for a
+// `vertical` bar between side-by-side panels, y for a horizontal one), else 0.
+// Shows a resize cursor on hover. `id` must be unique.
+float Mge_GuiSplitter(const char* id, float x, float y, float w, float h, bool vertical);
+
 // --- inputs -- each returns true the frame its value changes ---
 bool Mge_GuiCheckbox(const char* label, bool* value);
 bool Mge_GuiCombo(const char* label, int* index, const char* const* items, int count); // dropdown

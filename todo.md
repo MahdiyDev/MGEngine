@@ -372,11 +372,25 @@ phases so the app keeps working the whole way.
       pre-Play scene. Hot-reload keeps working. `Play_*` dropped the
       `EditorCamera*` param -- `Play.viewCam` is set by `main.c` each frame.
 
+## Resizable window + panels   [DONE]
+
+- [x] `Mge_SetWindowResizable(bool)` (before `Mge_InitWindow`) +
+      `Mge_SetWindowSize(w, h)`; a GLFW `Framebuffer_Size_Callback` updates
+      `CORE.Window.screen` + resets the viewport. Editor window opts in (min
+      640x400).
+- [x] `Scene_Resize(s, w, h)` rebuilds the HDR / bloom render targets;
+      `main.c` calls it when `Mge_GetScreenWidth/Height` changes.
+- [x] `Mge_GuiSplitter` (an invisible draggable strip); the editor's left /
+      right / bottom panel splits are draggable, the top strip stays fixed.
+- [x] `editor/prefs.c` -- window size + split positions persisted to
+      `~/.mgeeditor.ini`.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view
       in the left panel, world = parent-chain composition).
-- [ ] ImGui **docking** branch for freely arranged / resizable panels (currently
-      panels are pinned to window edges).
-- [ ] Editor preferences file (`~/.mgeeditor` or `editor.ini`): last scene,
-      window size, panel widths, camera speed.
+- [ ] ImGui **docking** branch proper -- tear-off / re-dockable / tabbed panels
+      (needs swapping the vendored ImGui to the docking branch + a DockSpace host;
+      the split shell above covers "resize" but not "rearrange").
+- [ ] Editor preferences: also persist the last scene + camera speed (window
+      size + panel splits are done, see above).

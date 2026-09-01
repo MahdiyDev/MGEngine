@@ -35,23 +35,22 @@
 #include "fileops.h"
 #include "play.h"
 #include "history.h"
+#include "prefs.h"
 
-static const int width = 1280, height = 720;
-
-// docked-shell metrics (px)
-enum {
-    TOPBAR_H = 46,
-    LEFT_W = 240,
-    RIGHT_W = 320,
-    BOTTOM_H = 172,
-};
+enum { TOPBAR_H = 46 }; // the top strip is a fixed height; the other splits move
 
 #define DELETE_ID "Delete selection"
 
+static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
+
 int main(void)
 {
+    EditorPrefs prefs;
+    Prefs_Load(&prefs);
+
     Mge_SetMSAA(4); // 4x anti-aliasing on every shape / object / model
-    Mge_InitWindow(width, height, "MGEngine editor");
+    Mge_SetWindowResizable(true);
+    Mge_InitWindow((uint32_t)prefs.winW, (uint32_t)prefs.winH, "MGEngine editor");
     Mge_SetTargetFPS(60);
 
     bool editMode = true; // start in EDIT mode (cursor free, panels clickable)
@@ -64,7 +63,10 @@ int main(void)
     Project_Default(&project); // in-memory: one scene "untitled", no files yet
 
     Scene scene;
-    Scene_Init(&scene, width, height); // GPU resources + the default "untitled" scene data
+    Scene_Init(&scene, prefs.winW, prefs.winH); // GPU resources + the default "untitled" scene data
+
+    float leftW = prefs.leftW, rightW = prefs.rightW, bottomH = prefs.bottomH;
+    int prevW = Mge_GetScreenWidth(), prevH = Mge_GetScreenHeight();
 
     FileOps ops = { 0 };
     Play play;
@@ -89,6 +91,14 @@ int main(void)
             fpsShown = Mge_GetFps();
             drawsShown = Mge_GetDrawCalls();
             fpsAt = Mge_GetTime();
+        }
+
+        // window was resized -> rebuild the framebuffer-sized render targets
+        int curW = Mge_GetScreenWidth(), curH = Mge_GetScreenHeight();
+        if (curW != prevW || curH != prevH) {
+            Scene_Resize(&scene, curW, curH);
+            prevW = curW;
+            prevH = curH;
         }
 
         if (IsKeyPressed(KEY_TAB) && !guiKeyboard && !playing)
@@ -140,13 +150,17 @@ int main(void)
         if (interact && !gizmoBusy)
             Scene_Pick(&scene, view);
 
-        // docked-panel layout, recomputed each frame (window can be resized)
+        // docked-panel layout, recomputed each frame (window can be resized,
+        // panel splits are draggable). Clamp so a panel can't eat the viewport.
         float W = (float)Mge_GetScreenWidth(), H = (float)Mge_GetScreenHeight();
-        float midH = H - TOPBAR_H - BOTTOM_H;
+        leftW = clampf(leftW, 140.0f, W * 0.4f);
+        rightW = clampf(rightW, 160.0f, W * 0.4f);
+        bottomH = clampf(bottomH, 60.0f, H * 0.5f);
+        float midH = H - TOPBAR_H - bottomH;
         Rectangle rTop = { 0, 0, W, TOPBAR_H };
-        Rectangle rLeft = { 0, TOPBAR_H, LEFT_W, midH };
-        Rectangle rRight = { W - RIGHT_W, TOPBAR_H, RIGHT_W, midH };
-        Rectangle rBottom = { 0, H - BOTTOM_H, W, BOTTOM_H };
+        Rectangle rLeft = { 0, TOPBAR_H, leftW, midH };
+        Rectangle rRight = { W - rightW, TOPBAR_H, rightW, midH };
+        Rectangle rBottom = { 0, H - bottomH, W, bottomH };
 
         Mge_GuiBeginFrame();
 
@@ -175,6 +189,11 @@ int main(void)
                 Play_DrawConsole(&play, rBottom);
             else
                 Resources_Draw(&res, rBottom, &project, &scene, fpsShown, drawsShown);
+
+            // draggable panel splitters
+            leftW += Mge_GuiSplitter("L", leftW - 3.0f, TOPBAR_H, 6.0f, midH, true);
+            rightW -= Mge_GuiSplitter("R", W - rightW - 3.0f, TOPBAR_H, 6.0f, midH, true);
+            bottomH -= Mge_GuiSplitter("B", 0.0f, H - bottomH - 3.0f, W, 6.0f, false);
 
             // --- editing hotkeys (EDIT mode, not while a field has focus) ---
             bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
@@ -247,6 +266,13 @@ int main(void)
         if (ops.quit)
             break;
     }
+
+    prefs.winW = Mge_GetScreenWidth();
+    prefs.winH = Mge_GetScreenHeight();
+    prefs.leftW = leftW;
+    prefs.rightW = rightW;
+    prefs.bottomH = bottomH;
+    Prefs_Save(&prefs);
 
     History_Free(&hist);
     Play_Shutdown(&play, &scene);

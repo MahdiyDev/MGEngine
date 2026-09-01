@@ -6,7 +6,8 @@ A scene editor built on top of the engine library — see
 
 | file | contents |
 | --- | --- |
-| `main.c` | the window, the frame loop, the docked-panel layout (top / left / right / bottom rectangles), the **TAB** mode toggle, the Play-mode branch (hide panels, view through the main camera, Esc = Stop), **F12** screenshot, the close-button guard. Owns the `Project` + active `Scene` + undo `History` |
+| `main.c` | the window (resizable), the frame loop, the docked-panel layout (fixed top strip + draggable left / right / bottom splits), `Scene_Resize` on window resize, the **TAB** mode toggle, the Play-mode branch (hide panels, view through the main camera, Esc = Stop), **F12** screenshot, the close-button guard. Owns the `Project` + active `Scene` + undo `History` |
+| `prefs.c` / `.h` | `EditorPrefs` — window size + panel split positions, read from / written to `~/.mgeeditor.ini` |
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |
 | `project.c` / `project.h` | `Project`: global config (window / build settings) + the scene list. `Project_Default` / `Project_AddScene` / `Project_RemoveScene`, and `Project_Root` / `Project_SceneDir` / `Project_SceneFile` path helpers |
 | `project_io.c` / `.h` | `project.mgproject` read / write (`Project_Save` / `Project_Load`) — flat text, **data only** |
@@ -37,15 +38,22 @@ The editor calls `Mge_SetMSAA(4)` before `Mge_InitWindow` (4x anti-aliasing).
 via `Mge_GuiBeginPanel` (a title-bar-less window pinned to an exact rect):
 
 ```
-+--------------------------------------------------+  top    TOPBAR_H (46)
-| Hierarchy |          viewport         | Inspector |  left   LEFT_W  (240)
-|           |    (the 3D scene fills     |           |  right  RIGHT_W (320)
-|           |     the whole window;      |           |
-|           |     panels draw on top)    |           |
-+--------------------------------------------------+  bottom BOTTOM_H (172)
++--------------------------------------------------+  top    TOPBAR_H (46, fixed)
+| Hierarchy |          viewport         | Inspector |  left / right / bottom split
+|           |    (the 3D scene fills     |           |  positions are draggable
+|           |     the whole window;      |           |  (Mge_GuiSplitter) and
+|           |     panels draw on top)    |           |  persisted
++--------------------------------------------------+  bottom
 | Resources                                        |
 +--------------------------------------------------+
 ```
+
+**The window is resizable** (`Mge_SetWindowResizable(true)` before
+`Mge_InitWindow`; min 640x400). On a size change `main.c` calls `Scene_Resize` to
+rebuild the HDR / bloom render targets, and the panel rects reflow. **Drag the
+gap** between the viewport and any panel to resize that panel. The window size
+and the three split positions are saved to `~/.mgeeditor.ini` (`editor/prefs.c`)
+on exit and restored next launch.
 
 ## Controls
 
