@@ -1096,6 +1096,9 @@ void Draw_TriangleFan(Vector2 *points, int pointCount, Color color);
 void Draw_TriangleStrip(Vector2 *points, int pointCount, Color color);
 void Draw_Arrow(Vector2 start, Vector2 end, float headSize, Color color);   // 2D
 void Draw_Arrow3D(Vector3 start, Vector3 end, Color color);                 // call inside Mge_BeginMode3D
+// Wireframe view frustum for `camera` (near + far rectangles + joining edges).
+// `aspect` = w/h; `nearDist`/`farDist` bound the drawn volume. Inside Mge_BeginMode3D.
+void Draw_CameraFrustum(Camera3D camera, float aspect, float nearDist, float farDist, Color color);
 void Draw_Cube(Vector3 center, Vector3 size, Color color);
 void Draw_CubeWires(Vector3 center, Vector3 size, Color color);
 // ...Ex: `rotation` is a Quaternion applied about `center` ({0,0,0,1} = none).

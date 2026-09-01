@@ -335,8 +335,8 @@ yet composed down the chain.
 The fixed **Environment** row at the top can't be deleted. Selecting it shows the
 scene's sun (`lights[0]`), the **skybox**, and the **main camera** — which
 `OBJECT_CAMERA` the built game views the scene through. A camera object draws as a
-wireframe box + forward arrow; its gizmo is hidden while it sits exactly where the
-editor fly-cam is.
+wireframe box + a representative view frustum (`Draw_CameraFrustum`, 60° / 16:9);
+its gizmo is hidden while it sits exactly where the editor fly-cam is.
 
 Skybox buttons: **choose folder...** (pick a folder holding
 `right/left/top/bottom/front/back.jpg`), **use engine default** (copy the engine's

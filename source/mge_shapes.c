@@ -225,6 +225,54 @@ void Draw_Arrow3D(Vector3 start, Vector3 end, Color color)
     MgeGL_End();
 }
 
+// Wireframe view frustum for `camera` (call inside Mge_BeginMode3D): the near and
+// far rectangles plus the four edges joining them. `aspect` is width/height;
+// `nearDist` / `farDist` bound the drawn volume (for a gizmo, keep them small).
+// Uses camera.fovy as the vertical FOV in degrees (perspective) or the full
+// height (orthographic), and camera.target as a direction.
+void Draw_CameraFrustum(Camera3D camera, float aspect, float nearDist, float farDist, Color color)
+{
+    Vector3 fwd = Vector3Normalize(camera.target);
+    Vector3 right = Vector3Normalize(Vector3Cross(fwd, camera.up));
+    Vector3 up = Vector3Cross(right, fwd);
+
+    float nh, nw, fh, fw;
+    if (camera.projection == CAMERA_ORTHOGRAPHIC) {
+        nh = fh = camera.fovy * 0.5f;
+        nw = fw = nh * aspect;
+    } else {
+        float t = tanf(camera.fovy * 0.5f * DEG2RAD);
+        nh = nearDist * t;
+        fh = farDist * t;
+        nw = nh * aspect;
+        fw = fh * aspect;
+    }
+
+    Vector3 nc = Vector3_Add(camera.position, Vector3_Scale(fwd, nearDist));
+    Vector3 fc = Vector3_Add(camera.position, Vector3_Scale(fwd, farDist));
+
+    Vector3 n[4], f[4]; // corners, CCW from top-left
+    const float sx[4] = { -1.0f, 1.0f, 1.0f, -1.0f };
+    const float sy[4] = { 1.0f, 1.0f, -1.0f, -1.0f };
+    for (int k = 0; k < 4; k++) {
+        n[k] = Vector3_Add(nc, Vector3_Add(Vector3_Scale(right, sx[k] * nw), Vector3_Scale(up, sy[k] * nh)));
+        f[k] = Vector3_Add(fc, Vector3_Add(Vector3_Scale(right, sx[k] * fw), Vector3_Scale(up, sy[k] * fh)));
+    }
+
+    MgeGL_Begin(MGEGL_LINES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+    for (int k = 0; k < 4; k++) {
+        int j = (k + 1) & 3;
+        MgeGL_Vertex3f(n[k].x, n[k].y, n[k].z); // near rect edge
+        MgeGL_Vertex3f(n[j].x, n[j].y, n[j].z);
+        MgeGL_Vertex3f(f[k].x, f[k].y, f[k].z); // far rect edge
+        MgeGL_Vertex3f(f[j].x, f[j].y, f[j].z);
+        MgeGL_Vertex3f(n[k].x, n[k].y, n[k].z); // near -> far
+        MgeGL_Vertex3f(f[k].x, f[k].y, f[k].z);
+    }
+    MgeGL_End();
+}
+
 // true unless `q` is identity -- lets the common unrotated case skip the maths.
 // x=y=z=0 covers both {0,0,0,1} and a zero-initialised {0,0,0,0}.
 static bool has_rotation(Quaternion q)

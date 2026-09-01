@@ -199,13 +199,13 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~25 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~26 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
 mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
 tone-mapped vs clamped, a bloom glow, a deferred-shaded scene, an SSAO scene,
 a PBR + IBL sphere grid, the cube/sphere/plane primitives, a rotated cube with
 each gizmo mode, the rotate gizmo head-on, a scripted rotate drag, a raycast
-against two shapes with the hit marker drawn, a
+against two shapes with the hit marker drawn, a camera marker's view frustum, a
 `MgeGL_SaveScreenshot` round-trip) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
@@ -258,7 +258,7 @@ editor's close guard does this).
 
 3D uses a `Camera3D` (passed **by value**) between `Mge_BeginMode3D` /
 `Mge_EndMode3D`; draw with `Draw_Cube` / `Draw_CubeWires` / `Draw_Sphere` /
-`Draw_Plane` / `Draw_Arrow3D` (and the `*Ex` variants) or the
+`Draw_Plane` / `Draw_Arrow3D` / `Draw_CameraFrustum` (and the `*Ex` variants) or the
 low-level `MgeGL_Begin(MGEGL_TRIANGLES)` … `MgeGL_Vertex3f` … `MgeGL_End` immediate
 calls. `editor/` shows a fly-camera plus TAB-toggled edit mode with the
 translate / rotate / scale gizmo.
@@ -548,9 +548,9 @@ if (IsKeyPressed(KEY_F12))
 
 An `Object` is a movable rectangle (`OBJECT_2D`), a 3D primitive (`OBJECT_3D`:
 `PRIM_CUBE` / `PRIM_SPHERE` / `PRIM_PLANE`, in `obj.primitive`), or a camera
-marker (`OBJECT_CAMERA` — a transform only, drawn as a wireframe box + forward
-arrow, never lit; `Mge_CameraObjectForward(rotation)` applies the orientation to
-local −Z). Its placement lives in `obj.transform` — a
+marker (`OBJECT_CAMERA` — a transform only, drawn as a wireframe box + a
+representative view frustum, never lit; `Mge_CameraObjectForward(rotation)`
+applies the orientation to local −Z). Its placement lives in `obj.transform` — a
 `Transform { Vector3 position, Quaternion rotation, Vector3 scale; int parent; }`
 where `rotation` is `{0,0,0,1}` (identity) on a fresh object — the constructors
 set it, and a zero-initialised `{0,0,0,0}` is also treated as identity when

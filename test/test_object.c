@@ -20,6 +20,7 @@ void Draw_SphereEx(Vector3 a, float r, int ri, int sl, Color c) { (void)a; (void
 void Draw_Plane(Vector3 a, float w, float l, Color c) { (void)a; (void)w; (void)l; (void)c; }
 void Draw_Arrow(Vector2 a, Vector2 b, float s, Color c) { (void)a; (void)b; (void)s; (void)c; }
 void Draw_Arrow3D(Vector3 a, Vector3 b, Color c) { (void)a; (void)b; (void)c; }
+void Draw_CameraFrustum(Camera3D cam, float a, float n, float f, Color c) { (void)cam; (void)a; (void)n; (void)f; (void)c; }
 void Mge_DrawObjectOutline(Object o, float t, Color c) { (void)o; (void)t; (void)c; }
 
 // lighting backend (mge_light.c is not linked here; mge_material.c provides the

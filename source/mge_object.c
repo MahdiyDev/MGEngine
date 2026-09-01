@@ -106,7 +106,10 @@ void Mge_DrawObject(Object obj)
         Draw_CubeWires(p, (Vector3){ 0.7f, 0.5f, 0.5f }, body);
         Draw_CubeWires((Vector3){ p.x + fwd.x * 0.45f, p.y + fwd.y * 0.45f, p.z + fwd.z * 0.45f },
             (Vector3){ 0.35f, 0.35f, 0.2f }, body);
-        Draw_Arrow3D(p, (Vector3){ p.x + fwd.x * 1.6f, p.y + fwd.y * 1.6f, p.z + fwd.z * 1.6f }, body);
+        // a representative view frustum (60 deg / 16:9, as Scene_MainCamera builds it)
+        Camera3D cam = { .position = p, .target = fwd, .up = { 0.0f, 1.0f, 0.0f },
+            .fovy = 60.0f, .projection = CAMERA_PERSPECTIVE };
+        Draw_CameraFrustum(cam, 16.0f / 9.0f, 0.12f, 2.4f, body);
         return;
     }
 

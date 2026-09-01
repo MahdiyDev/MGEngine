@@ -754,6 +754,38 @@ static void scene_raycast(void)
     Mge_EndDrawing();
 }
 
+// camera marker: Mge_DrawObject draws an OBJECT_CAMERA as body + view frustum;
+// also exercise Draw_CameraFrustum directly for an orthographic camera.
+static void scene_camera_frustum(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 6.0f, 4.5f, 7.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.4f;
+
+    Object floor = Mge_MakeShape3D(PRIM_PLANE, (Vector3){ 0, -1.5f, 0 }, (Vector3){ 12, 0.2f, 12 }, (Color){ 90, 95, 105, 255 });
+
+    Object marker = Mge_MakeObject3D((Vector3){ -2.5f, 0, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
+    marker.kind = OBJECT_CAMERA;
+    marker.transform.rotation = Quaternion_LookRotation((Vector3){ 1.0f, -0.05f, 0.15f }, (Vector3){ 0, 1, 0 });
+
+    Camera3D ortho = { .position = { 3.0f, 1.5f, 1.0f }, .target = { -1.0f, -0.4f, -0.2f },
+        .up = { 0, 1, 0 }, .fovy = 1.4f, .projection = CAMERA_ORTHOGRAPHIC };
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 22, 24, 30, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    Mge_DrawObject(floor);
+    Mge_EndLighting3D();
+    Mge_DrawObject(marker); // body + perspective frustum
+    Draw_CameraFrustum(ortho, 1.6f, 0.1f, 2.2f, (Color){ 120, 255, 160, 255 }); // ortho box
+    Mge_EndMode3D();
+    check("camera_frustum");
+    Mge_EndDrawing();
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -789,6 +821,7 @@ int main(void)
     scene_rotate_gizmo((Vector3){ 6.0f, 0.3f, 0.2f }, "rot_facing_x");
     scene_scripted_rotate();
     scene_raycast();
+    scene_camera_frustum();
     scene_screenshot();
 
     Mge_CloseWindow();

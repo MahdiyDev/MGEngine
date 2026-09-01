@@ -446,6 +446,11 @@ phases so the app keeps working the whole way.
       `res/` root -- it keeps them in place. Only a path from *outside* `res/`
       (the file picker) is still imported. `test_scene_io` covers both.
 
+- [x] `Draw_CameraFrustum(camera, aspect, near, far, color)` -- wireframe view
+      frustum (near + far rects + edges), perspective or ortho. `Mge_DrawObject`
+      draws it for an `OBJECT_CAMERA` marker (60 deg / 16:9) in place of the plain
+      forward arrow. `render_smoke` `scene_camera_frustum`.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view
