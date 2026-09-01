@@ -179,7 +179,8 @@ toggle and callback registration; `test_dylib` compiles a tiny shared library
 with the C compiler and loads / calls / frees it through `Mge_LoadLibrary`;
 `test_pak` writes + reads a `.pak` (crc, split-file spanning, mount stack);
 `test_scene_io` / `test_project_io` round-trip the editor's `.mgscene` /
-`.mgproject` text formats.
+`.mgproject` text formats; `test_physics` covers the raycast primitives, the
+nearest-hit object sweep and screen→ray unprojection.
 
 `test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
 `<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
@@ -194,12 +195,13 @@ vendored Assimp: it runs `Mge_LoadModel` for real against a generated OBJ and,
 if present, `assets/sliced_musk_melon/scene.gltf`. Run `make vendor` first.
 
 `make render` is the one test that touches a real GPU: it opens a **hidden**
-GLFW window, renders ~24 engine features (2D shapes, a lit cube, a shadow map,
+GLFW window, renders ~25 engine features (2D shapes, a lit cube, a shadow map,
 a post-fx pass, the skybox, a normal-mapped wall, a parallax-mapped wall, a
 mirror-repeat wrapped quad, a tiled plane + a triplanar box, an HDR scene
 tone-mapped vs clamped, a bloom glow, a deferred-shaded scene, an SSAO scene,
 a PBR + IBL sphere grid, the cube/sphere/plane primitives, a rotated cube with
-each gizmo mode, the rotate gizmo head-on, a scripted rotate drag, a
+each gizmo mode, the rotate gizmo head-on, a scripted rotate drag, a raycast
+against two shapes with the hit marker drawn, a
 `MgeGL_SaveScreenshot` round-trip) one frame each, reads the
 framebuffer back, and fails on a GL error or a blank frame. Every frame is also
 written to `test/render_out/*.tga` so you can eyeball what actually rendered —
@@ -562,10 +564,12 @@ rotated on the CPU — there is no per-object model matrix), with a stencil
 outline when `selected`, and draws nothing when `!active`. `Mge_DrawPrimitive(obj, color)` draws just
 the geometry (used by the shadow pass and the outline).
 
-**Picking** (3D): `Mge_PickObject3D(objects, count, camera)` selects the object
-whose screen-projected centre is nearest the cursor on left-click (returns the
-index, or `-1`). `Mge_SetSelectedObject` / `Mge_ClearSelection` /
-`Mge_GetSelectedObject` do it from code. `objects[i].selected` drives the outline.
+**Picking** (3D): `Mge_PickObject3D(objects, count, camera)` casts a ray through
+the cursor on left-click and selects the nearest object whose geometry it hits
+(a miss clears the selection); returns the index, or `-1`. It is a thin wrapper
+over `Mge_GetMouseRay` + `Mge_RaycastObjects` (see **Physics: raycasting**).
+`Mge_SetSelectedObject` / `Mge_ClearSelection` / `Mge_GetSelectedObject` do it
+from code. `objects[i].selected` drives the outline.
 
 **Gizmo** (3D): one switchable handle set for a single target, drawn on top of
 the scene (depth test off) with the hovered handle over-stroked white.
@@ -629,6 +633,60 @@ Each call is one frame, so call it with `leftDown = true` to press, again (moved
 to drag, then `false` to release; `Mge_ClearMouseOverride()` restores the real
 mouse. The `make render` harness uses this to script a rotate drag and screenshot
 the result, and `test_gizmo` stubs the same functions for headless drag tests.
+
+### Physics: raycasting
+
+`mge_physics.c` casts rays at primitives and scene objects. A `Ray` is an
+`origin + direction`; the direction is normalised internally, so an unnormalised
+one is fine. Every `Mge_Raycast*` returns a `RayHit` and only ever reports a
+**forward** hit (`distance >= 0`):
+
+```c
+typedef struct Ray    { Vector3 position, direction; } Ray;
+typedef struct RayHit {
+    bool    hit;       // did the ray meet the primitive?
+    float   distance;  // world units along the ray to `point`
+    Vector3 point;     // world-space contact point
+    Vector3 normal;    // unit surface normal, flipped to face the ray
+    int     index;     // Mge_RaycastObjects: the object; -1 otherwise
+} RayHit;
+
+RayHit Mge_RaycastSphere(Ray ray, Vector3 center, float radius);
+RayHit Mge_RaycastBox(Ray ray, Vector3 center, Vector3 size, Quaternion rotation); // OBB; identity/zero q -> AABB
+RayHit Mge_RaycastAABB(Ray ray, Vector3 min, Vector3 max);
+RayHit Mge_RaycastPlane(Ray ray, Vector3 point, Vector3 normal);                    // infinite plane
+RayHit Mge_RaycastTriangle(Ray ray, Vector3 v0, Vector3 v1, Vector3 v2);            // Möller–Trumbore
+```
+
+`Mge_RaycastBox` takes `size` as full extents and applies `rotation` about
+`center`; the identity (or a zero) quaternion takes an axis-aligned fast path.
+
+**Scene objects.** `Mge_RaycastObjects(ray, objects, count)` tests each object as
+its `primitive` — `PRIM_SPHERE` (radius `scale.x/2`), `PRIM_CUBE` (an OBB from
+`transform.scale` + `transform.rotation`), `PRIM_PLANE` (the finite XZ quad,
+`scale.x` × `scale.z`, rotated); an `OBJECT_CAMERA` is tested as its marker-body
+box. It returns the **nearest** forward hit, with `.index` set to that object (or
+`-1`). Inactive objects and `OBJECT_2D` rects are skipped.
+
+**Mouse picking.** `Mge_GetScreenRay(pixel, camera, w, h)` unprojects a pixel to a
+world ray (perspective *and* orthographic); `Mge_GetMouseRay(camera)` uses the
+live cursor + window size. This is what `Mge_PickObject3D` and the editor's
+click-to-select are built on — combine the two directly for custom picking:
+
+```c
+if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    RayHit h = Mge_RaycastObjects(Mge_GetMouseRay(camera), objects, n);
+    for (int i = 0; i < n; i++) objects[i].selected = (i == h.index);
+}
+```
+
+**Debug draw** (inside `Mge_BeginMode3D`): `Mge_DrawRay(ray, length, color)` draws
+the ray as an arrow; `Mge_DrawRayHit(ray, hit, rayColor, hitColor)` draws it up to
+the contact point (a long stub on a miss) and marks the point + surface normal.
+
+Demo: `examples/physics/raycast_pick.c`. Tests: `test/test_physics.c` (hermetic —
+the unprojection maths is self-contained, needing only `mge_math` + libm) and the
+`raycast` scene in `make render`.
 
 ### Lighting
 

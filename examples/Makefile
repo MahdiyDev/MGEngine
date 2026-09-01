@@ -24,7 +24,7 @@ LIB_LINKS = -lglfw3 -lassimp -lzlibstatic
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
     .SHELLFLAGS := /c
-    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32
+    LIB_LINKS += -lopengl32 -lgdi32 -lwinmm -lkernel32 -lcomdlg32 -lole32 -lshell32
     EXE = .exe
     RM  = del /q /f $(subst /,\,$1) 2>nul
 else
@@ -37,7 +37,7 @@ endif
 # main; the GUI/ImGui unit is only for the editor app)
 ENGINE_OBJS = $(filter-out ../build/obj/mge_gui.o,$(wildcard ../build/obj/*.o))
 
-SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c depth/*.c stencil/*.c culling/*.c framebuffer/*.c cubemap/*.c geometry/*.c instancing/*.c antialiasing/*.c batching/*.c pbr/*.c)
+SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c depth/*.c stencil/*.c culling/*.c framebuffer/*.c cubemap/*.c geometry/*.c instancing/*.c antialiasing/*.c batching/*.c pbr/*.c physics/*.c)
 BIN = $(SRC:.c=$(EXE))
 
 .PHONY: all clean

@@ -304,29 +304,16 @@ int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength)
     return g_active;
 }
 
+// 3D picking: on left-click, cast a ray through the cursor and select the
+// nearest object it actually hits (its primitive geometry), or clear on a miss.
 int Mge_PickObject3D(Object* objects, int count, Camera3D camera)
 {
     if (objects == NULL || count <= 0)
         return -1;
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        Vector2 m = GetMousePosition();
-        int w = Mge_GetScreenWidth();
-        int h = Mge_GetScreenHeight();
-
-        int hit = -1;
-        float bestD = 48.0f; // pixel radius around each object's screen centre
-        for (int i = 0; i < count; i++) {
-            if (objects[i].kind != OBJECT_3D)
-                continue;
-            Vector2 sc = Mge_GetWorldToScreenEx(objects[i].transform.position, camera, w, h);
-            float dd = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
-            if (dd < bestD) {
-                bestD = dd;
-                hit = i;
-            }
-        }
-        SelectOnly(objects, count, hit);
+        RayHit h = Mge_RaycastObjects(Mge_GetMouseRay(camera), objects, count);
+        SelectOnly(objects, count, h.index);
     }
 
     return g_active;

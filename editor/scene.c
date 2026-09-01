@@ -638,23 +638,19 @@ void Scene_Pick(Scene* s, Camera3D camera)
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return;
 
-    Vector2 m = GetMousePosition();
-    int w = Mge_GetScreenWidth(), h = Mge_GetScreenHeight();
+    Ray ray = Mge_GetMouseRay(camera);
 
     int kind = SEL_NONE, index = 0;
-    float best = 48.0f;
+    float best = 1e30f;
 
-    for (int i = 0; i < s->objectCount; i++) {
-        Vector2 sc = Mge_GetWorldToScreenEx(s->objects[i].transform.position, camera, w, h);
-        float d = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
-        if (d < best) { best = d; kind = SEL_OBJECT; index = i; }
-    }
+    RayHit oh = Mge_RaycastObjects(ray, s->objects, s->objectCount);
+    if (oh.hit) { best = oh.distance; kind = SEL_OBJECT; index = oh.index; }
+
     for (int i = 0; i < s->lightCount; i++) {
         if (s->lights[i].type == LIGHT_DIRECTIONAL)
             continue; // no world position
-        Vector2 sc = Mge_GetWorldToScreenEx(s->lights[i].position, camera, w, h);
-        float d = sqrtf((sc.x - m.x) * (sc.x - m.x) + (sc.y - m.y) * (sc.y - m.y));
-        if (d < best) { best = d; kind = SEL_LIGHT; index = i; }
+        RayHit h = Mge_RaycastSphere(ray, s->lights[i].position, 0.4f); // the lamp marker
+        if (h.hit && h.distance < best) { best = h.distance; kind = SEL_LIGHT; index = i; }
     }
 
     bool additive = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);

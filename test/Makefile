@@ -16,7 +16,7 @@ ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib test_pak
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib test_pak test_physics
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -70,11 +70,15 @@ test_utils$(EXE): test_utils.c ../source/mge_utils.c ../source/mge_pak.c $(MLIB)
 test_pak$(EXE): test_pak.c ../source/mge_pak.c ../source/mge_pak.h $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_pak.c ../source/mge_pak.c
 
-test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c -lm
+test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c ../source/mge_physics.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c ../source/mge_physics.c -lm
 
 test_gizmo$(EXE): test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gizmo.c ../source/mge_gizmo.c ../source/mge_math.c -lm
+
+# raycasting + screen->ray; the debug-draw backend is stubbed in the test
+test_physics$(EXE): test_physics.c ../source/mge_physics.c ../source/mge_math.c $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_physics.c ../source/mge_physics.c ../source/mge_math.c -lm
 
 # editor .mgscene (de)serialiser + path helpers; the parser reads via Mge_LoadFileText (pak-aware)
 # and converts rotations via the quaternion helpers (mge_math.c)

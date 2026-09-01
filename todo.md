@@ -385,6 +385,32 @@ phases so the app keeps working the whole way.
 - [x] `editor/prefs.c` -- window size + split positions persisted to
       `~/.mgeeditor.ini`.
 
+## Physics module -- raycasting   [DONE]
+
+- [x] `source/mge_physics.c` + `Ray` / `RayHit` types in `mge.h`. A ray is
+      origin + direction; every `Mge_Raycast*` normalises the direction and
+      reports the nearest FORWARD hit as a `RayHit` (world `point`, `normal`
+      facing the ray, `distance`).
+- [x] Primitive tests: `Mge_RaycastSphere`, `Mge_RaycastBox` (OBB: `size` full
+      extents + a `Quaternion` about the centre; identity -> AABB fast path),
+      `Mge_RaycastAABB` (slab), `Mge_RaycastPlane` (infinite), `Mge_RaycastTriangle`
+      (Moller-Trumbore).
+- [x] `Mge_RaycastObjects(ray, objects, count)` -- each object as its primitive
+      (sphere / OBB cube / finite XZ plane) from its transform; returns the
+      nearest, `.index` = that object or -1; skips `!active`.
+- [x] `Mge_GetScreenRay(pixel, camera, w, h)` / `Mge_GetMouseRay(camera)` --
+      self-contained unprojection (camera basis + fov), perspective + ortho, so
+      `test_physics` stays hermetic (mge_math + libm only).
+- [x] `Mge_DrawRay` / `Mge_DrawRayHit` -- arrow + contact-point marker + normal,
+      inside `Mge_BeginMode3D`.
+- [x] `test/test_physics.c`, `examples/physics/raycast_pick.c`, `render_smoke`
+      `scene_raycast`, USAGE.md "Physics: raycasting" section.
+- [x] Click-to-select now raycasts the cursor against real geometry (no more
+      48px screen-centre tolerance): `Mge_PickObject3D` and the editor's
+      `Scene_Pick` both go through `Mge_GetMouseRay` + `Mge_RaycastObjects`
+      (lights picked as a 0.4 sphere). `Mge_RaycastObjects` skips `OBJECT_2D`
+      and tests an `OBJECT_CAMERA` as its marker box.
+
 ## Later / optional
 
 - [ ] Object **parenting** + hierarchy transforms (`Transform.parent`, tree view

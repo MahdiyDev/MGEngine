@@ -1113,6 +1113,55 @@ Matrix Mge_GetCameraProjectionMatrix(Camera3D camera, float aspect);
 Vector2 Mge_GetWorldToScreen(Vector3 position, Camera3D camera);
 Vector2 Mge_GetWorldToScreenEx(Vector3 position, Camera3D camera, int screenWidth, int screenHeight);
 
+// --- Physics: raycasting -------------------------------------------------
+//
+// A Ray is an origin + a direction (the Mge_Get*Ray helpers return it unit
+// length; the Mge_Raycast* functions normalise internally, so an unnormalised
+// direction is fine). Every Mge_Raycast* returns a RayHit: on a hit it carries
+// the world-space contact `point`, the surface `normal` (facing back toward the
+// ray), and `distance` along the ray. Only forward hits (distance >= 0) count.
+typedef struct Ray {
+	Vector3 position;   // origin
+	Vector3 direction;  // travel direction
+} Ray;
+
+typedef struct RayHit {
+	bool hit;           // did the ray meet the primitive?
+	float distance;     // units along the ray to `point`
+	Vector3 point;      // world-space contact point
+	Vector3 normal;     // unit surface normal at `point`, facing the ray
+	int index;          // Mge_RaycastObjects: the object index; -1 otherwise
+} RayHit;
+
+// Ray vs. a single primitive. Mge_RaycastBox takes `size` as full extents and
+// applies `rotation` about `center` (an OBB); pass Quaternion_Identity() (or a
+// zero quaternion) for an axis-aligned box, or use Mge_RaycastAABB with an
+// explicit min/max. Mge_RaycastPlane's plane is infinite; `normal` need not be
+// unit length.
+RayHit Mge_RaycastSphere(Ray ray, Vector3 center, float radius);
+RayHit Mge_RaycastBox(Ray ray, Vector3 center, Vector3 size, Quaternion rotation);
+RayHit Mge_RaycastAABB(Ray ray, Vector3 min, Vector3 max);
+RayHit Mge_RaycastPlane(Ray ray, Vector3 point, Vector3 normal);
+RayHit Mge_RaycastTriangle(Ray ray, Vector3 v0, Vector3 v1, Vector3 v2);
+
+// Ray vs. an array of scene objects, each tested as its primitive (sphere / OBB
+// cube / finite plane) from transform.position + transform.scale +
+// transform.rotation; an OBJECT_CAMERA is tested as its marker-body box.
+// Returns the NEAREST forward hit; `.index` is that object, or -1 for a miss.
+// Objects with `active == false`, and OBJECT_2D rects, are skipped.
+RayHit Mge_RaycastObjects(Ray ray, const Object* objects, int count);
+
+// Build a ray through a screen pixel, pointing from the camera into the scene.
+// Mge_GetMouseRay uses the current cursor position + window size.
+Ray Mge_GetScreenRay(Vector2 pixel, Camera3D camera, int screenWidth, int screenHeight);
+Ray Mge_GetMouseRay(Camera3D camera);
+
+// Debug draw -- call inside Mge_BeginMode3D. Mge_DrawRay draws the ray as an
+// arrow `length` units long; Mge_DrawRayHit draws up to the contact point (or a
+// long stub on a miss) and marks the point + surface normal.
+void Mge_DrawRay(Ray ray, float length, Color color);
+void Mge_DrawRayHit(Ray ray, RayHit hit, Color rayColor, Color hitColor);
+
 // Objects. The `color` is stored as the material's diffuse-map tint (there is no
 // separate Object.color); pass WHITE for an untinted surface. Mge_MakeObject3D
 // makes a cube -- use Mge_MakeShape3D for a sphere or a plane. Constructors set
@@ -1169,9 +1218,9 @@ void Mge_UnloadModelBatch(ModelBatch* batch);
 int Mge_ManipulateObjects2D(Object* objects, int count, float axisLength);
 void Mge_DrawObjectGizmo2D(Object obj, float axisLength); // X (red) / Y (green) arrows
 
-// 3D picking: on left-click, select whichever object's screen-projected centre
-// is nearest the cursor (within a pixel tolerance). Returns the index, or -1.
-// Does not drag -- use Mge_Gizmo3D for that.
+// 3D picking: on left-click, cast a ray through the cursor and select the
+// nearest object whose geometry it hits (a miss clears the selection). Returns
+// the index, or -1. Does not drag -- use Mge_Gizmo3D for that.
 int Mge_PickObject3D(Object* objects, int count, Camera3D camera);
 void Mge_ClearSelection(Object* objects, int count); // deselect all
 int Mge_GetSelectedObject(void);                     // index of the selected object, or -1

@@ -215,7 +215,7 @@ TEST(object_rotation_defaults_to_identity)
     CHECK(Quaternion_Approx(o.transform.rotation, Quaternion_Identity()));
 }
 
-TEST(pick_object_3d_selects_nearest_screen_centre)
+TEST(pick_object_3d_raycasts_the_cursor)
 {
     Object objs[2] = {
         Mge_MakeObject3D((Vector3){ 0, 0, 0 }, (Vector3){ 1, 1, 1 }, RED),
@@ -225,14 +225,21 @@ TEST(pick_object_3d_selects_nearest_screen_centre)
         .fovy = 60.0f, .projection = CAMERA_PERSPECTIVE };
     Mge_ClearSelection(objs, 2);
 
+    // a click on obj 1's projected centre -> the ray hits its box
     Vector2 c1 = Mge_GetWorldToScreenEx(objs[1].transform.position, cam, 800, 600);
     press_at(c1.x, c1.y);
     CHECK(Mge_PickObject3D(objs, 2, cam) == 1);
     CHECK(objs[1].selected && !objs[0].selected);
     release();
 
-    // clicking far from any centre deselects
+    // a click on empty sky -> the ray misses everything, selection clears
     press_at(5.0f, 5.0f);
+    CHECK(Mge_PickObject3D(objs, 2, cam) == -1);
+    release();
+
+    // a click between the two cubes (past obj 0's right face) hits neither
+    Vector2 gap = Mge_GetWorldToScreenEx((Vector3){ 2.0f, 0, 0 }, cam, 800, 600);
+    press_at(gap.x, gap.y);
     CHECK(Mge_PickObject3D(objs, 2, cam) == -1);
     release();
 
@@ -267,7 +274,7 @@ int main(void)
     RUN(manipulate_2d_select_and_body_drag);
     RUN(manipulate_2d_axis_constrained_drag);
     RUN(object_rotation_defaults_to_identity);
-    RUN(pick_object_3d_selects_nearest_screen_centre);
+    RUN(pick_object_3d_raycasts_the_cursor);
     RUN(set_selected_object_matches_a_pick);
     return test_summary();
 }

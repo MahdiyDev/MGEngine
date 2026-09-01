@@ -724,6 +724,36 @@ static void scene_screenshot(void)
     Mge_EndDrawing();
 }
 
+// physics: cast a ray at a few shapes and draw the ray + the contact marker
+static void scene_raycast(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 5.0f, 4.0f, 8.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.4f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.35f;
+
+    Object ball = Mge_MakeShape3D(PRIM_SPHERE, (Vector3){ 0, 0, 0 }, (Vector3){ 2.0f, 2.0f, 2.0f }, (Color){ 90, 170, 220, 255 });
+    Object cube = Mge_MakeObject3D((Vector3){ -3.0f, 0, 1.5f }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 200, 90, 90, 255 });
+    Object objs[2] = { ball, cube };
+
+    // the centre pixel looks straight at the origin -> the ray hits the sphere
+    Ray ray = Mge_GetScreenRay((Vector2){ W / 2.0f, H / 2.0f }, cam, W, H);
+    RayHit hit = Mge_RaycastObjects(ray, objs, 2);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 22, 24, 30, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(sun, cam);
+    Mge_DrawObject(objs[0]);
+    Mge_DrawObject(objs[1]);
+    Mge_EndLighting3D();
+    Mge_DrawRayHit(ray, hit, (Color){ 255, 230, 80, 255 }, (Color){ 255, 120, 40, 255 });
+    Mge_EndMode3D();
+    check("raycast");
+    Mge_EndDrawing();
+}
+
 int main(void)
 {
     Mge_SetDebugOutput(true); // loud GL errors in the log
@@ -758,6 +788,7 @@ int main(void)
     scene_rotate_gizmo((Vector3){ 0.2f, 0.3f, 6.0f }, "rot_facing_z"); // face-on -> full ring
     scene_rotate_gizmo((Vector3){ 6.0f, 0.3f, 0.2f }, "rot_facing_x");
     scene_scripted_rotate();
+    scene_raycast();
     scene_screenshot();
 
     Mge_CloseWindow();
