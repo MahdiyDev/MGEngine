@@ -14,6 +14,23 @@ TEST(clamp)
     CHECK_F(Clamp(50.0f, 0.0f, 10.0f), 10.0f);
 }
 
+TEST(lerp)
+{
+    CHECK_F(Lerp(0.0f, 10.0f, 0.0f), 0.0f);
+    CHECK_F(Lerp(0.0f, 10.0f, 1.0f), 10.0f);
+    CHECK_F(Lerp(2.0f, 4.0f, 0.5f), 3.0f);
+    CHECK_F(Lerp(0.0f, 10.0f, 1.5f), 15.0f); // unclamped
+
+    Vector2 v2 = Vector2_Lerp((Vector2){ 0, 0 }, (Vector2){ 4, 8 }, 0.25f);
+    CHECK_F(v2.x, 1.0f);
+    CHECK_F(v2.y, 2.0f);
+
+    Vector3 v3 = Vector3_Lerp((Vector3){ 1, 2, 3 }, (Vector3){ 3, 6, 9 }, 0.5f);
+    CHECK_F(v3.x, 2.0f);
+    CHECK_F(v3.y, 4.0f);
+    CHECK_F(v3.z, 6.0f);
+}
+
 TEST(vector3_arithmetic)
 {
     Vector3 a = { 1.0f, 2.0f, 3.0f };
@@ -190,6 +207,7 @@ TEST(quaternion_look_and_slerp)
 int main(void)
 {
     RUN(clamp);
+    RUN(lerp);
     RUN(vector3_arithmetic);
     RUN(vector3_cross_and_normalize);
     RUN(vector2_rotate);

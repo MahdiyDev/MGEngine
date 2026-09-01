@@ -52,7 +52,9 @@ int main(void)
     Mge_SetMSAA(4); // 4x anti-aliasing on every shape / object / model
     Mge_SetWindowResizable(true);
     Mge_InitWindow((uint32_t)prefs.winW, (uint32_t)prefs.winH, "MGEngine editor");
-    Mge_SetTargetFPS(60);
+    Mge_SetVSync(true);
+    int hz = Mge_GetMonitorRefreshRate(); // match the monitor; falls back to 60
+    Mge_SetTargetFPS(hz > 0 ? hz : 60);
 
     bool editMode = true; // start in EDIT mode (cursor free, panels clickable)
     EnableCursor();
@@ -265,6 +267,8 @@ int main(void)
 
         if (IsKeyPressed(KEY_F12) && !guiKeyboard)
             Mge_TakeScreenshot("editor_screenshot.png");
+        if (IsKeyPressed(KEY_F11) && !guiKeyboard)
+            Mge_ToggleFullscreen(); // Scene_Resize (top of loop) rebuilds the RTs next frame
 
         Mge_EndDrawing();
 

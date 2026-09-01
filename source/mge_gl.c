@@ -1063,6 +1063,8 @@ void MgeGL_SetBlend(bool enabled)
     }
 }
 
+void Mge_SetBlend(bool enabled) { MgeGL_SetBlend(enabled); }
+
 void MgeGL_SetFramebufferSRGB(bool enabled)
 {
     // GL_FRAMEBUFFER_SRGB: the GPU encodes linear -> sRGB on every write to an

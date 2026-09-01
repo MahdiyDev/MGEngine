@@ -164,6 +164,70 @@ void Mge_SetWindowSize(int width, int height)
     glfwSetWindowSize(platform.window, width, height); // -> Framebuffer_Size_Callback
 }
 
+// the windowed-mode rect, saved when we go fullscreen so it can be restored
+static struct { int x, y, w, h; bool saved; } s_windowedRect;
+static bool s_vsync = false;
+
+void Mge_SetVSync(bool enabled)
+{
+    s_vsync = enabled;
+    if (platform.window != NULL)
+        glfwSwapInterval(enabled ? 1 : 0);
+}
+
+bool Mge_IsVSyncEnabled(void) { return s_vsync; }
+
+int Mge_GetMonitorRefreshRate(void)
+{
+    GLFWmonitor* mon = platform.window ? glfwGetWindowMonitor(platform.window) : NULL;
+    if (mon == NULL)
+        mon = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = mon ? glfwGetVideoMode(mon) : NULL;
+    return (mode != NULL && mode->refreshRate > 0) ? mode->refreshRate : 0;
+}
+
+bool Mge_IsFullscreen(void)
+{
+    return platform.window != NULL && glfwGetWindowMonitor(platform.window) != NULL;
+}
+
+void Mge_ToggleFullscreen(void)
+{
+    if (platform.window == NULL)
+        return;
+
+    if (glfwGetWindowMonitor(platform.window) == NULL) {
+        glfwGetWindowPos(platform.window, &s_windowedRect.x, &s_windowedRect.y);
+        glfwGetWindowSize(platform.window, &s_windowedRect.w, &s_windowedRect.h);
+        s_windowedRect.saved = true;
+
+        GLFWmonitor* mon = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = mon ? glfwGetVideoMode(mon) : NULL;
+        if (mon == NULL || mode == NULL)
+            return;
+        glfwSetWindowMonitor(platform.window, mon, 0, 0, mode->width, mode->height, mode->refreshRate);
+    } else {
+        int x = s_windowedRect.saved ? s_windowedRect.x : 100;
+        int y = s_windowedRect.saved ? s_windowedRect.y : 100;
+        int w = (s_windowedRect.saved && s_windowedRect.w > 0) ? s_windowedRect.w : 1280;
+        int h = (s_windowedRect.saved && s_windowedRect.h > 0) ? s_windowedRect.h : 720;
+        glfwSetWindowMonitor(platform.window, NULL, x, y, w, h, 0);
+    }
+
+    glfwSwapInterval(s_vsync ? 1 : 0); // glfwSetWindowMonitor can reset the swap interval
+
+    // a non-resizable window doesn't get Framebuffer_Size_Callback -- sync now
+    int fw = 0, fh = 0;
+    glfwGetFramebufferSize(platform.window, &fw, &fh);
+    if (fw > 0 && fh > 0) {
+        CORE.Window.screen.width = (uint32_t)fw;
+        CORE.Window.screen.height = (uint32_t)fh;
+        CORE.Window.render.width = (uint32_t)fw;
+        CORE.Window.render.height = (uint32_t)fh;
+        SetupViewport((uint32_t)fw, (uint32_t)fh);
+    }
+}
+
 void Close_Platform(void)
 {
     glfwDestroyWindow(platform.window);

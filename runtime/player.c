@@ -145,7 +145,11 @@ int main(int argc, char** argv)
     Mge_SetMSAA(project.msaa);
     Mge_InitWindow((uint32_t)(project.windowW > 0 ? project.windowW : 1280),
         (uint32_t)(project.windowH > 0 ? project.windowH : 720), project.name);
-    Mge_SetTargetFPS(project.targetFps > 0 ? project.targetFps : 60);
+    // v-sync paces the loop to the display (no tearing); the FPS target below is
+    // a fallback cap, matching the monitor's refresh rate (or the project setting)
+    Mge_SetVSync(true);
+    int hz = Mge_GetMonitorRefreshRate();
+    Mge_SetTargetFPS(hz > 0 ? hz : (project.targetFps > 0 ? project.targetFps : 60));
 
     Scene scene;
     Scene_Init(&scene, project.windowW, project.windowH);
@@ -176,6 +180,9 @@ int main(int argc, char** argv)
     int shotAt = (shotAtEnv != NULL && atoi(shotAtEnv) > 0) ? atoi(shotAtEnv) : 60;
     int frame = 0;
     while (!Mge_WindowShouldClose()) {
+        if (IsKeyPressed(KEY_F11))
+            Mge_ToggleFullscreen();
+
         Camera3D view;
         if (!Scene_MainCamera(&scene, &view)) {
             EditorCamera_Update(&camera, false, false); // no main camera -> debug fly-cam

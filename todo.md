@@ -467,12 +467,30 @@ phases so the app keeps working the whole way.
       module), resolved through an `mlib/hashmap` (`DEFINE_HASHMAP_STR`) of the
       project scene list. Editor Play only logs the request (one scene at a time).
       `MGE_PLAYER_SHOT_AT` env overrides the headless screenshot frame.
-- [x] Snake game in `test project/`: 5 scenes `map1..map5`, one `snake.c` copied
-      into each folder (map-agnostic; keyed on `ctx->sceneName`), `MgeScene_Draw`
-      board / snake / food, arrow/WASD steer, Space start/restart, 5 food ->
-      `requestedScene` = next map (wraps 5->1). Interior walls are authored Wall
-      Objects read off `ctx->objects`. `MGE_SNAKE_AUTO` self-plays (smoke test).
-      Replaced the 4 placeholder scenes; `project.mgproject` startupScene = map1.
+- [x] Snake game in `test project/`: 5 scenes `map1..map5`, shared
+      `scenes/snake_game.h` (`mapN/snake.c` is a one-line include), keyed on
+      `ctx->sceneName`. `MgeScene_Draw` board / snake / food, camera-relative
+      arrow/WASD steer, Space start/restart, 5 food -> `requestedScene` = next map
+      (wraps 5->1). Interior walls are authored Wall Objects read off
+      `ctx->objects`. `MGE_SNAKE_AUTO` self-plays (smoke test). Replaced the 4
+      placeholder scenes; `project.mgproject` startupScene = map1.
+- [x] Snake polish: smooth per-segment interpolation between steps
+      (`Vector3_Lerp`), palette from colour theory (snake = floor's complementary
+      hue, walls = triadic hues, random light colour per map), random cube/sphere
+      food, eat-counter pips floating outside the rail with a soft translucent
+      glow (`Mge_SetBlend`).
+
+## Engine: Lerp, fullscreen, v-sync, blend, refresh-rate FPS   [DONE]
+
+- [x] `mge_math`: `Lerp` / `Vector2_Lerp` / `Vector3_Lerp` (`test_math.c`).
+- [x] `Mge_ToggleFullscreen` / `Mge_IsFullscreen` (borderless, remembers the
+      windowed rect, syncs the viewport itself since a non-resizable window gets
+      no framebuffer callback). Bound to **F11** in editor + player.
+- [x] `Mge_SetVSync` / `Mge_IsVSyncEnabled` (survives a fullscreen toggle);
+      `Mge_GetMonitorRefreshRate`. Editor + player enable v-sync and target the
+      monitor's Hz as a fallback cap instead of a flat 60.
+- [x] `Mge_SetBlend(bool)` -- public wrapper over `MgeGL_SetBlend` for translucent
+      immediate-mode draws (the snake glow uses it).
 
 ## Debug/Release engine builds + structured dist/   [DONE]
 

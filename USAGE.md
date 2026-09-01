@@ -531,12 +531,23 @@ while (!Mge_WindowShouldClose()) {
 
 The window is a fixed size by default. Call `Mge_SetWindowResizable(true)` **before**
 `Mge_InitWindow` to let the OS resize it (min 640x400); `Mge_SetWindowSize(w, h)`
-resizes it from code. Either way `Mge_GetScreenWidth/Height` and the GL viewport
+resizes it from code; `Mge_ToggleFullscreen()` flips borderless fullscreen on the
+primary monitor and back (`Mge_IsFullscreen()` reports it; the editor and player
+bind it to **F11**). Either way `Mge_GetScreenWidth/Height` and the GL viewport
 follow the window, so 2D layout and `Mge_BeginMode3D`'s aspect stay correct.
 Anything **you** sized to the framebuffer — a `RenderTexture` for a post-fx pass,
 a `BloomFX` — must be recreated when the size changes (`editor/main.c` compares
 the size each frame and calls `Scene_Resize`). `editor/prefs.c` shows persisting
 the window size across runs.
+
+### Frame pacing
+
+`Mge_SetTargetFPS(fps)` caps the loop (a spin/sleep limiter; 0 = uncapped).
+`Mge_SetVSync(true)` (call after `Mge_InitWindow`) syncs buffer swaps to the
+display instead — no tearing, and the setting survives a fullscreen toggle.
+`Mge_GetMonitorRefreshRate()` returns the primary monitor's Hz (0 if unknown);
+the editor and player use `Mge_SetVSync(true)` plus `Mge_SetTargetFPS(hz)` as a
+fallback cap.
 
 ### Screenshots
 
@@ -1277,6 +1288,14 @@ void Mge_EnableDepthTest(void);  void Mge_DisableDepthTest(void);
 void Mge_SetDepthFunc(int func);   // a DepthFunc: DEPTH_LESS (default) ... DEPTH_ALWAYS
 void Mge_SetDepthMask(bool write); // false -> test against depth but leave it unchanged
 ```
+
+**Translucency.** `Mge_SetBlend(true)` turns on straight alpha blending
+(`src.a` / `1-src.a`) for `Draw_*` calls with `color.a < 255`; turn it back off
+when done. Pair it with `Mge_SetDepthMask(false)` for overlapping translucent
+draws (glows, particles) so they blend instead of z-fighting. Each toggle flushes
+the batch. The snake demo's food/counter glow (`../test project/scenes/snake_game.h`)
+is a worked example — enlarged, brightened, low-alpha shells drawn after
+`Mge_EndLighting3D`.
 
 **Visualizing the depth buffer.** Draw between `Mge_BeginDepthPreview()` /
 `Mge_EndDepthPreview()` (in place of `Mge_BeginLighting3D`) to shade every

@@ -777,6 +777,12 @@ bool Mge_GetWindowResizable(void); // internal: read by the platform layer
 // same path as an OS resize -- Mge_GetScreenWidth/Height update, viewport resets.
 void Mge_SetWindowSize(int width, int height);
 
+// Toggle borderless fullscreen on the primary monitor (remembers the windowed
+// rect to restore). Mge_GetScreenWidth/Height and the viewport update either way;
+// an app with framebuffer-sized render targets must recreate them after this.
+void Mge_ToggleFullscreen(void);
+bool Mge_IsFullscreen(void);
+
 void Mge_InitWindow(uint32_t width, uint32_t height, const char* title);
 bool Mge_WindowShouldClose(void);
 void Mge_SetWindowShouldClose(bool value); // set/clear the close flag -- e.g. cancel a quit to prompt "save first?"
@@ -786,6 +792,13 @@ double Mge_GetDeltaTime(void);
 int Mge_GetFps(void);
 int Mge_GetDrawCalls(void);          // GL draw calls in the previous frame (the batcher keeps this low)
 void Mge_SetTargetFPS(int fps);
+// The primary monitor's current refresh rate in Hz, or 0 if it can't be read.
+// Valid after Mge_InitWindow. A sensible default target: Mge_SetTargetFPS(hz > 0 ? hz : 60).
+int Mge_GetMonitorRefreshRate(void);
+// Sync buffer swaps to the display (removes tearing, paces the loop). Call after
+// Mge_InitWindow; the setting survives a fullscreen toggle. Off by default.
+void Mge_SetVSync(bool enabled);
+bool Mge_IsVSyncEnabled(void);
 void Mge_BeginShaderMode(Shader shader);
 void Mge_EndShaderMode(void);
 Shader Mge_LoadShader(const char* vsFileName, const char* fsFileName);
@@ -1044,6 +1057,10 @@ void Mge_EnableDepthTest(void);
 void Mge_DisableDepthTest(void);
 void Mge_SetDepthFunc(int func);   // DepthFunc value
 void Mge_SetDepthMask(bool write); // false = test against depth but don't write it
+
+// Straight alpha blending (src.a / 1-src.a) for translucent immediate-mode draws.
+// Off by default; flushes the batch on each change. Turn back off when done.
+void Mge_SetBlend(bool enabled);
 
 // Near/far clip planes. A tiny near plane throws away most of the depth buffer's
 // precision and is the usual cause of z-fighting -- push `near` out as far as

@@ -63,8 +63,10 @@ typedef struct Matrix {
 } Matrix;
 
 float Clamp(float value, float min, float max);
+float Lerp(float a, float b, float t);            // a + (b - a) * t  (t is not clamped)
 
 Vector2 Vector2_Rotate(Vector2 v, float angle);
+Vector2 Vector2_Lerp(Vector2 a, Vector2 b, float t);
 
 Vector3 Vector3_Add(Vector3 a, Vector3 b);
 Vector3 Vector3_Subtract(Vector3 a, Vector3 b);
@@ -74,6 +76,7 @@ float   Vector3_DotProduct(Vector3 a, Vector3 b);
 float   Vector3_Length(Vector3 v);
 Vector3 Vector3Cross(Vector3 v1, Vector3 v2);
 Vector3 Vector3Normalize(Vector3 v);
+Vector3 Vector3_Lerp(Vector3 a, Vector3 b, float t); // per-component a + (b - a) * t
 
 Vector4 Vector4_Transform(Vector4 v, Matrix mat); // column-major mat * v
 // rotate `p` about `pivot` by `rot` (a Matrix_Rotate / Matrix_RotateXYZ result)

@@ -11,6 +11,16 @@ float Clamp(float value, float min, float max)
     return result;
 }
 
+float Lerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+
+Vector2 Vector2_Lerp(Vector2 a, Vector2 b, float t)
+{
+    return (Vector2){ a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t };
+}
+
 Vector2 Vector2_Rotate(Vector2 v, float angle)
 {
     Vector2 result = { 0 };
@@ -42,6 +52,11 @@ Vector3 Vector3_Scale(Vector3 v, float scalar)
 Vector3 Vector3_Multiply(Vector3 a, Vector3 b)
 {
     return (Vector3){ a.x * b.x, a.y * b.y, a.z * b.z };
+}
+
+Vector3 Vector3_Lerp(Vector3 a, Vector3 b, float t)
+{
+    return (Vector3){ a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t };
 }
 
 float Vector3_DotProduct(Vector3 a, Vector3 b)
