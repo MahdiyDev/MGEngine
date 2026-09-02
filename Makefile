@@ -27,7 +27,10 @@ MLIB   = $(VENDOR)/mlib
 
 CFLAGS   ?= -std=c11 -Wall -Wextra -g
 CXXFLAGS ?= -std=c++17 -Wall -Wextra -g
-CPPFLAGS  = -DPLATFORM_DESKTOP
+# strict -std=c11/-std=c++17 defines __STRICT_ANSI__, which hides POSIX APIs the
+# engine uses (clock_gettime, nanosleep, popen, strdup, usleep, ...). Ask glibc
+# for them explicitly; a no-op on Windows/macOS.
+CPPFLAGS  = -DPLATFORM_DESKTOP -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 
 # production build flags (see the `release` target). -O2 is the big FPS win over
 # the default -O0; NDEBUG drops assertions; the section flags + -s let the linker
@@ -42,7 +45,9 @@ INCLUDES  = -I./source \
             -I$(VENDOR)/imgui \
             -I$(MLIB) -I$(MLIB)/vec
 
-LIB_DIR   = -L$(VENDOR)/glfw/lib -L$(VENDOR)/assimp/lib
+# distros using GNUInstallDirs (Fedora, ...) install these to lib64/; keep both
+LIB_DIR   = -L$(VENDOR)/glfw/lib -L$(VENDOR)/glfw/lib64 \
+            -L$(VENDOR)/assimp/lib -L$(VENDOR)/assimp/lib64
 LINK      = g++
 
 SOURCE_DIR    = source
@@ -79,7 +84,7 @@ else
     LIB_NAME := libmgengine.so
     IMPLIB   :=
     SHAREDFLAGS := -shared
-    APP_LIBS := -L$(CONF_DIR) -lmgengine -Wl,-rpath,'$$ORIGIN'
+    APP_LIBS := -L$(CONF_DIR) -lmgengine -lm -Wl,-rpath,'$$ORIGIN'
     MKDIR = mkdir -p $1
     CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
     CPHDR = cp $1/*.h "$2"/

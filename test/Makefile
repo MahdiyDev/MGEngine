@@ -14,7 +14,8 @@ CXX ?= g++
 MLIB   := ../vendor/mlib
 ASSIMP := ../vendor/assimp
 CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
-CPPFLAGS += -DPLATFORM_DESKTOP -I../source -I$(MLIB) -I$(MLIB)/vec
+# strict -std=c11 hides POSIX APIs (S_IFDIR, readlink, strdup, ...) on glibc
+CPPFLAGS += -DPLATFORM_DESKTOP -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -I../source -I$(MLIB) -I$(MLIB)/vec
 
 TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib test_pak test_physics test_component
 
@@ -58,17 +59,17 @@ render: render_smoke$(EXE)
 
 render_smoke$(EXE): render_smoke.c $(RENDER_OBJS)
 	$(CC) $(CPPFLAGS) -I../vendor/glad/include -I../vendor/stb -I../vendor/glfw/include -I$(ASSIMP)/include $(CFLAGS) -c render_smoke.c -o render_smoke.o
-	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) render_smoke.o $(RENDER_OBJS) -L../vendor/glfw/lib -L$(ASSIMP)/lib -lglfw3 -lassimp -lzlibstatic $(RENDER_SYSLIBS)
+	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) render_smoke.o $(RENDER_OBJS) -L../vendor/glfw/lib -L../vendor/glfw/lib64 -L$(ASSIMP)/lib -L$(ASSIMP)/lib64 -lglfw3 -lassimp -lzlibstatic $(RENDER_SYSLIBS)
 	-$(RM) $(call native,render_smoke.o)
 
 test_math$(EXE): test_math.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_math.c ../source/mge_math.c -lm
 
 test_utils$(EXE): test_utils.c ../source/mge_utils.c ../source/mge_pak.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_utils.c ../source/mge_utils.c ../source/mge_pak.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_utils.c ../source/mge_utils.c ../source/mge_pak.c -lm
 
 test_pak$(EXE): test_pak.c ../source/mge_pak.c ../source/mge_pak.h $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_pak.c ../source/mge_pak.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_pak.c ../source/mge_pak.c -lm
 
 test_object$(EXE): test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c ../source/mge_physics.c ../source/mge_component.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_object.c ../source/mge_object.c ../source/mge_math.c ../source/mge_material.c ../source/mge_physics.c ../source/mge_component.c -lm
@@ -93,49 +94,49 @@ test_scene_io$(EXE): test_scene_io.c ../editor/scene_io.c ../editor/pathutil.c $
 
 # editor project.mgproject (de)serialiser + Project helpers
 test_project_io$(EXE): test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c $(IO_ENGINE) ../editor/project.h ../editor/project_io.h $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c $(IO_ENGINE)
+	$(CC) $(CPPFLAGS) -I../editor $(CFLAGS) -o $@ $(LDFLAGS) test_project_io.c ../editor/project.c ../editor/project_io.c ../editor/pathutil.c $(IO_ENGINE) -lm
 
 # dynamic library loading (mge_dylib.c) -- compiles + loads a tiny .dll/.so at runtime
 test_dylib$(EXE): test_dylib.c ../source/mge_dylib.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_dylib.c ../source/mge_dylib.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_dylib.c ../source/mge_dylib.c -lm
 
 test_material$(EXE): test_material.c ../source/mge_material.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_material.c ../source/mge_material.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_material.c ../source/mge_material.c -lm
 
 test_light$(EXE): test_light.c ../source/mge_light.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_light.c ../source/mge_light.c -lm
 
 test_mesh$(EXE): test_mesh.c ../source/mge_mesh.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_mesh.c ../source/mge_mesh.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_mesh.c ../source/mge_mesh.c -lm
 
 test_depth$(EXE): test_depth.c ../source/mge_depth.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_depth.c ../source/mge_depth.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_depth.c ../source/mge_depth.c -lm
 
 test_stencil$(EXE): test_stencil.c ../source/mge_stencil.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_stencil.c ../source/mge_stencil.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_stencil.c ../source/mge_stencil.c -lm
 
 test_cull$(EXE): test_cull.c ../source/mge_cull.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_cull.c ../source/mge_cull.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_cull.c ../source/mge_cull.c -lm
 
 test_framebuffer$(EXE): test_framebuffer.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_framebuffer.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_framebuffer.c -lm
 
 test_cubemap$(EXE): test_cubemap.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_cubemap.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_cubemap.c -lm
 
 # mge_geometry.c needs the GL_*_SHADER constants (glad header only, no linking)
 test_geometry$(EXE): test_geometry.c ../source/mge_geometry.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) -I../vendor/glad/include $(CFLAGS) -o $@ $(LDFLAGS) test_geometry.c ../source/mge_geometry.c
+	$(CC) $(CPPFLAGS) -I../vendor/glad/include $(CFLAGS) -o $@ $(LDFLAGS) test_geometry.c ../source/mge_geometry.c -lm
 
 # ModelBatch struct + CPU matrix packing; the instanced draw path is raw GL (untested here)
 test_instancing$(EXE): test_instancing.c ../source/mge_math.c $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_instancing.c ../source/mge_math.c -lm
 
 test_msaa$(EXE): test_msaa.c ../source/mge_msaa.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_msaa.c ../source/mge_msaa.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_msaa.c ../source/mge_msaa.c -lm
 
 test_gamma$(EXE): test_gamma.c ../source/mge_gamma.c $(MLIB)/test.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gamma.c ../source/mge_gamma.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(LDFLAGS) test_gamma.c ../source/mge_gamma.c -lm
 
 # ShadowMap struct only; the depth FBO + PCF shader need a live context
 test_shadow$(EXE): test_shadow.c ../source/mge_math.c $(MLIB)/test.h
@@ -154,7 +155,7 @@ test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(ASSIMP)/include -c test_model.c -o test_model_t.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(ASSIMP)/include -c ../source/mge_model.c -o test_model_m.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c ../source/mge_mesh.c -o test_model_mesh.o
-	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) test_model_t.o test_model_m.o test_model_mesh.o -L$(ASSIMP)/lib -lassimp -lzlibstatic
+	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) test_model_t.o test_model_m.o test_model_mesh.o -L$(ASSIMP)/lib -L$(ASSIMP)/lib64 -lassimp -lzlibstatic
 	-$(RM) $(call native,test_model_t.o test_model_m.o test_model_mesh.o)
 
 clean:
