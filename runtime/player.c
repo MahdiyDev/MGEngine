@@ -45,6 +45,15 @@ static void chdir_to_exe(const char* argv0)
         (void)CHDIR(dir);
 }
 
+// Scene_Draw's hook thunk: composites the running module's MgeScene_Draw into
+// the same lit/HDR pass (see the Scene_Draw doc comment in editor/scene.h).
+typedef struct { SceneRuntime* rt; MgeSceneCtx* ctx; } PlayerDrawHook;
+static void player_draw_hook(void* user)
+{
+    PlayerDrawHook* h = (PlayerDrawHook*)user;
+    SceneRuntime_Draw(h->rt, h->ctx, h->ctx->camera);
+}
+
 static MgeSceneCtx make_ctx(Scene* s, const char* sceneName)
 {
     MgeSceneCtx c = { 0 };
@@ -202,8 +211,9 @@ int main(int argc, char** argv)
             ctx.camera = view;
 
         Mge_BeginDrawing();
-        Scene_Draw(&scene, view, false, false); // no editor gizmos in the shipped game
-        SceneRuntime_Draw(&rt, &ctx, view);     // module's own geometry, on top of the scene
+        // no editor gizmos in the shipped game; the hook composites the module's
+        // own geometry into the same lit/HDR pass, so it can bloom
+        Scene_Draw(&scene, view, false, false, player_draw_hook, &(PlayerDrawHook){ &rt, &ctx });
         Mge_EndDrawing();
 
         // a scene module asked to switch scenes

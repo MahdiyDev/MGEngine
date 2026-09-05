@@ -770,7 +770,8 @@ Vector3* Scene_SelScale(Scene* s)
 // fixed -- the gizmo is a constant on-screen tool, it does not track object size
 #define GIZMO_SIZE 1.7f
 
-bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers)
+bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers,
+    void (*sceneHook)(void* user), void* hookUser)
 {
     // reflect selection into Object.selected so Mge_DrawObject outlines it
     for (int i = 0; i < s->objectCount; i++)
@@ -800,6 +801,11 @@ bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers)
         if (s->objects[i].kind != OBJECT_CAMERA)
             Mge_DrawObject(s->objects[i]);
     Mge_EndLighting3D();
+
+    // a scene module's own geometry -- still inside this Mge_BeginMode3D and (if
+    // hdrOn) the HDR target, so it can bloom. See the Scene_Draw doc comment.
+    if (sceneHook != NULL)
+        sceneHook(hookUser);
 
     // unlit editor markers, drawn after the lit pass: lamp positions + camera icons.
     // The built player passes markers=false so a game never shows its own gizmos.

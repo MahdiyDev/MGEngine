@@ -41,8 +41,9 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s);
 // change then run MgeScene_Update with `p->viewCam` as the module's camera.
 void Play_Frame(Play* p, Project* proj, Scene* s);
 
-// Run the playing module's optional MgeScene_Draw. Call inside Mge_BeginDrawing,
-// right after Scene_Draw. No-op unless playing and the module exports it.
+// Run the playing module's optional MgeScene_Draw. Pass this (wrapped in a
+// thunk -- see editor/main.c) as Scene_Draw's sceneHook so it composites into
+// the scene's own lit/HDR pass. No-op unless playing and the module exports it.
 void Play_Draw(Play* p, Scene* s, Camera3D view);
 
 // The play-mode overlay strip: Stop + Console toggle + FPS. Returns true the

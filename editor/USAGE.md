@@ -143,13 +143,16 @@ void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera);  // optional
 state. The module links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`,
 `Mge_Load*`, etc.
 
-- **`MgeScene_Draw`** (optional) runs after the scene is drawn — open your own
-  `Mge_BeginMode3D` and issue `Draw_*` calls for geometry the module owns and
+- **`MgeScene_Draw`** (optional) is composited straight into the scene's own lit
+  pass — `Mge_BeginMode3D` is already active (don't call it or `Mge_EndMode3D`
+  yourself) and, with `hdr 1`, so is the scene's HDR target, so bright draws here
+  bloom for real. Issue `Draw_*` calls (optionally wrapped in your own
+  `Mge_BeginLighting3DEx` / `Mge_EndLighting3D`) for geometry the module owns and
   that isn't an Object (game boards, actors — no `SCENE_MAX_OBJECTS` limit).
 - **`ctx->requestedScene`** — write a scene name and the game switches scenes.
   Works in the **built game** (Build Bundle → `mgeplayer`, where every scene's
   module is pre-built); in the editor's Play mode a request only logs to the
-  Console (Play runs one scene). See `../test project/scenes/map1..map5/snake.c`.
+  Console (Play runs one scene).
 
 **Editing the scripts** — the engine headers aren't in the project, so on New /
 Open / Save Project the editor writes a `compile_flags.txt` at the project root

@@ -147,4 +147,13 @@ Vector3* Scene_SelScale(Scene* s);
 // Shadow pass + lit pass + skybox + (when `markers`) the editor-only lamp / camera
 // icons + (when `interact`) the mouse-driven gizmo. The built player passes
 // markers=false. Returns true while a gizmo handle is dragged.
-bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers);
+//
+// `sceneHook` (may be NULL), if given, runs right after the lit object pass --
+// still inside the active Mge_BeginMode3D and, when hdrOn, inside the HDR render
+// target, so anything it draws is lit-pass-adjacent and participates in bloom.
+// It must NOT call Mge_BeginMode3D/Mge_EndMode3D (one is already open); it may
+// call Mge_BeginLighting3DEx/Mge_EndLighting3D around its own draws. This is how
+// a scene module's optional MgeScene_Draw gets composited in -- see
+// SceneRuntime_Draw / Play_Draw and runtime/player.c.
+bool Scene_Draw(Scene* s, Camera3D camera, bool interact, bool markers,
+    void (*sceneHook)(void* user), void* hookUser);

@@ -44,6 +44,15 @@ enum { TOPBAR_H = 46 }; // the top strip is a fixed height; the other splits mov
 
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+// Scene_Draw's hook thunk: composites the playing module's MgeScene_Draw into
+// the same lit/HDR pass (no-op when not playing -- see Play_Draw).
+typedef struct { Play* play; Scene* scene; Camera3D view; } EditorDrawHook;
+static void editor_draw_hook(void* user)
+{
+    EditorDrawHook* h = (EditorDrawHook*)user;
+    Play_Draw(h->play, h->scene, h->view);
+}
+
 int main(void)
 {
     EditorPrefs prefs;
@@ -147,8 +156,8 @@ int main(void)
 
         Mge_BeginDrawing();
 
-        bool gizmoBusy = Scene_Draw(&scene, view, interact, !playing); // no editor markers in Play
-        Play_Draw(&play, &scene, view); // the playing module's own geometry, on top of the scene
+        EditorDrawHook edh = { &play, &scene, view };
+        bool gizmoBusy = Scene_Draw(&scene, view, interact, !playing, editor_draw_hook, &edh); // no editor markers in Play
         if (gizmoBusy) {
             History_Record(&hist);
             scene.dirty = true;
