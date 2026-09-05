@@ -111,6 +111,31 @@ static void scene_shapes(void)
     Mge_EndDrawing();
 }
 
+static void scene_text(void)
+{
+    Font f = Mge_GetDefaultFont();
+    const char* ttfPath = getenv("MGE_FONT"); // optional: a .ttf to exercise stb_truetype
+    Font ttf = ttfPath ? Mge_LoadFont(ttfPath, 40) : (Font){ 0 };
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 20, 22, 30, 255 });
+    Draw_Text(f, "MGEngine text: The quick brown fox 0123456789",
+        (Vector2){ 24, 30 }, 16, (Color){ 240, 240, 245, 255 });
+    Draw_Text(f, "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", (Vector2){ 24, 60 }, 16,
+        (Color){ 120, 200, 255, 255 });
+    Draw_Text(f, "scaled 3x\nmulti-line", (Vector2){ 24, 90 }, 24, (Color){ 200, 255, 200, 255 });
+    Vector2 m = Mge_MeasureText(f, "boxed", 20);
+    Draw_Rectangle(20, 160, (int)m.x + 8, (int)m.y + 8, (Color){ 50, 50, 70, 255 });
+    Draw_Text(f, "boxed", (Vector2){ 24, 164 }, 20, (Color){ 255, 220, 120, 255 });
+    if (Mge_IsFontValid(ttf))
+        Draw_Text(ttf, "TrueType via stb_truetype", (Vector2){ 24, 210 }, 36,
+            (Color){ 255, 200, 120, 255 });
+    check("text");
+    Mge_EndDrawing();
+
+    Mge_UnloadFont(ttf);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -887,6 +912,7 @@ int main(void)
     printf("render smoke test  %dx%d  -> %s/\n", W, H, OUT_DIR);
 
     scene_shapes();
+    scene_text();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

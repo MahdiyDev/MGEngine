@@ -96,6 +96,7 @@ void glDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei 
 #define GL_TEXTURE_WRAP_S       0x2802
 #define GL_TEXTURE_WRAP_T       0x2803
 #define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
+#define GL_NEAREST              0x2600
 #define GL_LINEAR               0x2601
 #define GL_LINEAR_MIPMAP_LINEAR 0x2703
 #define GL_REPEAT               0x2901

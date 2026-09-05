@@ -242,6 +242,18 @@ typedef struct Image {
     int format;             // Data format (PixelFormat type)
 } Image;
 
+// A rasterised font: one coverage atlas (ASCII 32..126) + per-glyph metrics.
+// Draw with Draw_Text (screen space -- see mge_text.c / the "Text" USAGE section).
+typedef struct Font {
+    Texture2D atlas;       // RG8 coverage atlas (R=255, G=coverage); clamped, no mips
+    float     size;        // pixel height it was baked at (its natural size)
+    float     ascent;      // pixels from the top of a line down to the baseline, at `size`
+    float     lineAdvance; // pixels between successive baselines, at `size`
+    int       first;       // first codepoint in the atlas (32)
+    int       count;       // codepoints baked (95 -> ASCII 32..126)
+    void     *glyphs;      // internal: stbtt_packedchar[count]
+} Font;
+
 // A cube map -- six square textures addressed by a 3D direction.
 typedef struct Cubemap {
     unsigned int id;   // GL_TEXTURE_CUBE_MAP
@@ -714,12 +726,15 @@ typedef struct Object {
 // host's live object / light storage -- so a rebuild-and-reload never loses
 // state. The module links `libmgengine` dynamically and #includes <mge.h>.
 //
-// MgeScene_Draw, when present, runs each frame right after the host has drawn
-// the scene (inside Mge_BeginDrawing, scene depth buffer still bound). Use it for
-// game geometry the module owns and that isn't an editor Object -- open your own
-// Mge_BeginMode3D(camera) (+ Mge_BeginLighting3DEx if you want it lit), issue
-// Draw_Cube / Draw_Sphere / ..., then Mge_EndMode3D. The standalone player calls
-// it every frame; the editor calls it only in Play mode.
+// MgeScene_Draw, when present, runs each frame composited into the scene's own
+// lit pass -- Mge_BeginMode3D is already active (do NOT call it or
+// Mge_EndMode3D yourself) and, when the scene has HDR on, so is its HDR render
+// target, so anything bright you draw here can bloom like the rest of the
+// scene. Use it for game geometry the module owns and that isn't an editor
+// Object -- issue Draw_Cube / Draw_Sphere / ... directly, optionally wrapped in
+// your own Mge_BeginLighting3DEx / Mge_EndLighting3D if you want it lit (unlit
+// draws use flat vertex colour). The standalone player calls it every frame;
+// the editor calls it only in Play mode.
 typedef struct MgeSceneCtx {
 	Object*  objects;     // the host's object array
 	int*     objectCount; // live count; the module may grow/shrink within maxObjects
@@ -863,6 +878,23 @@ Texture2D Mge_LoadTextureFromImageEx(Image image, bool sRGB);
 Texture2D Mge_LoadTextureEx(const char *fileName, bool sRGB);
 Texture2D Mge_LoadTextureHDR(const char *fileName); // Radiance .hdr -> an RGB16F float texture (for IBL / PBR)
 void Mge_UnloadTexture(Texture2D texture); // free the GPU texture (no-op when id == 0)
+
+// Text (stb_truetype). Bakes ASCII 32..126 into one coverage atlas at
+// `pixelHeight`. `Mge_LoadFont` reads `.ttf` / `.otf` via Mge_LoadFileData
+// (pak-aware). `Mge_GetDefaultFont` is a lazily-built 8x8 bitmap font that needs
+// no file -- do not Mge_UnloadFont it.
+Font Mge_LoadFont(const char *fileName, int pixelHeight);
+Font Mge_LoadFontFromMemory(const unsigned char *ttfData, int ttfSize, int pixelHeight);
+Font Mge_GetDefaultFont(void);
+bool Mge_IsFontValid(Font font);
+void Mge_UnloadFont(Font font);
+// Draw `text` in screen space: pixel coords, top-left origin, +Y down (same as
+// Draw_Rectangle). `pos` is the top-left of the first line; '\n' starts a new
+// line; `fontSize` scales linearly from `font.size` (pass font.size for 1:1).
+// Enables alpha blending for its own draw and restores the previous state.
+void Draw_Text(Font font, const char *text, Vector2 pos, float fontSize, Color tint);
+// {max line width, total height} of `text` at `fontSize`, without drawing.
+Vector2 Mge_MeasureText(Font font, const char *text, float fontSize);
 
 // Texture wrap mode (see TextureWrap). Mge_SetTextureWrap sets both axes;
 // Mge_SetTextureWrapEx sets U (horizontal) and V (vertical) independently.

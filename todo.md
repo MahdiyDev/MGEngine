@@ -49,6 +49,7 @@
 - [x] SSAO: mge_ssao.c -- Mge_LoadSSAO (hemisphere kernel + 4x4 noise) + Mge_ComputeSSAO (occlusion + box blur, from the deferred G-buffer) + Mge_DeferredLightingAO (ambient *= AO); examples/lighting/ssao.c uses the melon (LearnOpenGL Advanced-Lighting/SSAO)
 - [x] PBR + IBL: mge_pbr.c (Cook-Torrance BRDF: GGX/Smith/Schlick, PBRMaterial albedo/normal/metallic/roughness/ao, Mge_BeginPBR3D / Mge_BeginPBR3DIBL / Mge_SetPBRMaterial) + mge_ibl.c (Mge_LoadEnvironment: equirect->cube, 32^2 irradiance, 5-mip prefilter, 512^2 BRDF LUT; Mge_DrawEnvironmentSkybox). Mge_LoadTextureHDR (stbi_loadf -> RGB16F). assets/hdr/newport_loft.hdr + assets/pbr/rusted_iron/; examples/pbr/spheres.c. (LearnOpenGL PBR/Theory + PBR/Lighting + PBR/IBL x2). Forward-only, no shadows in the PBR path.
 - [x] builder starts in EDIT mode (was VIEW/fly)
+- [x] text rendering: mge_text.c -- stb_truetype (vendored single header, in place of FreeType) bakes ASCII 32..126 into one coverage atlas (RG8, swizzled so the default batch shader alpha-blends it -- no text shader); Font + Mge_LoadFont/FromMemory + Mge_GetDefaultFont (a built-in 8x8 bitmap font, no asset) + Draw_Text / Mge_MeasureText (screen space, top-left origin, like Draw_Rectangle). examples/text/draw_text.c; test/test_text.c + the `text` render-smoke scene. (LearnOpenGL In-Practice/Text-Rendering)
 
 ---
 
@@ -444,9 +445,8 @@ phases so the app keeps working the whole way.
       render block.
 - [x] `test/test_component.c` (new), `test_physics.c` (overlap + one-step
       integration / bounce / trigger), `test_scene_io.c` (Collider + RigidBody +
-      component-less object round-trip), `render_smoke` `scene_physics`,
-      `test project/scenes/untitled` collision demo, USAGE.md "Components" +
-      "Physics: colliders & the rigid-body step", editor/USAGE.md.
+      component-less object round-trip), `render_smoke` `scene_physics`, USAGE.md
+      "Components" + "Physics: colliders & the rigid-body step", editor/USAGE.md.
 - [x] restitution fix: a static collider (Collider, no RigidBody) counted as
       `restitution 0`, killing every bounce off level geometry -- now counts as 1
       so `fminf` yields the dynamic body's bounciness. `test_physics.c`
@@ -457,28 +457,22 @@ phases so the app keeps working the whole way.
 ## Scene modules: draw hook + scene switch by name   [DONE]
 
 - [x] Optional 4th module export `MgeScene_Draw(MgeSceneCtx*, Camera3D)` --
-      resolved in `SceneRuntime_Load` (NULL when absent), run by the host after
-      `Scene_Draw` inside `Mge_BeginDrawing` (`runtime/player.c` always, editor
-      `main.c` while playing via `Play_Draw`). For game geometry the module owns
-      that isn't an Object -- dodges the `SCENE_MAX_OBJECTS` cap.
+      resolved in `SceneRuntime_Load` (NULL when absent). `Scene_Draw` takes a
+      `sceneHook(void* user)` (+ `hookUser`) run right after the lit object pass,
+      still inside the active `Mge_BeginMode3D` and (when `hdrOn`) the scene's HDR
+      target -- the module must NOT call `Mge_BeginMode3D`/`Mge_EndMode3D` itself,
+      but may wrap draws in its own `Mge_BeginLighting3DEx`/`Mge_EndLighting3D`.
+      `runtime/player.c` (`player_draw_hook`) and editor `main.c`
+      (`editor_draw_hook` -> `Play_Draw`, no-op unless playing) pass it in. For
+      game geometry the module owns that isn't an Object -- dodges the
+      `SCENE_MAX_OBJECTS` cap -- and, being composited into the HDR pass, can
+      bloom like the rest of the scene.
 - [x] `MgeSceneCtx` += `const char* sceneName` (read-only) + `char requestedScene[64]`
       (module writes a scene name -> host switches). `runtime/player.c` acts on it:
       `load_scene(idx)` helper (unload module, `Scene_Load` + textures + skybox +
       module), resolved through an `mlib/hashmap` (`DEFINE_HASHMAP_STR`) of the
       project scene list. Editor Play only logs the request (one scene at a time).
       `MGE_PLAYER_SHOT_AT` env overrides the headless screenshot frame.
-- [x] Snake game in `test project/`: 5 scenes `map1..map5`, shared
-      `scenes/snake_game.h` (`mapN/snake.c` is a one-line include), keyed on
-      `ctx->sceneName`. `MgeScene_Draw` board / snake / food, camera-relative
-      arrow/WASD steer, Space start/restart, 5 food -> `requestedScene` = next map
-      (wraps 5->1). Interior walls are authored Wall Objects read off
-      `ctx->objects`. `MGE_SNAKE_AUTO` self-plays (smoke test). Replaced the 4
-      placeholder scenes; `project.mgproject` startupScene = map1.
-- [x] Snake polish: smooth per-segment interpolation between steps
-      (`Vector3_Lerp`), palette from colour theory (snake = floor's complementary
-      hue, walls = triadic hues, random light colour per map), random cube/sphere
-      food, eat-counter pips floating outside the rail with a soft translucent
-      glow (`Mge_SetBlend`).
 
 ## Engine: Lerp, fullscreen, v-sync, blend, refresh-rate FPS   [DONE]
 
@@ -490,7 +484,7 @@ phases so the app keeps working the whole way.
       `Mge_GetMonitorRefreshRate`. Editor + player enable v-sync and target the
       monitor's Hz as a fallback cap instead of a flat 60.
 - [x] `Mge_SetBlend(bool)` -- public wrapper over `MgeGL_SetBlend` for translucent
-      immediate-mode draws (the snake glow uses it).
+      immediate-mode draws.
 
 ## Debug/Release engine builds + structured dist/   [DONE]
 

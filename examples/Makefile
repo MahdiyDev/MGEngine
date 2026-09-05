@@ -37,7 +37,7 @@ endif
 # main; the GUI/ImGui unit is only for the editor app)
 ENGINE_OBJS = $(filter-out ../build/obj/mge_gui.o,$(wildcard ../build/obj/*.o))
 
-SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c depth/*.c stencil/*.c culling/*.c framebuffer/*.c cubemap/*.c geometry/*.c instancing/*.c antialiasing/*.c batching/*.c pbr/*.c physics/*.c)
+SRC = $(wildcard shapes/*.c objects/*.c lighting/*.c materials/*.c meshes/*.c models/*.c depth/*.c stencil/*.c culling/*.c framebuffer/*.c cubemap/*.c geometry/*.c instancing/*.c antialiasing/*.c batching/*.c pbr/*.c physics/*.c text/*.c)
 BIN = $(SRC:.c=$(EXE))
 
 .PHONY: all clean

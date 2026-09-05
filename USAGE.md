@@ -20,6 +20,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_math.h mge_math.c  Vector2/3/4, Matrix, Quaternion, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
+  mge_text.c            Font + Draw_Text / Mge_MeasureText -- stb_truetype atlas + a built-in bitmap font
   mge_object.c          Object struct (Transform + components, active flag) + 3D picking
   mge_component.c       Object components (Shape / Material / Collider / RigidBody) + accessors
   mge_body.c            linear rigid-body step + box/sphere collider overlap + resolution
@@ -74,7 +75,7 @@ runtime/
   player.c             standalone project runner -- reuses the editor data layer; what Build Bundle ships
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
-  stb/                 stb_image.h
+  stb/                 stb_image.h, stb_image_write.h, stb_truetype.h (single-header, public domain)
   mlib/                MahdiyDev/mlib (containers, test harness)
   imgui/               Dear ImGui 1.90.5 source (compiled straight into the engine)
   glfw/                GLFW -- vendored source; `make vendor-glfw` builds lib/ + include/
@@ -189,7 +190,9 @@ with the C compiler and loads / calls / frees it through `Mge_LoadLibrary`;
 nearest-hit object sweep, screen→ray unprojection, box/sphere collider overlap
 and one linear rigid-body step; `test_component` covers the component array —
 add / remove / has / get, typed vs generic accessors, the seeded defaults and
-what the `Mge_Make*` constructors attach.
+what the `Mge_Make*` constructors attach; `test_text` covers the built-in font,
+glyph metrics, `Mge_MeasureText`'s cursor walk and `Draw_Text`'s batch emission
+(also against the fake glad).
 
 `test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
 `<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
@@ -248,6 +251,7 @@ int main(void)
         Draw_RectangleRec((Rectangle){ 100, 100, 120, 80 }, RED);
         Draw_TriangleLines((Vector2){ 300, 80 }, (Vector2){ 260, 200 },
                            (Vector2){ 340, 200 }, GREEN);
+        Draw_Text(Mge_GetDefaultFont(), "hello", (Vector2){ 20, 20 }, 24, WHITE);
 
         Mge_EndDrawing();
     }
@@ -561,6 +565,53 @@ form that captures an arbitrary rectangle. `editor/main.c` binds **F12** to it.
 if (IsKeyPressed(KEY_F12))
     Mge_TakeScreenshot("screenshot.png");   // next to the executable
 ```
+
+### Text (`mge_text.c`)
+
+`stb_truetype` bakes ASCII 32..126 into one coverage atlas at a chosen pixel
+height, keeping a per-glyph rect + placement offsets + advance (the
+LearnOpenGL In-Practice/Text-Rendering approach, minus FreeType). The atlas is
+uploaded so the default batch shader draws it as ordinary alpha-blended geometry
+— there is **no dedicated text shader**.
+
+```c
+typedef struct Font {
+    Texture2D atlas;      // coverage atlas (internal format)
+    float     size;       // pixel height it was baked at (its natural size)
+    float     ascent;     // px from the top of a line down to the baseline, at `size`
+    float     lineAdvance;// px between baselines, at `size`
+    int       first, count; // codepoint range (32, 95)
+    void     *glyphs;     // internal
+} Font;
+
+Font    Mge_LoadFont(const char* fileName, int pixelHeight);   // .ttf / .otf (pak-aware)
+Font    Mge_LoadFontFromMemory(const unsigned char* ttf, int ttfSize, int pixelHeight);
+Font    Mge_GetDefaultFont(void);   // a built-in 8x8 bitmap font -- needs no file; don't unload it
+bool    Mge_IsFontValid(Font font);
+void    Mge_UnloadFont(Font font);
+
+void    Draw_Text(Font font, const char* text, Vector2 pos, float fontSize, Color tint);
+Vector2 Mge_MeasureText(Font font, const char* text, float fontSize); // {max line width, total height}
+```
+
+`Draw_Text` works in the same **screen space as `Draw_Rectangle`** — pixel
+coordinates, top-left origin, +Y down. `pos` is the top-left of the first line;
+`'\n'` starts a new line; `fontSize` scales linearly from `font.size` (pass
+`font.size` for 1:1 — sharpest for the bitmap font at integer multiples). It
+enables alpha blending for its own draw and restores the previous state, and
+flushes its batch, so it composes with any 2D drawing around it.
+
+```c
+Font font = Mge_GetDefaultFont();               // or Mge_LoadFont("res/ui.ttf", 32)
+// ... in the frame, after Mge_EndMode3D (or with no 3D at all):
+Vector2 sz = Mge_MeasureText(font, label, 20);
+Draw_Rectangle(x - 4, y - 2, (int)sz.x + 8, (int)sz.y + 4, (Color){ 40, 40, 55, 255 });
+Draw_Text(font, label, (Vector2){ x, y }, 20, WHITE);
+```
+
+Demo: `examples/text/draw_text.c` (`MGE_FONT=path/to/font.ttf` for the scalable
+half). Tests: `test/test_text.c` (metrics / measure / batch emission, hermetic)
+and the `text` scene in `make render`.
 
 ### Objects & the manipulation gizmo
 
@@ -1293,9 +1344,14 @@ void Mge_SetDepthMask(bool write); // false -> test against depth but leave it u
 (`src.a` / `1-src.a`) for `Draw_*` calls with `color.a < 255`; turn it back off
 when done. Pair it with `Mge_SetDepthMask(false)` for overlapping translucent
 draws (glows, particles) so they blend instead of z-fighting. Each toggle flushes
-the batch. The snake demo's food/counter glow (`../test project/scenes/snake_game.h`)
-is a worked example — enlarged, brightened, low-alpha shells drawn after
-`Mge_EndLighting3D`.
+the batch.
+
+For a *bloom* glow instead of a translucent halo, don't fake it with alpha —
+draw the object lit, with a local copy of the scene's lights boosted
+(`ambient`/`diffuse` pushed up) so it genuinely exceeds 1.0 in the HDR target and
+the engine's real bloom pass picks it up (`scene.mgscene` needs `hdr 1` /
+`bloom 1`). See the `MgeScene_Draw` section above for the hook this composites
+through.
 
 **Visualizing the depth buffer.** Draw between `Mge_BeginDepthPreview()` /
 `Mge_EndDepthPreview()` (in place of `Mge_BeginLighting3D`) to shade every
@@ -1629,27 +1685,33 @@ and two scene-control fields:
   *logs* the request (it runs one scene at a time). Resolution is by name via an
   `mlib` hashmap (`vendor/mlib/hashmap`) of the project's scene list.
 
-**`MgeScene_Draw`**, when exported, runs each frame right after the host has drawn
-the scene, inside `Mge_BeginDrawing` (the scene depth buffer is still bound — keep
-`hdr 0` for depth-correct results). Use it for game geometry the module owns and
-that isn't an editor Object (so the `SCENE_MAX_OBJECTS` cap doesn't apply):
+**`MgeScene_Draw`**, when exported, is composited straight into the scene's own
+lit pass — `Scene_Draw` runs it right after the lit object loop, with
+`Mge_BeginMode3D` already active and, when the scene has `hdr 1`, still inside
+its HDR render target. **Do not call `Mge_BeginMode3D` / `Mge_EndMode3D`
+yourself** (one is already open); you may wrap draws in your own
+`Mge_BeginLighting3DEx` / `Mge_EndLighting3D`. Use it for game geometry the
+module owns that isn't an editor Object (so the `SCENE_MAX_OBJECTS` cap doesn't
+apply) — and because it shares the HDR pass, anything genuinely bright it draws
+blooms like the rest of the scene:
 
 ```c
 void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera) {
-    Mge_BeginMode3D(camera);
     Mge_BeginLighting3DEx(ctx->lights, *ctx->lightCount, camera);
     Draw_Cube(pos, size, color);   // ... the module's own board / actors ...
     Mge_EndLighting3D();
-    Mge_EndMode3D();
 }
 ```
 
+`Scene_Draw(s, camera, interact, markers, sceneHook, hookUser)` is how the host
+wires this in — `sceneHook` is a `void (*)(void* user)` thunk the host calls at
+that point (`runtime/player.c`'s `player_draw_hook`, the editor's
+`editor_draw_hook` → `Play_Draw`, a no-op unless a module is playing).
+
 Windows locks a loaded DLL, so copy it to a fresh name before loading (the editor
 uses `<name>_live_<n>.dll`). The editor (`editor/scene_build.c` +
-`scene_runtime.c` + `play.c`) and `runtime/player.c` are the worked examples — see
-[editor/USAGE.md](editor/USAGE.md). A full game (snake, 5 maps, one module keyed
-on `sceneName`, `requestedScene` to advance) lives in
-`../test project/scenes/map1..map5/snake.c`.
+`scene_runtime.c` + `play.c`) and `runtime/player.c` are the worked examples —
+see [editor/USAGE.md](editor/USAGE.md).
 
 ### `.pak` archives (`mge_pak.c`)
 
