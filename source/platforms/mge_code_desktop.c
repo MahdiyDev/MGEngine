@@ -31,6 +31,7 @@ static void Error_Callback(int error, const char* description);
 static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void MouseCursorPosCallback(GLFWwindow* window, double x, double y);
 static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+static void MouseScrollCallback(GLFWwindow* window, double x, double y);
 static void Framebuffer_Size_Callback(GLFWwindow* window, int w, int h);
 
 // GLFW3 Error Callback, runs on GLFW3 error
@@ -102,6 +103,7 @@ void InitPlatform(void)
     glfwSetKeyCallback(platform.window, KeyCallback);
     glfwSetCursorPosCallback(platform.window, MouseCursorPosCallback);
     glfwSetMouseButtonCallback(platform.window, MouseButtonCallback);
+    glfwSetScrollCallback(platform.window, MouseScrollCallback);
     glfwSetFramebufferSizeCallback(platform.window, Framebuffer_Size_Callback);
     if (Mge_GetWindowResizable())
         glfwSetWindowSizeLimits(platform.window, 640, 400, GLFW_DONT_CARE, GLFW_DONT_CARE);
@@ -123,6 +125,7 @@ void Poll_Input_Events(void)
     CORE.Input.Keyboard.charPressedQueueCount = 0;
 
     CORE.Input.Mouse.previousPosition = CORE.Input.Mouse.currentPosition;
+    CORE.Input.Mouse.currentWheelMove = (Vector2){ 0.0f, 0.0f }; // MouseScrollCallback refills it
 
     for (int i = 0; i < MAX_KEYBOARD_KEYS; i++) {
         CORE.Input.Keyboard.previousKeyState[i] = CORE.Input.Keyboard.currentKeyState[i];
@@ -276,6 +279,13 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
     if (button < 0 || button >= MAX_MOUSE_BUTTONS)
         return;
     CORE.Input.Mouse.currentButtonState[button] = (action == GLFW_PRESS) ? 1 : 0;
+}
+
+static void MouseScrollCallback(GLFWwindow* window, double x, double y)
+{
+    (void)window;
+    CORE.Input.Mouse.currentWheelMove.x += (float)x;
+    CORE.Input.Mouse.currentWheelMove.y += (float)y;
 }
 
 // window / framebuffer resized (only fires when the window is resizable). Fires

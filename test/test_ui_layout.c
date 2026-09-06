@@ -27,6 +27,20 @@ void Mge_UnloadTexture(Texture2D t) { (void)t; }
 int Mge_GetScreenWidth(void) { return 800; }
 int Mge_GetScreenHeight(void) { return 600; }
 
+// mouse input the GUI reads in Mge_UiNewFrame; the scroll tests drive these
+static Vector2 g_mouse = { -1.0f, -1.0f };
+static bool    g_mouseDown = false;
+static Vector2 g_wheel = { 0.0f, 0.0f };
+Vector2 GetMousePosition(void) { return g_mouse; }
+bool IsMouseButtonDown(int b) { (void)b; return g_mouseDown; }
+Vector2 GetMouseWheelMoveV(void) { return g_wheel; }
+static void input_reset(void)
+{
+    g_mouse = (Vector2){ -1.0f, -1.0f };
+    g_mouseDown = false;
+    g_wheel = (Vector2){ 0.0f, 0.0f };
+}
+
 static void render(MgeUiWidget root, float w, float h)
 {
     Mge_UiViewport(w, h);
@@ -511,6 +525,166 @@ TEST(visibility_maintain_keeps_the_size)
     Mge_UiDestroy(root);
 }
 
+// ---- Phase 2: scrolling & clipping ----
+
+// a ScrollView of `n` fixed rows in a fixed-size box; returns the root, fills
+// `*sv` with the scroll node and `*content` with the inner column.
+static MgeUiWidget scroll_tree(int n, float rowH, float boxW, float boxH,
+    MgeUiWidget* sv, MgeUiWidget* content)
+{
+    input_reset();
+    MgeUiWidget s = Mge_UiScrollView(MGE_AXIS_VERTICAL, (MgeScrollStyle){ 0 });
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .mainSize = MGE_MAIN_SIZE_MIN });
+    for (int i = 0; i < n; i++)
+        Mge_UiAddChild(col, fixed(80, rowH));
+    Mge_UiAddChild(s, col);
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = boxW, .height = boxH });
+    Mge_UiAddChild(box, s);
+    MgeUiWidget root = wrap(box, 800, 600);
+    if (sv) *sv = s;
+    if (content) *content = col;
+    return root;
+}
+
+TEST(scrollview_keeps_the_viewport_size_and_reports_scroll_max)
+{
+    MgeUiWidget sv, col;
+    MgeUiWidget root = scroll_tree(10, 40.0f, 100.0f, 150.0f, &sv, &col); // 400 tall content
+    CHECK_F(Mge_UiGetRect(sv).height, 150.0f);   // clamped to the viewport
+    CHECK_F(Mge_UiGetRect(col).height, 400.0f);  // full content laid out
+    CHECK_F(Mge_UiScrollMax(sv), 250.0f);        // 400 - 150
+    CHECK_F(Mge_UiScrollOffset(sv), 0.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(scroll_to_shifts_content_and_clamps)
+{
+    MgeUiWidget sv, col;
+    MgeUiWidget root = scroll_tree(10, 40.0f, 100.0f, 150.0f, &sv, &col);
+
+    Mge_UiScrollTo(sv, 100.0f);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 100.0f);
+    CHECK_F(Mge_UiGetRect(col).y, Mge_UiGetRect(sv).y - 100.0f); // content pulled up
+
+    Mge_UiScrollTo(sv, 1.0e9f);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 250.0f); // clamped to ScrollMax
+    Mge_UiDestroy(root);
+}
+
+TEST(scroll_to_edge_hits_both_ends)
+{
+    MgeUiWidget sv, col;
+    MgeUiWidget root = scroll_tree(10, 40.0f, 100.0f, 150.0f, &sv, &col);
+    Mge_UiScrollToEdge(sv, true);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 250.0f);
+    Mge_UiScrollToEdge(sv, false);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 0.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(bounded_content_shorter_than_viewport_never_scrolls)
+{
+    MgeUiWidget sv, col;
+    MgeUiWidget root = scroll_tree(1, 30.0f, 100.0f, 200.0f, &sv, &col); // 30 tall content
+    CHECK_F(Mge_UiScrollMax(sv), 0.0f);
+    Mge_UiScrollTo(sv, 50.0f);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 0.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(listview_routes_items_into_its_inner_flex)
+{
+    input_reset();
+    MgeUiWidget lv = Mge_UiListView(MGE_AXIS_VERTICAL, (MgeScrollStyle){ 0 });
+    Mge_UiAddChild(lv, fixed(50, 25));
+    Mge_UiAddChild(lv, fixed(50, 25));
+    Mge_UiAddChild(lv, fixed(50, 25));
+    CHECK(Mge_UiChildCount(lv) == 1); // just the internal flex
+    MgeUiWidget inner = Mge_UiChildAt(lv, 0);
+    CHECK(Mge_UiChildCount(inner) == 3);
+
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 80, .height = 40 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600);
+    CHECK_F(Mge_UiScrollMax(lv), 35.0f); // 75 content - 40 view
+    Mge_UiDestroy(root);
+}
+
+TEST(scroll_to_child_brings_a_far_row_into_view)
+{
+    input_reset();
+    MgeUiWidget lv = Mge_UiListView(MGE_AXIS_VERTICAL, (MgeScrollStyle){ 0 });
+    MgeUiWidget rows[40];
+    for (int i = 0; i < 40; i++) {
+        rows[i] = fixed(80, 20);
+        Mge_UiAddChild(lv, rows[i]);
+    }
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 100, .height = 100 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600);
+    CHECK_F(Mge_UiScrollMax(lv), 700.0f); // 800 content - 100 view
+
+    Mge_UiScrollToChild(lv, rows[30]);
+    render(root, 800, 600);
+    float rel = Mge_UiGetRect(rows[30]).y - Mge_UiGetRect(lv).y;
+    CHECK(rel >= -0.1f && rel + 20.0f <= 100.0f + 0.1f); // fully visible
+    Mge_UiDestroy(root);
+}
+
+TEST(clip_rect_lays_out_passthrough)
+{
+    input_reset();
+    MgeUiWidget cr = Mge_UiClipRect();
+    Mge_UiAddChild(cr, fixed(120, 45));
+    MgeUiWidget root = wrap(cr, 800, 600);
+    CHECK_F(Mge_UiGetRect(cr).width, 120.0f);
+    CHECK_F(Mge_UiGetRect(cr).height, 45.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(wheel_over_a_scroll_view_scrolls_it_and_captures_the_pointer)
+{
+    MgeUiWidget sv, col;
+    MgeUiWidget root = scroll_tree(10, 40.0f, 100.0f, 150.0f, &sv, &col);
+
+    g_mouse = (Vector2){ 10.0f, 10.0f }; // inside the box (top-left aligned root)
+    g_wheel = (Vector2){ 0.0f, -1.0f };  // one notch toward the content end
+    render(root, 800, 600);
+    CHECK(Mge_UiWantsPointer());
+    float off = Mge_UiScrollOffset(sv);
+    CHECK(off > 0.0f && off <= 60.0f);
+
+    g_wheel = (Vector2){ 0.0f, 0.0f };
+    g_mouse = (Vector2){ 400.0f, 400.0f }; // outside
+    render(root, 800, 600);
+    CHECK(!Mge_UiWantsPointer());
+    Mge_UiDestroy(root);
+}
+
+TEST(click_drag_scrolls_the_content)
+{
+    MgeUiWidget sv, col;
+    MgeUiWidget root = scroll_tree(10, 40.0f, 100.0f, 150.0f, &sv, &col);
+
+    g_mouse = (Vector2){ 10.0f, 20.0f };
+    g_mouseDown = true; // press
+    render(root, 800, 600);
+
+    g_mouse = (Vector2){ 10.0f, 5.0f }; // dragged up 15 px
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 15.0f);
+
+    g_mouseDown = false; // release
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(sv), 15.0f); // no fling; stays put
+    Mge_UiDestroy(root);
+}
+
 int main(void)
 {
     MgeGL_Init(800, 600); // the batcher the paint pass feeds
@@ -544,5 +718,15 @@ int main(void)
     RUN(unconstrained_and_limited_box);
     RUN(indexed_stack_lays_out_all_but_paints_one);
     RUN(visibility_maintain_keeps_the_size);
+
+    RUN(scrollview_keeps_the_viewport_size_and_reports_scroll_max);
+    RUN(scroll_to_shifts_content_and_clamps);
+    RUN(scroll_to_edge_hits_both_ends);
+    RUN(bounded_content_shorter_than_viewport_never_scrolls);
+    RUN(listview_routes_items_into_its_inner_flex);
+    RUN(scroll_to_child_brings_a_far_row_into_view);
+    RUN(clip_rect_lays_out_passthrough);
+    RUN(wheel_over_a_scroll_view_scrolls_it_and_captures_the_pointer);
+    RUN(click_drag_scrolls_the_content);
     return test_summary();
 }

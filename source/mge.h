@@ -395,6 +395,7 @@ typedef struct CoreData {
 			Vector2 previousPosition;
 			Vector2 offset;
 			Vector2 scale;
+			Vector2 currentWheelMove; // accumulated scroll for this frame (zeroed each poll)
 			bool cursorHidden;
 			char currentButtonState[MAX_MOUSE_BUTTONS];
 			char previousButtonState[MAX_MOUSE_BUTTONS];
@@ -855,6 +856,8 @@ float GetMouseX(void);
 float GetMouseY(void);
 Vector2 GetMousePosition(void);
 Vector2 GetMouseDelta(void);
+float GetMouseWheelMove(void);   // this frame's scroll on the dominant axis (+ = up / away)
+Vector2 GetMouseWheelMoveV(void); // both axes
 void SetMousePosition(int x, int y);
 
 // Fake the mouse (for headless tests / scripted drags). Each call is one frame,

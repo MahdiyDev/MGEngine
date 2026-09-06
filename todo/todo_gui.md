@@ -135,28 +135,65 @@ Each is a self-contained sub-algorithm. `test/test_ui_layout.c` (+8 cases),
       layout bounds is an anti-pattern). `MgeVerticalDirection` -- not planned
       (add children in reverse order instead).
 
-## Phase 2 -- scrolling & viewports
+## Phase 2 -- scrolling & viewports   [CORE LANDED]
 
-- [ ] `MgeScrollController` + `Mge_ScrollController(void)` /
-      `Mge_ScrollTo(ctl, float px, float durationSec, MgeCurve)` /
-      `Mge_ScrollOffset(ctl)` / `Mge_ScrollExtent(ctl)` /
-      `Mge_ScrollAnimateToEdge`.
-- [ ] `Mge_GuiSingleChildScrollView(parent, MgeAxis, MgeScrollController)`.
-- [ ] `Mge_GuiListView(parent, MgeAxis, MgeScrollController)` (children = items) /
-      `Mge_GuiListViewBuilder(parent, int count, MgeUiWidget (*item)(int i,
+Landed: engine mouse-wheel (`GetMouseWheelMove` / `GetMouseWheelMoveV`,
+`CoreData.Input.Mouse.currentWheelMove` + a GLFW scroll callback), the core
+scroll views, rect clipping, a real `Mge_UiWantsPointer`. `test/test_ui_layout.c`
+(+9 cases, 114 checks), `render_smoke` `ui_scroll` scene, `examples/ui/menu.c`
+scrolling options list. Deferred work moved to Phase 2b below.
+
+- [x] Engine: `float GetMouseWheelMove(void)` (dominant axis, raylib sign) /
+      `Vector2 GetMouseWheelMoveV(void)`. Accumulated per frame, zeroed each poll.
+- [x] `Mge_UiScrollView(MgeAxis axis, MgeScrollStyle)` -- one child, free to grow
+      on `axis`; needs a bounded viewport on that axis (else falls back to
+      passthrough). `MgeScrollStyle { bool noScrollbar; float scrollbarThickness;
+      Color trackColor, thumbColor; }` (all-zero = thumb shown, 6 px, subtle grey).
+- [x] `Mge_UiListView(MgeAxis axis, MgeScrollStyle)` -- a scroll view whose sole
+      child is an internal Flex (`mainSize` MIN, cross STRETCH) on the same axis;
+      `Mge_UiAddChild(listView, item)` routes items into it.
+- [x] Input: mouse wheel while the cursor is over the view, click-drag on the
+      content, and a draggable scrollbar thumb (track + rounded thumb sized
+      `view/content` of the track). `Mge_UiWantsPointer()` true while hovered or
+      dragging. Hit-test walks the tree respecting visibility / IndexedStack /
+      scroll & clip bounds.
+- [x] Clipping: `Mge_UiClipRect()` + a 16-deep scissor stack in the paint pass
+      (`MgeGL_EnableScissor` intersect-and-push, disable on unwind). `NODE_SCROLL`
+      and `NODE_CLIPRECT` clip their children; the thumb paints outside the clip.
+- [x] Scroll query / control: `Mge_UiScrollOffset` / `Mge_UiScrollMax` /
+      `Mge_UiScrollTo(px)` / `Mge_UiScrollToEdge(bool end)` /
+      `Mge_UiScrollToChild(target)` -- all instant, clamped, on the scroll handle
+      directly (no separate controller). `…ToChild` uses last frame's rects.
+
+## Phase 2b -- deferred scrolling work
+
+- [ ] `MgeScrollController` (separate handle) + `Mge_ScrollController(void)` /
+      `Mge_ScrollOffset(ctl)` / `Mge_ScrollExtent(ctl)`. **Deferred:** the scroll
+      view is its own controller for now; a shared handle only earns its keep
+      with `NestedScrollView` (below), which needs it to link an outer + inner
+      scrollable.
+- [ ] `Mge_UiListViewBuilder(parent, int count, MgeUiWidget (*item)(int i,
       void*), void* user)` (virtualized -- only visible items built) /
-      `Mge_GuiListSeparated`.
-- [ ] `Mge_GuiGridView(parent, int crossAxisCount, float mainSpacing, float
-      crossSpacing, float childAspect, MgeScrollController)` /
-      `Mge_GuiGridViewBuilder`.
-- [ ] `Mge_GuiScrollbar(parent, MgeScrollController)` (auto-hide, drag thumb).
-- [ ] `Mge_GuiClipRect(parent)` / `Mge_GuiClipRRect(parent, MgeBorderRadius)` /
-      `Mge_GuiClipOval(parent)` / `Mge_GuiClipPath(parent, MgePath)`.
-- [ ] `MgeScrollPhysics` (clamping / bouncing) + overscroll glow;
-      `Mge_GuiScrollConfiguration(parent, MgeScrollPhysics)`.
-- [ ] `Mge_GuiNestedScrollView` / `Mge_GuiScrollNotification` hook /
-      `Mge_GuiScrollToWidget(MgeUiWidget target)`.
-- [ ] `Mge_GuiSafeArea(parent)` (applies `MgeMediaQuery` view insets).
+      `Mge_UiGridViewBuilder` / `Mge_UiLayoutBuilder`. **Deferred:** all three
+      build a subtree *during* the layout pass; needs the re-entrancy audit
+      tracked in Phase 1b (a `build` callback that reallocs the node pool
+      mid-`layout_*`). The non-virtual list handles hundreds of rows fine.
+- [ ] Non-virtual `Mge_UiGridView(crossAxisCount, mainSpacing, crossSpacing,
+      childAspect)`. **Deferred:** straightforward once `Wrap` + scroll compose;
+      just not needed yet.
+- [ ] `MgeScrollPhysics` (clamping / bouncing) + overscroll glow + fling
+      momentum. **Deferred:** needs a per-frame velocity integrator; the current
+      drag is a hard clamp, which is fine for menus / panels.
+- [ ] Animated `Mge_UiScrollTo(px, durationSec, MgeCurve)` /
+      `Mge_ScrollAnimateToEdge`. **Deferred to Phase 6** (the animation /
+      transition system) -- `Mge_UiNewFrame` already carries `dt` for it.
+- [ ] `Mge_UiClipRRect(MgeBorderRadius)` / `Mge_UiClipOval` / `Mge_UiClipPath`.
+      **Deferred:** rectangular scissor can't do these -- needs a stencil pass or
+      SDF/path clip, a renderer feature of its own.
+- [ ] `Mge_UiNestedScrollView` / `Mge_UiScrollNotification` hook. **Deferred:**
+      depends on `MgeScrollController` and the Phase 3 event model.
+- [ ] `Mge_UiSafeArea(parent)` (applies `MgeMediaQuery` view insets).
+      **Deferred to Phase 7** (MediaQuery).
 
 ## Phase 3 -- input & interactive widgets
 

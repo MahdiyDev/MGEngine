@@ -429,6 +429,17 @@ Vector2 GetMouseDelta(void)
     return d;
 }
 
+Vector2 GetMouseWheelMoveV(void)
+{
+    return CORE.Input.Mouse.currentWheelMove;
+}
+
+float GetMouseWheelMove(void)
+{
+    Vector2 w = CORE.Input.Mouse.currentWheelMove;
+    return (fabsf(w.x) > fabsf(w.y)) ? w.x : w.y;
+}
+
 bool IsMouseButtonPressed(int button)
 {
     if (s_mouseOvr && button == MOUSE_BUTTON_LEFT)

@@ -311,6 +311,25 @@ MgeUiWidget Mge_UiLimitedBox(float maxW, float maxH);   // caps only an axis tha
 MgeUiWidget Mge_UiIndexedStack(int index);              // a Stack that paints only child `index`
 void        Mge_UiSetStackIndex(MgeUiWidget w, int index);
 
+// --- scrolling & clipping (Phase 2) ---
+
+typedef struct MgeScrollStyle {
+    bool  noScrollbar;         // hide the thumb (default: shown)
+    float scrollbarThickness;  // 0 => 6 px
+    Color trackColor;          // a == 0 => transparent
+    Color thumbColor;          // a == 0 => subtle grey
+} MgeScrollStyle;
+
+MgeUiWidget Mge_UiScrollView(MgeAxis axis, MgeScrollStyle style); // single child, scrolls on `axis`
+MgeUiWidget Mge_UiListView(MgeAxis axis, MgeScrollStyle style);   // scroll + an internal Row/Column
+MgeUiWidget Mge_UiClipRect(void);                                 // single child, clipped to this rect
+
+float Mge_UiScrollOffset(MgeUiWidget scrollView);
+float Mge_UiScrollMax(MgeUiWidget scrollView);                    // contentExtent - viewExtent, >= 0
+void  Mge_UiScrollTo(MgeUiWidget scrollView, float px);           // instant; clamped
+void  Mge_UiScrollToEdge(MgeUiWidget scrollView, bool end);       // 0 or max
+void  Mge_UiScrollToChild(MgeUiWidget scrollView, MgeUiWidget target); // bring it into view
+
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);
 void Mge_UiSetVisible(MgeUiWidget w, bool visible);      // on an Mge_UiVisibility node

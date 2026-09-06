@@ -27,6 +27,8 @@ enum {
     NODE_FRACTIONAL,
     NODE_UNCONSTRAINED,
     NODE_LIMITED,
+    NODE_SCROLL,
+    NODE_CLIPRECT,
 };
 
 #define MGE_UI_TABLE_MAX_COLS 16
@@ -77,8 +79,19 @@ typedef struct Node {
         struct {
             float maxW, maxH;
         } limited;
+        struct {
+            MgeAxis        axis;
+            MgeScrollStyle style;
+            float          offset;        // scroll position on `axis`, px
+            float          contentExtent; // child size on `axis`
+            float          viewExtent;    // viewport size on `axis`
+            int32_t        innerFlex;     // Mge_UiListView: the flex children route into; else -1
+        } scroll;
     } v;
 } Node;
+
+#define MGE_UI_WHEEL_STEP 42.0f
+#define MGE_UI_CLIP_MAX   16
 
 static struct {
     bool     booted;
@@ -89,6 +102,20 @@ static struct {
     int32_t  root;     // -1 = none
     float    vpW, vpH; // 0 = use the screen size
     bool     dirty;
+
+    // input (read by Mge_UiNewFrame, consumed by Mge_UiRender's input_update)
+    Vector2  mouse, mousePrev;
+    float    wheel;
+    bool     mouseDown, mousePrevDown;
+    int32_t  pointerNode;    // deepest node under the cursor, or -1
+    int32_t  activeScroll;   // scroll view being drag-scrolled, or -1
+    bool     draggingThumb;  // the active scroll's drag is on its scrollbar thumb
+    float    dragAnchorMouse, dragAnchorOffset;
+    bool     pointerOverScroll;
+
+    // paint-time scissor stack
+    Rectangle clipStack[MGE_UI_CLIP_MAX];
+    int       clipTop;
 } S;
 
 // ---- helpers ----------------------------------------------------------
@@ -123,6 +150,8 @@ static void ensure_boot(void)
     S.vpW = S.vpH = 0.0f;
     S.dirty = true;
     S.booted = true;
+    S.pointerNode = -1;
+    S.activeScroll = -1;
 }
 
 static int32_t alloc_node(uint8_t type)
@@ -223,6 +252,9 @@ void Mge_UiAddChild(MgeUiWidget parent, MgeUiWidget child)
 {
     int32_t p = h_index(parent), c = h_index(child);
     if (p < 0 || c < 0 || p == c) return;
+    // Mge_UiListView: items route into the internal flex, not the scroll node
+    if (S.nodes[p].type == NODE_SCROLL && S.nodes[p].v.scroll.innerFlex >= 0)
+        p = S.nodes[p].v.scroll.innerFlex;
     detach(c);
     // append to the end of parent's child list
     Node* pn = &S.nodes[p];
@@ -528,6 +560,95 @@ MgeUiWidget Mge_UiLimitedBox(float maxW, float maxH)
     return h_make(i);
 }
 
+// ---- scrolling & clipping (Phase 2) --------------------------------
+
+MgeUiWidget Mge_UiScrollView(MgeAxis axis, MgeScrollStyle style)
+{
+    int32_t i = alloc_node(NODE_SCROLL);
+    S.nodes[i].v.scroll.axis = axis;
+    S.nodes[i].v.scroll.style = style;
+    S.nodes[i].v.scroll.innerFlex = -1;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiListView(MgeAxis axis, MgeScrollStyle style)
+{
+    MgeUiWidget sv = Mge_UiScrollView(axis, style);
+    int32_t si = h_index(sv);
+    // an internal flex the ScrollView scrolls; Mge_UiAddChild(listView, ...) redirects here
+    MgeUiWidget flex = Mge_UiFlex(axis, (MgeFlexStyle){
+        .mainSize = MGE_MAIN_SIZE_MIN, .crossAxis = MGE_CROSS_STRETCH });
+    S.nodes[si].firstChild = h_index(flex);
+    S.nodes[h_index(flex)].parent = si;
+    S.nodes[si].v.scroll.innerFlex = h_index(flex);
+    return sv;
+}
+
+MgeUiWidget Mge_UiClipRect(void)
+{
+    int32_t i = alloc_node(NODE_CLIPRECT);
+    S.dirty = true;
+    return h_make(i);
+}
+
+static int32_t scroll_index(MgeUiWidget w)
+{
+    int32_t i = h_index(w);
+    return (i >= 0 && S.nodes[i].type == NODE_SCROLL) ? i : -1;
+}
+
+static float scroll_max_i(int32_t i)
+{
+    return fmaxf(0.0f, S.nodes[i].v.scroll.contentExtent - S.nodes[i].v.scroll.viewExtent);
+}
+
+float Mge_UiScrollOffset(MgeUiWidget w)
+{
+    int32_t i = scroll_index(w);
+    return i >= 0 ? S.nodes[i].v.scroll.offset : 0.0f;
+}
+
+float Mge_UiScrollMax(MgeUiWidget w)
+{
+    int32_t i = scroll_index(w);
+    return i >= 0 ? scroll_max_i(i) : 0.0f;
+}
+
+void Mge_UiScrollTo(MgeUiWidget w, float px)
+{
+    int32_t i = scroll_index(w);
+    if (i < 0) return;
+    S.nodes[i].v.scroll.offset = clampf(px, 0.0f, scroll_max_i(i));
+    S.dirty = true;
+}
+
+void Mge_UiScrollToEdge(MgeUiWidget w, bool end)
+{
+    int32_t i = scroll_index(w);
+    if (i < 0) return;
+    S.nodes[i].v.scroll.offset = end ? scroll_max_i(i) : 0.0f;
+    S.dirty = true;
+}
+
+void Mge_UiScrollToChild(MgeUiWidget w, MgeUiWidget target)
+{
+    int32_t i = scroll_index(w), t = h_index(target);
+    if (i < 0 || t < 0) return;
+    const bool horiz = (S.nodes[i].v.scroll.axis == MGE_AXIS_HORIZONTAL);
+    // target rect is absolute after a render; scroll view rect too
+    float tPos = (horiz ? S.nodes[t].rect.x : S.nodes[t].rect.y);
+    float tExt = (horiz ? S.nodes[t].rect.width : S.nodes[t].rect.height);
+    float vPos = (horiz ? S.nodes[i].rect.x : S.nodes[i].rect.y);
+    float view = S.nodes[i].v.scroll.viewExtent;
+    float rel = (tPos - vPos) + S.nodes[i].v.scroll.offset; // position within content
+    float off = S.nodes[i].v.scroll.offset;
+    if (rel < off) off = rel;
+    else if (rel + tExt > off + view) off = rel + tExt - view;
+    S.nodes[i].v.scroll.offset = clampf(off, 0.0f, scroll_max_i(i));
+    S.dirty = true;
+}
+
 Rectangle Mge_UiGetRect(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -540,6 +661,12 @@ void Mge_UiNewFrame(float dt)
 {
     (void)dt; // animation lands in a later phase
     ensure_boot();
+
+    S.mousePrev = S.mouse;
+    S.mousePrevDown = S.mouseDown;
+    S.mouse = GetMousePosition();
+    S.wheel = GetMouseWheelMoveV().y;
+    S.mouseDown = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 }
 
 void Mge_UiSetRoot(MgeUiWidget root)
@@ -556,8 +683,8 @@ void Mge_UiViewport(float w, float h)
     S.dirty = true;
 }
 
-bool Mge_UiWantsPointer(void)  { return false; } // no interactive widgets yet
-bool Mge_UiWantsKeyboard(void) { return false; }
+bool Mge_UiWantsPointer(void)  { return S.pointerOverScroll || S.activeScroll >= 0; }
+bool Mge_UiWantsKeyboard(void) { return false; } // Phase 3
 
 void Mge_UiShutdown(void)
 {
@@ -1021,6 +1148,45 @@ static MgeUiSize layout_unconstrained(int32_t i, MgeUiConstraints c)
     return (MgeUiSize){ w, h };
 }
 
+// ScrollView: lay the child out with the scroll axis unbounded, keep the
+// viewport size, offset the child by -scroll on that axis.
+static MgeUiSize layout_scroll(int32_t i, MgeUiConstraints c)
+{
+    const bool horiz = (S.nodes[i].v.scroll.axis == MGE_AXIS_HORIZONTAL);
+    const float viewMain = horiz ? c.maxW : c.maxH;
+    if (viewMain >= MGE_UI_INF) { // no bounded viewport -> can't scroll
+        S.nodes[i].v.scroll.contentExtent = 0.0f;
+        S.nodes[i].v.scroll.viewExtent = 0.0f;
+        return layout_passthrough(i, c);
+    }
+    const float crossMax = horiz ? c.maxH : c.maxW;
+    MgeUiConstraints cc = horiz
+        ? (MgeUiConstraints){ 0.0f, MGE_UI_INF, 0.0f, crossMax }
+        : (MgeUiConstraints){ 0.0f, crossMax, 0.0f, MGE_UI_INF };
+
+    float content = 0.0f, childCross = 0.0f;
+    int32_t child = S.nodes[i].firstChild;
+    if (child >= 0) {
+        MgeUiSize s = layout_node(child, cc);
+        content = horiz ? s.w : s.h;
+        childCross = horiz ? s.h : s.w;
+    }
+    S.nodes[i].v.scroll.contentExtent = content;
+    S.nodes[i].v.scroll.viewExtent = viewMain;
+    S.nodes[i].v.scroll.offset = clampf(S.nodes[i].v.scroll.offset, 0.0f, fmaxf(0.0f, content - viewMain));
+
+    if (child >= 0) {
+        S.nodes[child].rect.x = horiz ? -S.nodes[i].v.scroll.offset : 0.0f;
+        S.nodes[child].rect.y = horiz ? 0.0f : -S.nodes[i].v.scroll.offset;
+    }
+
+    float w = horiz ? viewMain : clampf(childCross, c.minW, c.maxW);
+    float h = horiz ? clampf(childCross, c.minH, c.maxH) : viewMain;
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
 static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
 {
     switch (S.nodes[i].type) {
@@ -1034,6 +1200,7 @@ static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
     case NODE_ASPECT:    return layout_aspect(i, c);
     case NODE_FRACTIONAL: return layout_fractional(i, c);
     case NODE_UNCONSTRAINED: return layout_unconstrained(i, c);
+    case NODE_SCROLL:    return layout_scroll(i, c);
     case NODE_LIMITED:
         if (c.maxW >= MGE_UI_INF) c.maxW = S.nodes[i].v.limited.maxW;
         if (c.maxH >= MGE_UI_INF) c.maxH = S.nodes[i].v.limited.maxH;
@@ -1041,6 +1208,7 @@ static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
     case NODE_FLEXIBLE:  return layout_passthrough(i, c);
     case NODE_POSITIONED: return layout_passthrough(i, c);
     case NODE_TABLE_ROW: return layout_passthrough(i, c);
+    case NODE_CLIPRECT:  return layout_passthrough(i, c);
     case NODE_VISIBILITY:
         if (!S.nodes[i].v.visibility.visible && !S.nodes[i].v.visibility.maintainSize) {
             S.nodes[i].rect = (Rectangle){ 0, 0, 0, 0 };
@@ -1058,6 +1226,185 @@ static void place_node(int32_t i, float absX, float absY)
     S.nodes[i].rect.y = absY;
     for (int32_t c = S.nodes[i].firstChild; c >= 0; c = S.nodes[c].nextSibling)
         place_node(c, absX + S.nodes[c].rect.x, absY + S.nodes[c].rect.y);
+}
+
+// ---- input --------------------------------------------------------
+
+static bool rect_contains(Rectangle r, Vector2 p)
+{
+    return p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height;
+}
+
+// deepest node whose absolute rect contains p; later siblings win (painted on
+// top). Mirrors paint_node's skip rules and clips at scroll / clip boundaries.
+static int32_t hit_test(int32_t i, Vector2 p)
+{
+    Node* n = &S.nodes[i];
+
+    if (n->type == NODE_VISIBILITY && !n->v.visibility.visible)
+        return -1;
+    if ((n->type == NODE_SCROLL || n->type == NODE_CLIPRECT) && !rect_contains(n->rect, p))
+        return -1;
+
+    if (n->type == NODE_STACK && n->v.stack.index >= 0) {
+        int32_t c = n->firstChild;
+        for (int k = 0; k < n->v.stack.index && c >= 0; k++)
+            c = S.nodes[c].nextSibling;
+        int32_t hit = (c >= 0) ? hit_test(c, p) : -1;
+        if (hit >= 0) return hit;
+        return rect_contains(n->rect, p) ? i : -1;
+    }
+
+    int32_t best = -1;
+    for (int32_t c = n->firstChild; c >= 0; c = S.nodes[c].nextSibling) {
+        int32_t hit = hit_test(c, p);
+        if (hit >= 0) best = hit;
+    }
+    if (best >= 0) return best;
+    return rect_contains(n->rect, p) ? i : -1;
+}
+
+static int32_t nearest_scroll(int32_t i)
+{
+    while (i >= 0 && S.nodes[i].type != NODE_SCROLL)
+        i = S.nodes[i].parent;
+    return i;
+}
+
+static float scroll_axis_mouse(int32_t sc)
+{
+    return (S.nodes[sc].v.scroll.axis == MGE_AXIS_HORIZONTAL) ? S.mouse.x : S.mouse.y;
+}
+
+// scrollbar thumb rect in screen coords; false when the view doesn't overflow
+// or the style hides the bar.
+static bool scrollbar_thumb_rect(int32_t sc, Rectangle* out)
+{
+    Node* n = &S.nodes[sc];
+    float maxOff = scroll_max_i(sc);
+    if (n->v.scroll.style.noScrollbar || maxOff <= 0.0f)
+        return false;
+
+    const bool horiz = (n->v.scroll.axis == MGE_AXIS_HORIZONTAL);
+    float thick = n->v.scroll.style.scrollbarThickness > 0.0f
+        ? n->v.scroll.style.scrollbarThickness
+        : 6.0f;
+    Rectangle r = n->rect;
+    float view = n->v.scroll.viewExtent;
+    float content = fmaxf(n->v.scroll.contentExtent, 1.0f);
+    float trackLen = horiz ? r.width : r.height;
+    float thumbLen = clampf(trackLen * (view / content), 24.0f, trackLen);
+    float thumbPos = (n->v.scroll.offset / maxOff) * (trackLen - thumbLen);
+
+    if (horiz)
+        *out = (Rectangle){ r.x + thumbPos, r.y + r.height - thick, thumbLen, thick };
+    else
+        *out = (Rectangle){ r.x + r.width - thick, r.y + thumbPos, thick, thumbLen };
+    return true;
+}
+
+static void scroll_by(int32_t sc, float delta)
+{
+    if (sc < 0) return;
+    S.nodes[sc].v.scroll.offset = clampf(S.nodes[sc].v.scroll.offset + delta, 0.0f, scroll_max_i(sc));
+    S.dirty = true;
+}
+
+// hit-test + wheel / drag routing; called after place_node (needs absolute rects)
+static void input_update(void)
+{
+    S.pointerNode = (S.root >= 0) ? hit_test(S.root, S.mouse) : -1;
+    int32_t target = nearest_scroll(S.pointerNode);
+    S.pointerOverScroll = (target >= 0);
+
+    const bool pressed = S.mouseDown && !S.mousePrevDown;
+    const bool released = !S.mouseDown && S.mousePrevDown;
+
+    if (target >= 0 && S.wheel != 0.0f)
+        scroll_by(target, -S.wheel * MGE_UI_WHEEL_STEP);
+
+    if (pressed && target >= 0) {
+        Rectangle thumb;
+        S.draggingThumb = scrollbar_thumb_rect(target, &thumb) && rect_contains(thumb, S.mouse);
+        S.activeScroll = target;
+        S.dragAnchorMouse = scroll_axis_mouse(target);
+        S.dragAnchorOffset = S.nodes[target].v.scroll.offset;
+    }
+
+    if (S.activeScroll >= 0 && S.mouseDown) {
+        int32_t sc = S.activeScroll;
+        Node* n = &S.nodes[sc];
+        float delta = scroll_axis_mouse(sc) - S.dragAnchorMouse;
+        float maxOff = scroll_max_i(sc);
+        if (S.draggingThumb) {
+            const bool horiz = (n->v.scroll.axis == MGE_AXIS_HORIZONTAL);
+            float trackLen = horiz ? n->rect.width : n->rect.height;
+            float content = fmaxf(n->v.scroll.contentExtent, 1.0f);
+            float thumbLen = clampf(trackLen * (n->v.scroll.viewExtent / content), 24.0f, trackLen);
+            float travel = fmaxf(1.0f, trackLen - thumbLen);
+            n->v.scroll.offset = clampf(S.dragAnchorOffset + delta / travel * maxOff, 0.0f, maxOff);
+        } else {
+            // drag the content: pulling the mouse down scrolls back toward the top
+            n->v.scroll.offset = clampf(S.dragAnchorOffset - delta, 0.0f, maxOff);
+        }
+        S.dirty = true;
+        S.pointerOverScroll = true;
+    }
+
+    if (released) {
+        S.activeScroll = -1;
+        S.draggingThumb = false;
+    }
+}
+
+// ---- paint-time scissor stack ------------------------------------
+
+static Rectangle rect_intersect(Rectangle a, Rectangle b)
+{
+    float x0 = fmaxf(a.x, b.x), y0 = fmaxf(a.y, b.y);
+    float x1 = fminf(a.x + a.width, b.x + b.width);
+    float y1 = fminf(a.y + a.height, b.y + b.height);
+    return (Rectangle){ x0, y0, fmaxf(0.0f, x1 - x0), fmaxf(0.0f, y1 - y0) };
+}
+
+static void clip_push(Rectangle r)
+{
+    if (S.clipTop > 0)
+        r = rect_intersect(r, S.clipStack[S.clipTop - 1]);
+    if (S.clipTop < MGE_UI_CLIP_MAX)
+        S.clipStack[S.clipTop++] = r;
+    MgeGL_EnableScissor((int)r.x, (int)r.y, (int)r.width, (int)r.height);
+}
+
+static void clip_pop(void)
+{
+    if (S.clipTop > 0) S.clipTop--;
+    if (S.clipTop > 0) {
+        Rectangle r = S.clipStack[S.clipTop - 1];
+        MgeGL_EnableScissor((int)r.x, (int)r.y, (int)r.width, (int)r.height);
+    } else {
+        MgeGL_DisableScissor();
+    }
+}
+
+static void paint_scrollbar(int32_t i)
+{
+    Node* n = &S.nodes[i];
+    Rectangle thumb;
+    if (!scrollbar_thumb_rect(i, &thumb))
+        return;
+
+    const MgeScrollStyle st = n->v.scroll.style;
+    const bool horiz = (n->v.scroll.axis == MGE_AXIS_HORIZONTAL);
+    float thick = st.scrollbarThickness > 0.0f ? st.scrollbarThickness : 6.0f;
+    Rectangle track = horiz
+        ? (Rectangle){ n->rect.x, n->rect.y + n->rect.height - thick, n->rect.width, thick }
+        : (Rectangle){ n->rect.x + n->rect.width - thick, n->rect.y, thick, n->rect.height };
+
+    Color thumbC = (st.thumbColor.a != 0) ? st.thumbColor : (Color){ 255, 255, 255, 90 };
+    if (st.trackColor.a != 0)
+        Draw_RectangleRec(track, st.trackColor);
+    Draw_RectangleRounded(thumb, 1.0f, 6, thumbC);
 }
 
 // ---- paint ---------------------------------------------------------
@@ -1106,8 +1453,17 @@ static void paint_node(int32_t i)
         Draw_Text(f, n->v.text.text, (Vector2){ n->rect.x, n->rect.y }, size, col);
     }
 
+    const bool clipping = (n->type == NODE_SCROLL || n->type == NODE_CLIPRECT);
+    if (clipping)
+        clip_push(n->rect);
+
     for (int32_t c = n->firstChild; c >= 0; c = S.nodes[c].nextSibling)
         paint_node(c);
+
+    if (clipping)
+        clip_pop();
+    if (n->type == NODE_SCROLL)
+        paint_scrollbar(i); // after clip_pop so the thumb isn't clipped
 }
 
 void Mge_UiRender(void)
@@ -1120,11 +1476,14 @@ void Mge_UiRender(void)
 
     layout_node(S.root, Mge_ConstraintsTight(vpW, vpH));
     place_node(S.root, 0.0f, 0.0f);
+    input_update();
 
     MgeGL_SetShader(MgeGL_GetDefaultShaderId());
     MgeGL_SetBlend(true);
+    S.clipTop = 0;
     paint_node(S.root);
     MgeGL_Draw();
+    MgeGL_DisableScissor(); // safety net if a clip push was left unbalanced
     MgeGL_SetBlend(false);
 
     S.dirty = false;

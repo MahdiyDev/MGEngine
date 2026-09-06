@@ -1,6 +1,8 @@
-// Retained widget GUI -- Phase 1: a mock pause menu built from Column / Row /
+// Retained widget GUI -- Phase 1 + 2: a mock pause menu built from Column / Row /
 // Center / Expanded / Spacer. Arrow keys move the selection; the tree is built
-// once and only Mge_UiSetContainerStyle re-styles the highlighted row.
+// once and only Mge_UiSetContainerStyle re-styles the highlighted row. The option
+// list is longer than its box, so it sits in a Mge_UiListView -- mouse wheel or
+// click-drag scrolls it, and arrow-key selection keeps the current row in view.
 
 #include "mge.h"
 #include "mge_ui.h"
@@ -14,9 +16,13 @@ static void signal_handler(int sig)
     exit(sig);
 }
 
-#define N_ITEMS 3
-static const char* LABELS[N_ITEMS] = { "Resume", "Options", "Quit" };
+#define N_ITEMS 9
+static const char* LABELS[N_ITEMS] = {
+    "Resume", "Restart Level", "Options", "Controls", "Audio",
+    "Video", "Achievements", "Main Menu", "Quit"
+};
 static MgeUiWidget s_rows[N_ITEMS];
+static MgeUiWidget s_list;
 
 static MgeContainerStyle row_style(bool selected)
 {
@@ -59,10 +65,17 @@ int main(void)
     Mge_UiText(col, "PAUSED", (MgeTextStyle){ .size = 26, .color = Mge_Colors.white });
     Mge_UiAddChild(col, Mge_UiSizedBox(0, 8));
 
+    // the options live in a fixed-height scroll box (wheel / drag to scroll)
+    MgeUiWidget listBox = Mge_UiContainer((MgeContainerStyle){ .height = 172 });
+    s_list = Mge_UiListView(MGE_AXIS_VERTICAL, (MgeScrollStyle){ 0 });
+    Mge_UiAddChild(listBox, s_list);
+    Mge_UiAddChild(col, listBox);
     for (int k = 0; k < N_ITEMS; k++) {
+        MgeUiWidget slot = Mge_UiPadding(Mge_EdgeInsetsSymmetric(0, 4));
         s_rows[k] = Mge_UiContainer(row_style(k == 0));
         Mge_UiText(s_rows[k], LABELS[k], (MgeTextStyle){ .size = 20, .color = Mge_Colors.white });
-        Mge_UiAddChild(col, s_rows[k]);
+        Mge_UiAddChild(slot, s_rows[k]);
+        Mge_UiAddChild(s_list, slot);
     }
 
     // a small run stats block: a 2-column Table (label -> value)
@@ -92,6 +105,7 @@ int main(void)
         if (sel != prev) {
             Mge_UiSetContainerStyle(s_rows[prev], row_style(false));
             Mge_UiSetContainerStyle(s_rows[sel], row_style(true));
+            Mge_UiScrollToChild(s_list, s_rows[sel]); // keep the selection visible
         }
         if (IsKeyPressed(KEY_ENTER) && sel == N_ITEMS - 1) // "Quit"
             break;

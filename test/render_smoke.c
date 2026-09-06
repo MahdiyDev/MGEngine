@@ -271,6 +271,47 @@ static void scene_ui2(void)
     Mge_UiDestroy(pad);
 }
 
+// Phase 2: a fixed 260x180 box holding a Mge_UiListView of 24 coloured rows,
+// scrolled to the middle -- content clips to the box, a thumb sits mid-track
+static void scene_ui_scroll(void)
+{
+    MgeUiWidget outer = Mge_UiCenter();
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){
+        .width = 260, .height = 180,
+        .decoration = { .color = (Color){ 22, 24, 32, 255 },
+            .border = Mge_BorderAll((Color){ 90, 110, 170, 255 }, 2.0f),
+            .borderRadius = Mge_BorderRadiusAll(8.0f) } });
+    Mge_UiAddChild(outer, box);
+
+    MgeUiWidget list = Mge_UiListView(MGE_AXIS_VERTICAL, (MgeScrollStyle){ 0 });
+    Mge_UiAddChild(box, list);
+    for (int k = 0; k < 24; k++) {
+        MgeUiWidget rowPad = Mge_UiPadding(Mge_EdgeInsetsSymmetric(10, 4));
+        MgeUiWidget row = Mge_UiContainer((MgeContainerStyle){
+            .height = 30, .expand = true,
+            .decoration = { .color = (Color){ 40 + (k * 7) % 120, 70, 120, 255 },
+                .borderRadius = Mge_BorderRadiusAll(4) } });
+        Mge_UiText(row, "list row", (MgeTextStyle){ .size = 15, .color = Mge_Colors.white });
+        Mge_UiAddChild(rowPad, row);
+        Mge_UiAddChild(list, rowPad);
+    }
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(outer);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    Mge_UiScrollTo(list, Mge_UiScrollMax(list) * 0.5f); // land mid-content
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    check("ui_scroll");
+    Mge_EndDrawing();
+
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(outer);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -1088,6 +1129,7 @@ int main(void)
     scene_text3d();
     scene_ui();
     scene_ui2();
+    scene_ui_scroll();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

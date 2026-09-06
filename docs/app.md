@@ -46,6 +46,18 @@ while (!Mge_WindowShouldClose()) {
 }
 ```
 
+## Mouse & keyboard
+
+`IsKeyPressed/Down/Released/Up(KEY_*)` and `GetKeyPressed()` (queue drain, for
+text fields) cover the keyboard. For the mouse: `GetMousePosition()` /
+`GetMouseDelta()`, `IsMouseButtonPressed/Down(MOUSE_BUTTON_*)`, and the wheel —
+`GetMouseWheelMove()` returns this frame's scroll on the dominant axis (`+` = up
+/ away from you, like raylib), `GetMouseWheelMoveV()` returns both axes as a
+`Vector2`. The wheel value is the accumulated notches since the last frame and
+resets to zero each poll, so read it every frame you care about it. The retained
+widget GUI ([2d-ui.md](2d-ui.md#widget-gui-mge_uih)) consumes the wheel for its
+scroll views — gate your own handling on `Mge_UiWantsPointer()`.
+
 ## A resizable window
 
 The window is a fixed size by default. Call `Mge_SetWindowResizable(true)` **before**
