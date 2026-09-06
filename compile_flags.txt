@@ -3,6 +3,7 @@
 -Wextra
 -DPLATFORM_DESKTOP
 -I./source
+-I./editor
 -I./vendor/glad/include
 -I./vendor/stb
 -I./vendor/glfw/include

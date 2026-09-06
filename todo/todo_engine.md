@@ -1,0 +1,56 @@
+# Engine & rendering — feature log
+
+Chronological; each line is a shipped capability of the engine core / renderer.
+Newest at the bottom.
+
+- [x] draw line and triangle together.
+- [x] draw check limit
+- [x] set cursor hidden. (Hide/Show/Enable/DisableCursor, Mge_ToggleCursor, IsCursorHidden; TAB-bound in main.c)
+- [x] add gizmo (2D, 3D)
+- [x] lighting: ambient + diffuse + specular (Phong), Material on Object, Light as a scene entity
+- [x] material maps: MaterialMap (texture + color + value) slots on Material (diffuse / specular)
+- [x] light types: directional / point / spot (+ flashlight, soft cone edges), multi-light pass
+- [x] Mesh: vertices + indices + textures, own VAO/VBO/EBO (Mge_MakeMesh/Upload/Draw/Unload)
+- [x] Model: Mge_LoadModel via Assimp (glTF/OBJ/FBX) -> meshes + directory + bbox; node transforms baked in
+- [x] depth testing: depth func/mask, clip planes, polygon offset (z-fighting), depth-buffer preview shader
+- [x] stencil testing + object outlining; selected objects outline instead of wireframe
+- [x] split engine (source/ -> libmgengine shared lib) from the builder app (builder/main.c links it)
+- [x] Mge_Gui* UI abstraction (Dear ImGui backend); builder sidebar + type-aware inspector (Object / Light)
+- [x] face culling: enable/disable, cull face + winding order (opt-in)
+- [x] framebuffers + post-processing: RenderTexture, Mge_BeginTextureMode, invert/grayscale/sharpen/blur/edge
+- [x] cubemaps: skybox, environment mapping (reflect/refract), dynamic env probes
+- [x] batching vertex attributes: Mge_MakeMeshFromArrays -> one VBO, block per attribute
+- [x] geometry shaders: Mge_BeginExplode3D, Mge_BeginNormals3D (+ MgeGL_CreateShaderProgramGeo)
+- [x] instancing: ModelBatch -> Mge_LoadModelBatch / DrawModelBatch / UpdateModelBatch (one instanced draw per mesh)
+- [x] anti-aliasing: MSAA on by default (Mge_SetMSAA / Mge_GetMSAA); GLFW_SAMPLES hint + glEnable(GL_MULTISAMPLE)
+- [x] production build: `make release` -> -O2 -DNDEBUG, stripped, --gc-sections
+- [x] batch rendering: rlgl-style vertex batcher in mge_gl (Begin/Vertex/End -> one buffer, merged draw calls); Mge_GetDrawCalls + auto-flush on texture change
+- [x] multiple vertex rendering: triple-buffered batch VBOs (MGEGL_BATCH_BUFFERS), cycled per flush -> no upload stalls
+- [x] advanced lighting: Blinn-Phong specular (default) + Mge_SetLightingModel toggle to classic Phong
+- [x] gamma correction: Mge_SetGammaCorrection (GL_FRAMEBUFFER_SRGB, opt-in) + sRGB texture loading (Mge_LoadTextureEx)
+- [x] shadow mapping: ShadowMap + Mge_BeginShadowPass / Mge_BeginLighting3DShadowed (depth pass + 3x3 PCF, directional/spot)
+- [x] point shadows: PointShadowMap depth cubemap (6-face pass) + Mge_BeginLighting3DPointShadowed (20-tap PCF)
+- [x] normal mapping: MATERIAL_MAP_NORMAL / MESH_TEXTURE_NORMAL; TBN from screen-space derivatives (no tangent attribute)
+- [x] test_gl: unit-test mge_gl.c against a fake glad (test/glstub) -- matrix stack, batch merging, ring, enum mapping
+- [x] GL debug output: Mge_SetDebugOutput -> glDebugMessageCallback (on in debug builds, off with -DNDEBUG)
+- [x] `make render`: headless screenshot smoke test (hidden window, renders ~6 features, checks GL error + blank frame, dumps TGAs)
+- [x] manipulation gizmo: Object.rotation + Draw_CubeEx; mge_gizmo.c translate/rotate/scale (Mge_SetGizmoMode / Mge_Gizmo3D), drawn on top, hot-handle highlight
+- [x] builder split into main.c / scene.c / sidebar.c; sidebar shows EDIT/VIEW mode + gizmo switch; lamp movable by gizmo
+- [x] gizmo world/local space (Mge_SetGizmoSpace, shown in sidebar); Mge_SetMouseOverride for headless drag tests
+- [x] 3D primitives: Object.primitive (PRIM_CUBE/SPHERE/PLANE), Mge_MakeShape3D, Draw_Plane; removed Object.color (diffuse-map tint is the colour)
+- [x] builder Explorer panel (right edge): spawn cube/sphere/plane into the scene (Scene_AddShape)
+- [x] material texture slots in the inspector: Mge_GuiImageButton thumbnails -> native file picker (Mge_OpenImageDialog / mge_dialog.c) -> Mge_LoadTextureEx; Mge_UnloadTexture on clear/shutdown
+- [x] per-map color + value in the inspector, one group per slot; wired to shader: matDiffuse (gain), matSpecularColor (tint), normalStrength (fixes flat normal maps -- MATERIAL_MAP_NORMAL.value now defaults to 1)
+- [x] parallax mapping: MATERIAL_MAP_HEIGHT + parallax-occlusion in the lighting shader (LearnOpenGL Advanced-Lighting/Parallax); builder height-map slot; examples/lighting/parallax_mapping.c
+- [x] Makefile: -MMD -MP header deps so editing mge.h rebuilds dependent objects (was: stale cache -> ABI mismatch -> segfault)
+- [x] texture wrap modes: TextureWrap (Repeat/Clamp/MirrorRepeat/MirrorClamp), Mge_SetTextureWrap / ...Ex (per-axis U/V); builder per-slot wrap dropdown (Mge_GuiCombo)
+- [x] material tiling/offset (uv' = uv*tiling + offset) + triplanar projection (world-XYZ diffuse, no stretch on scale); builder inspector fields; examples/materials/tiling_triplanar.c
+- [x] triplanar normal map (whiteout blend) + height map (per-plane parallax-occlusion march, offset-limiting; view frame carries the face sign so it aligns on every face)
+- [x] HDR: Mge_LoadRenderTextureHDR (RGBA16F) + Mge_DrawRenderTextureHDR (ToneMap: Reinhard/Exposure/ACES + exposure); builder sidebar HDR toggle; examples/lighting/hdr.c (LearnOpenGL Advanced-Lighting/HDR)
+- [x] bloom: mge_bloom.c -- BloomFX (bright pass + ping-pong Gaussian, half res) + Mge_DrawBloom (composite scene+glow, tone-mapped); builder bloom toggle + threshold/intensity; examples/lighting/bloom.c (LearnOpenGL Advanced-Lighting/Bloom)
+- [x] deferred shading: mge_deferred.c -- GBuffer (pos/normal/albedo+spec MRT) + Mge_BeginGeometryPass/EndGeometryPass + Mge_DeferredLighting (full-screen, up to 32 lights) + Mge_BlitGBufferDepth; examples/lighting/deferred_shading.c (LearnOpenGL Advanced-Lighting/Deferred-Shading). No shadows/normal maps in the deferred path; builder stays forward.
+- [x] SSAO: mge_ssao.c -- Mge_LoadSSAO (hemisphere kernel + 4x4 noise) + Mge_ComputeSSAO (occlusion + box blur, from the deferred G-buffer) + Mge_DeferredLightingAO (ambient *= AO); examples/lighting/ssao.c uses the melon (LearnOpenGL Advanced-Lighting/SSAO)
+- [x] PBR + IBL: mge_pbr.c (Cook-Torrance BRDF: GGX/Smith/Schlick, PBRMaterial albedo/normal/metallic/roughness/ao, Mge_BeginPBR3D / Mge_BeginPBR3DIBL / Mge_SetPBRMaterial) + mge_ibl.c (Mge_LoadEnvironment: equirect->cube, 32^2 irradiance, 5-mip prefilter, 512^2 BRDF LUT; Mge_DrawEnvironmentSkybox). Mge_LoadTextureHDR (stbi_loadf -> RGB16F). assets/hdr/newport_loft.hdr + assets/pbr/rusted_iron/; examples/pbr/spheres.c. (LearnOpenGL PBR/Theory + PBR/Lighting + PBR/IBL x2). Forward-only, no shadows in the PBR path.
+- [x] builder starts in EDIT mode (was VIEW/fly)
+- [x] text rendering: mge_text.c -- stb_truetype (vendored single header, in place of FreeType) bakes ASCII 32..126 into one coverage atlas (RG8, swizzled so the default batch shader alpha-blends it -- no text shader); Font + Mge_LoadFont/FromMemory + Mge_GetDefaultFont (a built-in 8x8 bitmap font, no asset) + Draw_Text / Mge_MeasureText (screen space, top-left origin, like Draw_Rectangle). examples/text/draw_text.c; test/test_text.c + the `text` render-smoke scene. (LearnOpenGL In-Practice/Text-Rendering)
+- [x] world-space text: Draw_Text3D (camera-facing billboard, world units, call inside Mge_BeginMode3D; unlit, depth-tests + blooms). New COMPONENT_TEXT (Text: string/size/color) -> a "Text" entry in the editor "+ add" menu + inspector section + .mgscene round-trip; default batch shader now discards fully-transparent fragments so glyph-quad gaps don't leave a depth hole a later skybox can't fill. render-smoke `text3d` / `skybox` / `text_object` scenes.

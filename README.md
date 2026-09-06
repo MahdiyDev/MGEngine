@@ -42,4 +42,5 @@ On Windows use `mingw32-make`.
   library from your own app.
 - **[editor/USAGE.md](editor/USAGE.md)** — the editor: projects & scenes, the
   panels, scene code / Play / hot reload, Build Bundle + the player.
-- **[todo.md](todo.md)** — what's done and what's next.
+- **[todo/](todo/)** — what's done and what's next, split by area (engine,
+  editor, GUI).
