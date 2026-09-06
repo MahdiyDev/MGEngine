@@ -250,7 +250,11 @@ Font Mge_GetDefaultFont(void)
     if (s_font.glyphs != NULL)
         return s_font;
 
-    enum { CW = 8, CH = 8, COLS = 16, ROWS = 6, W = COLS * CW, H = ROWS * CH };
+    // each glyph sits in the middle of a 10x10 cell with a 1px transparent
+    // border, so the glyph quad's edges land on empty texels -- no MSAA edge
+    // seam and no bleed from a neighbour even at a fractional scale / position
+    enum { CW = 8, CH = 8, PAD = 1, CELLW = CW + 2 * PAD, CELLH = CH + 2 * PAD,
+        COLS = 16, ROWS = 6, W = COLS * CELLW, H = ROWS * CELLH };
     unsigned char* cov = (unsigned char*)calloc(W * H, 1);
     stbtt_packedchar* glyphs = (stbtt_packedchar*)calloc(CP_COUNT, sizeof(stbtt_packedchar));
     if (cov == NULL || glyphs == NULL) {
@@ -260,21 +264,23 @@ Font Mge_GetDefaultFont(void)
     }
 
     for (int g = 0; g < CP_COUNT; g++) {
-        int cellX = (g % COLS) * CW, cellY = (g / COLS) * CH;
+        int cellX = (g % COLS) * CELLW, cellY = (g / COLS) * CELLH;
         for (int row = 0; row < CH; row++)
             for (int col = 0; col < CW; col++)
                 if ((FONT8X8[g][row] >> col) & 1)
-                    cov[(cellY + row) * W + (cellX + col)] = 255;
+                    cov[(cellY + PAD + row) * W + (cellX + PAD + col)] = 255;
 
+        // the packed rect is the whole padded cell; xoff/yoff back the pen out
+        // over the border so the glyph's ink still lands at [pen, pen+8]
         stbtt_packedchar* p = &glyphs[g];
         p->x0 = (unsigned short)cellX;
         p->y0 = (unsigned short)cellY;
-        p->x1 = (unsigned short)(cellX + CW);
-        p->y1 = (unsigned short)(cellY + CH);
-        p->xoff = 0.0f;
-        p->yoff = -7.0f; // ascent 7 -> cell spans [baseline-7, baseline+1]
-        p->xoff2 = (float)CW;
-        p->yoff2 = 1.0f;
+        p->x1 = (unsigned short)(cellX + CELLW);
+        p->y1 = (unsigned short)(cellY + CELLH);
+        p->xoff = -(float)PAD;
+        p->yoff = -7.0f - (float)PAD; // ascent 7; +PAD for the top border row
+        p->xoff2 = (float)(CW + PAD);
+        p->yoff2 = 1.0f + (float)PAD;
         p->xadvance = (float)CW;
     }
 
@@ -353,8 +359,10 @@ static void emit_glyph(const stbtt_packedchar* g, float x, float baseline, float
     float y0 = s_drawOrigin.y + baseline + g->yoff * s;
     float x1 = s_drawOrigin.x + x + g->xoff2 * s;
     float y1 = s_drawOrigin.y + baseline + g->yoff2 * s;
-    float u0 = g->x0 / aw, v0 = g->y0 / ah;
-    float u1 = g->x1 / aw, v1 = g->y1 / ah;
+    // sample texel centres, not the cell edge -- a fractional scale / position
+    // otherwise catches a neighbour's edge column (see the built-in atlas gutter)
+    float u0 = (g->x0 + 0.5f) / aw, v0 = (g->y0 + 0.5f) / ah;
+    float u1 = (g->x1 - 0.5f) / aw, v1 = (g->y1 - 0.5f) / ah;
 
     // two triangles, matching Draw_RectanglePro's winding: TL, BL, TR / TR, BL, BR
     MgeGL_TexCoord2f(u0, v0); MgeGL_Vertex2f(x0, y0);
@@ -398,8 +406,8 @@ static void emit_glyph_3d(const stbtt_packedchar* g, float x, float baseline, fl
 {
     float x0 = x + g->xoff * s, y0 = baseline + g->yoff * s;
     float x1 = x + g->xoff2 * s, y1 = baseline + g->yoff2 * s;
-    float u0 = g->x0 / aw, v0 = g->y0 / ah;
-    float u1 = g->x1 / aw, v1 = g->y1 / ah;
+    float u0 = (g->x0 + 0.5f) / aw, v0 = (g->y0 + 0.5f) / ah; // texel centres (see emit_glyph)
+    float u1 = (g->x1 - 0.5f) / aw, v1 = (g->y1 - 0.5f) / ah;
 
     // 2D layout coords (+Y down) -> world: origin + right*lx - up*ly
 #define MGE_TEXT_W(lx, ly)                                              \
