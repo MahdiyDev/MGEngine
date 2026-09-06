@@ -368,3 +368,32 @@ void SetMousePosition(int x, int y)
 
     glfwSetCursorPos(platform.window, CORE.Input.Mouse.currentPosition.x, CORE.Input.Mouse.currentPosition.y);
 }
+
+void Mge_SetMouseCursor(MgeMouseCursor cursor)
+{
+    static const int shape[] = {
+        0,                          // MGE_CURSOR_ARROW -> default (NULL)
+        GLFW_POINTING_HAND_CURSOR,
+        GLFW_IBEAM_CURSOR,
+        GLFW_CROSSHAIR_CURSOR,
+        GLFW_RESIZE_EW_CURSOR,
+        GLFW_RESIZE_NS_CURSOR,
+        GLFW_NOT_ALLOWED_CURSOR,
+    };
+    static GLFWcursor* cache[7];
+    static int current = -1;
+
+    if (platform.window == NULL || (int)cursor < 0 || (int)cursor >= 7)
+        return;
+    if ((int)cursor == current)
+        return;
+    current = (int)cursor;
+
+    if (cursor == MGE_CURSOR_ARROW) {
+        glfwSetCursor(platform.window, NULL);
+        return;
+    }
+    if (cache[cursor] == NULL)
+        cache[cursor] = glfwCreateStandardCursor(shape[cursor]);
+    glfwSetCursor(platform.window, cache[cursor]);
+}

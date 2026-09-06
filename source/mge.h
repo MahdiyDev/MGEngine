@@ -876,6 +876,20 @@ void EnableCursor(void);     // show + unlock the cursor
 void DisableCursor(void);    // hide + lock the cursor to the window (FPS style)
 bool IsCursorHidden(void);   // true while the cursor is hidden or locked
 void Mge_ToggleCursor(void); // flip between EnableCursor() and DisableCursor()
+
+// Standard OS cursor shapes. The widget GUI sets this automatically each frame
+// (hand over a button, I-beam over a text field); call it yourself for game
+// cursors -- set it every frame you want a non-arrow shape.
+typedef enum {
+    MGE_CURSOR_ARROW = 0,
+    MGE_CURSOR_HAND,
+    MGE_CURSOR_IBEAM,
+    MGE_CURSOR_CROSSHAIR,
+    MGE_CURSOR_RESIZE_EW,
+    MGE_CURSOR_RESIZE_NS,
+    MGE_CURSOR_NOT_ALLOWED,
+} MgeMouseCursor;
+void Mge_SetMouseCursor(MgeMouseCursor cursor);
 bool IsMouseButtonPressed(int button);
 bool IsMouseButtonDown(int button);
 bool IsMouseButtonReleased(int button);

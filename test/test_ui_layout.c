@@ -59,6 +59,7 @@ void Mge_SetClipboardText(const char* s)
     strncpy(g_clip, s ? s : "", sizeof g_clip - 1);
     g_clip[sizeof g_clip - 1] = '\0';
 }
+void Mge_SetMouseCursor(MgeMouseCursor c) { (void)c; }
 
 static void input_reset(void)
 {
@@ -1345,6 +1346,222 @@ TEST(max_length_caps_input)
     Mge_UiDestroy(root);
 }
 
+// ---- Phase 3c: overlays ----
+
+static const char* const DD_ITEMS[4] = { "Easy", "Normal", "Hard", "Nightmare" };
+
+static MgeUiWidget dd_tree(int* sel, MgeUiWidget* dd, float boxY)
+{
+    input_reset();
+    MgeUiWidget d = Mge_UiDropdown(DD_ITEMS, 4, sel, (MgeUiDropdownStyle){ .expand = true });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 160, .height = 34 });
+    Mge_UiAddChild(box, d);
+    // an Align to push the box down the screen
+    MgeUiWidget al = Mge_UiAlign((MgeAlignment){ -1.0f, (boxY / 300.0f) - 1.0f });
+    Mge_UiAddChild(al, box);
+    MgeUiWidget root = Mge_UiContainer((MgeContainerStyle){ .alignment = MGE_ALIGN_TOP_LEFT });
+    Mge_UiAddChild(root, al);
+    render(root, 800, 600);
+    if (dd) *dd = d;
+    return root;
+}
+
+TEST(dropdown_opens_on_click_and_selects)
+{
+    int sel = 0;
+    MgeUiWidget d, root = dd_tree(&sel, &d, 40.0f);
+    Rectangle r = Mge_UiGetRect(d);
+
+    click_at(root, r.x + 20.0f, r.y + r.height * 0.5f); // toggle open
+    CHECK(Mge_UiDropdownOpen(d));
+    CHECK(Mge_UiWantsPointer());
+
+    // row 2 = "Hard": panel starts just below the control, rowH == control height
+    float rowY = r.y + r.height + 2.0f + r.height * 2.0f + r.height * 0.5f;
+    click_at(root, r.x + 20.0f, rowY);
+    CHECK(sel == 2);
+    CHECK(Mge_UiDropdownChanged(d));
+    CHECK(!Mge_UiDropdownOpen(d));
+    Mge_UiDestroy(root);
+}
+
+TEST(dropdown_click_away_closes_without_changing)
+{
+    int sel = 1;
+    MgeUiWidget d, root = dd_tree(&sel, &d, 40.0f);
+    Rectangle r = Mge_UiGetRect(d);
+    click_at(root, r.x + 20.0f, r.y + r.height * 0.5f);
+    CHECK(Mge_UiDropdownOpen(d));
+    click_at(root, 700.0f, 500.0f); // far away
+    CHECK(!Mge_UiDropdownOpen(d));
+    CHECK(sel == 1);
+    CHECK(!Mge_UiDropdownChanged(d));
+    Mge_UiDestroy(root);
+}
+
+TEST(dropdown_esc_closes)
+{
+    int sel = 0;
+    MgeUiWidget d, root = dd_tree(&sel, &d, 40.0f);
+    Rectangle r = Mge_UiGetRect(d);
+    click_at(root, r.x + 20.0f, r.y + r.height * 0.5f);
+    CHECK(Mge_UiDropdownOpen(d));
+    key(root, KEY_ESCAPE);
+    CHECK(!Mge_UiDropdownOpen(d));
+    Mge_UiDestroy(root);
+}
+
+TEST(dropdown_flips_above_when_it_would_overflow_bottom)
+{
+    int sel = 0;
+    MgeUiWidget d, root = dd_tree(&sel, &d, 560.0f); // control near the bottom (vpH 600)
+    Rectangle r = Mge_UiGetRect(d);
+    CHECK(r.y > 500.0f);
+    click_at(root, r.x + 20.0f, r.y + r.height * 0.5f);
+    CHECK(Mge_UiDropdownOpen(d));
+    // panel is above: row 0 sits just above the control
+    float aboveRowY = r.y - 2.0f - r.height * 3.5f; // 4 items, row 0 topmost
+    click_at(root, r.x + 20.0f, aboveRowY);
+    CHECK(sel == 0);
+    CHECK(!Mge_UiDropdownOpen(d));
+    Mge_UiDestroy(root);
+}
+
+TEST(dropdown_eats_the_pointer_over_a_button_below)
+{
+    input_reset();
+    int sel = 0;
+    g_cb_count = 0;
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH, .spacing = 0, .mainSize = MGE_MAIN_SIZE_MIN });
+    MgeUiWidget d = Mge_UiDropdown(DD_ITEMS, 4, &sel, (MgeUiDropdownStyle){ .expand = true });
+    MgeUiWidget btn = Mge_UiButton("under", Mge_UiButtonFilled(Mge_Colors.blue));
+    Mge_UiOnPressed(btn, count_cb, NULL);
+    Mge_UiAddChild(col, d);
+    Mge_UiAddChild(col, btn); // sits right below the dropdown's panel area
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 160, .height = 200 });
+    Mge_UiAddChild(box, col);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    Rectangle r = Mge_UiGetRect(d);
+    click_at(root, r.x + 20.0f, r.y + r.height * 0.5f); // open
+    CHECK(Mge_UiDropdownOpen(d));
+    // click where the panel overlaps the button
+    float panelRow = r.y + r.height + 2.0f + r.height * 0.5f;
+    click_at(root, r.x + 20.0f, panelRow);
+    CHECK(g_cb_count == 0);  // the button never saw it
+    CHECK(sel == 0);         // row 0 selected, panel closed
+    Mge_UiDestroy(root);
+}
+
+TEST(segmented_control_selects_by_segment)
+{
+    input_reset();
+    int view = 0;
+    static const char* const SEGS[3] = { "List", "Grid", "Map" };
+    MgeUiWidget sc = Mge_UiSegmentedControl(SEGS, 3, &view, Mge_Colors.blue);
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 300, .height = 34 });
+    Mge_UiAddChild(box, sc);
+    MgeUiWidget root = wrap(box, 800, 600);
+    Rectangle r = Mge_UiGetRect(sc);
+    CHECK_F(r.width, 300.0f);
+
+    click_at(root, r.x + r.width * (1.5f / 3.0f), r.y + r.height * 0.5f); // middle segment
+    CHECK(view == 1);
+    CHECK(Mge_UiSegmentChanged(sc));
+    click_at(root, r.x + r.width * (2.5f / 3.0f), r.y + r.height * 0.5f);
+    CHECK(view == 2);
+    Mge_UiDestroy(root);
+}
+
+TEST(tooltip_appears_after_the_delay)
+{
+    input_reset();
+    MgeUiWidget tip = Mge_UiTooltip("more info");
+    Mge_UiAddChild(tip, fixed(80, 30));
+    MgeUiWidget root = wrap(tip, 800, 600);
+
+    g_mouse = (Vector2){ 20.0f, 15.0f }; // over the wrapped box
+    render(root, 800, 600); // dt 0 -> timer starts
+    CHECK(!Mge_UiTooltipShowing());
+    for (int k = 0; k < 4; k++) Mge_UiNewFrame(0.2f), Mge_UiRender(); // ~0.8 s
+    CHECK(Mge_UiTooltipShowing());
+    CHECK(!Mge_UiWantsPointer()); // a tooltip doesn't capture the pointer
+
+    g_mouse = (Vector2){ 500.0f, 500.0f };
+    render(root, 800, 600);
+    CHECK(!Mge_UiTooltipShowing());
+    Mge_UiDestroy(root);
+}
+
+TEST(double_tap_fires)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget gd = Mge_UiGestureDetector();
+    Mge_UiAddChild(gd, fixed(100, 60));
+    Mge_UiOnDoubleTap(gd, count_cb, NULL);
+    MgeUiWidget root = wrap(gd, 800, 600);
+
+    click_at(root, 40.0f, 30.0f); // dt 0 between renders -> S.time doesn't advance
+    click_at(root, 40.0f, 30.0f);
+    CHECK(g_cb_count == 1);
+    Mge_UiDestroy(root);
+
+    // a slow second tap: advance time past 0.3 s between the two
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget gd2 = Mge_UiGestureDetector();
+    Mge_UiAddChild(gd2, fixed(100, 60));
+    Mge_UiOnDoubleTap(gd2, count_cb, NULL);
+    MgeUiWidget root2 = wrap(gd2, 800, 600);
+    click_at(root2, 40.0f, 30.0f);
+    for (int k = 0; k < 3; k++) Mge_UiNewFrame(0.2f), Mge_UiRender();
+    click_at(root2, 40.0f, 30.0f);
+    CHECK(g_cb_count == 0);
+    Mge_UiDestroy(root2);
+}
+
+TEST(long_press_fires_and_suppresses_the_tap)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget gd = Mge_UiGestureDetector();
+    Mge_UiAddChild(gd, fixed(100, 60));
+    Mge_UiOnLongPress(gd, count_cb, NULL);
+    MgeUiWidget root = wrap(gd, 800, 600);
+
+    g_mouse = (Vector2){ 40.0f, 30.0f };
+    g_mouseDown = true;
+    render(root, 800, 600);              // press (S.time here)
+    for (int k = 0; k < 4; k++) Mge_UiNewFrame(0.2f), Mge_UiRender(); // held ~0.8 s
+    CHECK(g_cb_count == 1);
+    g_mouseDown = false;
+    render(root, 800, 600);
+    CHECK(!Mge_UiTapped(gd)); // the long press consumed it
+    Mge_UiDestroy(root);
+}
+
+TEST(tap_cancel_on_release_outside)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget gd = Mge_UiGestureDetector();
+    Mge_UiAddChild(gd, fixed(80, 40));
+    Mge_UiOnTapCancel(gd, count_cb, NULL);
+    MgeUiWidget root = wrap(gd, 800, 600);
+
+    g_mouse = (Vector2){ 20.0f, 20.0f };
+    g_mouseDown = true;
+    render(root, 800, 600);
+    g_mouse = (Vector2){ 400.0f, 400.0f }; // off the node
+    render(root, 800, 600);
+    g_mouseDown = false;
+    render(root, 800, 600);
+    CHECK(g_cb_count == 1);
+    CHECK(!Mge_UiTapped(gd));
+    Mge_UiDestroy(root);
+}
+
 int main(void)
 {
     MgeGL_Init(800, 600); // the batcher the paint pass feeds
@@ -1421,5 +1638,16 @@ int main(void)
     RUN(tab_cycles_focus_between_two_fields);
     RUN(click_positions_the_caret);
     RUN(max_length_caps_input);
+
+    RUN(dropdown_opens_on_click_and_selects);
+    RUN(dropdown_click_away_closes_without_changing);
+    RUN(dropdown_esc_closes);
+    RUN(dropdown_flips_above_when_it_would_overflow_bottom);
+    RUN(dropdown_eats_the_pointer_over_a_button_below);
+    RUN(segmented_control_selects_by_segment);
+    RUN(tooltip_appears_after_the_delay);
+    RUN(double_tap_fires);
+    RUN(long_press_fires_and_suppresses_the_tap);
+    RUN(tap_cancel_on_release_outside);
     return test_summary();
 }

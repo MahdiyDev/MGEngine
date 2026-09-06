@@ -388,10 +388,15 @@ void Mge_UiOnPanUpdate(MgeUiWidget w, MgeUiGestureFn cb, void* user);
 void Mge_UiOnPanEnd(MgeUiWidget w, MgeUiGestureFn cb, void* user);
 void Mge_UiOnHoverEnter(MgeUiWidget w, MgeUiGestureFn cb, void* user);
 void Mge_UiOnHoverExit(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnTapCancel(MgeUiWidget w, MgeUiGestureFn cb, void* user); // press ended off the node / became a pan
+void Mge_UiOnDoubleTap(MgeUiWidget w, MgeUiGestureFn cb, void* user); // two taps within ~0.3 s
+void Mge_UiOnLongPress(MgeUiWidget w, MgeUiGestureFn cb, void* user); // held ~0.5 s without moving (suppresses the tap)
 
 bool Mge_UiTapped(MgeUiWidget w);  // poll: true the frame a tap completed
 bool Mge_UiHovered(MgeUiWidget w);
 bool Mge_UiPressed(MgeUiWidget w);
+
+void Mge_UiSetCursor(MgeUiWidget w, MgeMouseCursor cursor); // shape shown while hovering this node
 
 typedef enum {
     MGE_BTN_FILLED = 0,
@@ -463,6 +468,32 @@ bool Mge_UiTextSubmitted(MgeUiWidget w); // poll: Enter pressed while focused
 void Mge_UiFocus(MgeUiWidget w);
 void Mge_UiUnfocus(void);
 bool Mge_UiIsFocused(MgeUiWidget w);
+
+// ---- overlays (Phase 3c) -------------------------------------------
+//
+// Dropdowns and tooltips paint above the whole tree and take the pointer first.
+// Only one dropdown is open at a time.
+
+typedef struct MgeUiDropdownStyle {
+    Color accent, bg, textColor; // a == 0 => blue / dark / white
+    float textSize; // 0 => 16
+    float radius;   // 0 => 6
+    bool  expand;   // fill the available width (else fits the widest item)
+} MgeUiDropdownStyle;
+
+// closed: a control showing items[*index] + a chevron. Open (on click): a
+// floating list; clicking an item sets *index and closes, click-away / Esc close.
+MgeUiWidget Mge_UiDropdown(const char* const* items, int count, int* index, MgeUiDropdownStyle style);
+bool Mge_UiDropdownChanged(MgeUiWidget w); // poll: selection changed this frame
+bool Mge_UiDropdownOpen(MgeUiWidget w);
+
+// a row of `count` segments bound to *index (accent a == 0 => default blue)
+MgeUiWidget Mge_UiSegmentedControl(const char* const* items, int count, int* index, Color accent);
+bool Mge_UiSegmentChanged(MgeUiWidget w);  // poll
+
+// wraps one child; shows `text` in a small box after the cursor rests ~0.5 s
+MgeUiWidget Mge_UiTooltip(const char* text);
+bool Mge_UiTooltipShowing(void);           // a tooltip is currently visible
 
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);

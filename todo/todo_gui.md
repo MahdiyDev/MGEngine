@@ -268,27 +268,47 @@ text field. `test/test_ui_layout.c` (+11, 193 checks), `render_smoke`
       editing is a bigger caret/selection model; UTF-8 beyond ASCII, word-jump
       (ctrl+arrow), double-click word select, and undo/redo go here too.
 
-## Phase 3c -- overlays / drag-drop / ink
+## Phase 3c -- overlays: dropdown, tooltip, segmented   [PARTLY LANDED]
 
-- [ ] `Mge_UiDropdown(items, count, int* index)` / `Mge_UiSegmentedControl` /
-      `Mge_UiChoiceChip` / `FilterChip` / `InputChip`. **Deferred:** need an
-      overlay / portal layer (a popup that paints above everything and closes on
-      outside-click) that does not exist yet.
-- [ ] `Mge_UiTooltip(w, text, style)` (hover delay, follow-cursor). **Deferred:**
-      overlay layer + a per-widget hover-delay timer.
-- [ ] `Mge_UiDraggable(w, payload, feedback)` / `LongPressDraggable` /
-      `Mge_UiDragTarget(w, onWillAccept, onAccept, user)` /
-      `Mge_UiDismissible(w, axis, onDismissed, user)` /
-      `Mge_UiReorderableList(w, onReorder, user)`. **Deferred:** a drag-and-drop
-      subsystem (drag payload, feedback widget rendered at the cursor, drop-target
-      hit-testing) of its own.
+Landed: a minimal overlay layer (immediate-mode draw + input, handled after
+layout / before the tree's input pass / last in paint, driven by owner-widget
+state -- no extra node lifecycle) and the controls that need it, plus the cheap
+gesture / cursor extras. `test/test_ui_layout.c` (+10, 225 checks),
+`render_smoke` `ui_overlays` scene, `examples/ui/select.c`. One engine addition:
+`Mge_SetMouseCursor` (GLFW standard cursors).
+
+- [x] `Mge_UiDropdown(items, count, int* index, MgeUiDropdownStyle)` -- a closed
+      control (current item + chevron) that opens a floating list on click;
+      commits `*index` on release over a row, click-away / Esc close it; modal
+      while open (`overlayEating` skips the tree's pointer routing). Panel flips
+      above the control when it would overflow the viewport bottom.
+      `Mge_UiDropdownChanged` / `Mge_UiDropdownOpen`.
+- [x] `Mge_UiSegmentedControl(items, count, int* index, accent)` -- an inline
+      row of segments (fills a bounded width); `Mge_UiSegmentChanged`.
+- [x] `Mge_UiTooltip(text)` -- wraps one child, shows a hint box near the cursor
+      after ~0.5 s of rest (`S.tooltipOwner` / `S.tooltipT`, `nearest_tooltip`
+      walks past inner interact nodes); `Mge_UiTooltipShowing()`.
+- [x] `Mge_UiOnTapCancel` / `Mge_UiOnDoubleTap` (< 0.3 s) / `Mge_UiOnLongPress`
+      (> 0.5 s held, suppresses the tap); `Mge_UiSetCursor(w, MgeMouseCursor)` +
+      an automatic default per widget kind (hand / I-beam).
+- [ ] `Mge_UiChoiceChip` / `FilterChip` / `InputChip`. **Deferred:** styled
+      toggle buttons -- trivial once a chip palette is decided; not needed yet.
 - [ ] `Mge_UiInkWell(w)` / `Mge_UiInkResponse` (ripple / splash). **Deferred to
       Phase 6** (animation) -- the ripple is a timed expanding-circle effect.
 - [ ] Variants: `RangeSlider`, `TristateCheckbox`, `ProgressCircle` /
       `ProgressIndeterminate`, `FloatingActionButton`, `Mge_UiIconButton` (needs
-      the Phase 4 icon-font support), `Mge_UiMouseRegion` / `Mge_UiSetCursor`
-      (arrow / hand / text / resize -- GLFW standard cursors), `OnTapCancel` /
-      `OnDoubleTap` / `OnLongPress` / `OnSecondaryTap` / scale gestures.
+      Phase 4 icon fonts), `Mge_UiMouseRegion`, `OnSecondaryTap` / scale
+      gestures. **Deferred:** low demand.
+
+## Phase 3d -- drag & drop
+
+- [ ] `Mge_UiDraggable(w, payload, feedback)` / `LongPressDraggable` /
+      `Mge_UiDragTarget(w, onWillAccept, onAccept, user)` /
+      `Mge_UiDismissible(w, axis, onDismissed, user)` /
+      `Mge_UiReorderableList(w, onReorder, user)`. **Deferred:** a drag-and-drop
+      subsystem (a drag payload, a feedback widget rendered at the cursor,
+      drop-target hit-testing) -- a second capture model layered over pointer
+      routing, its own phase.
 
 ## Phase 4 -- visual styling depth (paint)
 

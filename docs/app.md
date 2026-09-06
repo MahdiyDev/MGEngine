@@ -24,6 +24,7 @@ screenshot check is what catches that.
 | `DisableCursor()` | hide **and** lock the cursor to the window centre (FPS style, enables raw mouse motion) |
 | `Mge_ToggleCursor()` | flip between `EnableCursor()` and `DisableCursor()` |
 | `IsCursorHidden()` | `true` while the cursor is hidden / locked |
+| `Mge_SetMouseCursor(MgeMouseCursor)` | pick a standard shape (`MGE_CURSOR_ARROW` / `HAND` / `IBEAM` / `CROSSHAIR` / `RESIZE_EW` / `RESIZE_NS` / `NOT_ALLOWED`); set it every frame you want a non-arrow shape. The widget GUI drives this on its own while the pointer is over a widget. |
 
 Bind it to a key in your loop — `editor/main.c` uses **TAB** to free and re-lock
 the mouse, and only runs the fly-camera while it is locked:

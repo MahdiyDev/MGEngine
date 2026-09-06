@@ -450,6 +450,52 @@ static void scene_ui_textfield(void)
     Mge_UiDestroy(outer);
 }
 
+// Phase 3c: an open dropdown over a segmented control + a tooltip
+static void scene_ui_overlays(void)
+{
+    static const char* const DIFF[4] = { "Easy", "Normal", "Hard", "Nightmare" };
+    static const char* const VIEW[3] = { "List", "Grid", "Map" };
+    static int diff = 2, view = 1;
+
+    MgeUiWidget outer = Mge_UiAlign((MgeAlignment){ 0.0f, -0.4f });
+    MgeUiWidget card = Mge_UiContainer((MgeContainerStyle){
+        .width = 300, .padding = Mge_EdgeInsetsAll(20),
+        .decoration = { .color = (Color){ 24, 26, 34, 255 },
+            .border = Mge_BorderAll((Color){ 90, 100, 130, 255 }, 2),
+            .borderRadius = Mge_BorderRadiusAll(14) } });
+    Mge_UiAddChild(outer, card);
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH, .spacing = 14, .mainSize = MGE_MAIN_SIZE_MIN });
+    Mge_UiAddChild(card, col);
+
+    Mge_UiText(col, "Difficulty", (MgeTextStyle){ .size = 14, .color = (Color){ 160, 170, 200, 255 } });
+    MgeUiWidget tt = Mge_UiTooltip("affects enemy health");
+    MgeUiWidget dd = Mge_UiDropdown(DIFF, 4, &diff, (MgeUiDropdownStyle){ .expand = true, .accent = Mge_Colors.blue });
+    Mge_UiAddChild(tt, dd);
+    Mge_UiAddChild(col, tt);
+
+    Mge_UiText(col, "View", (MgeTextStyle){ .size = 14, .color = (Color){ 160, 170, 200, 255 } });
+    Mge_UiAddChild(col, Mge_UiSegmentedControl(VIEW, 3, &view, Mge_Colors.blue));
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(outer);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    // park the cursor on the dropdown so its tooltip shows on the next frame
+    Rectangle rd = Mge_UiGetRect(dd);
+    Mge_SetMouseOverride((Vector2){ rd.x + 20.0f, rd.y + rd.height * 0.5f }, false);
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiNewFrame(0.6f); // one big dt -> past the tooltip delay
+    Mge_UiRender();
+    check("ui_overlays");
+    Mge_EndDrawing();
+
+    Mge_ClearMouseOverride();
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(outer);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -1271,6 +1317,7 @@ int main(void)
     scene_ui_vlist();
     scene_ui_widgets();
     scene_ui_textfield();
+    scene_ui_overlays();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

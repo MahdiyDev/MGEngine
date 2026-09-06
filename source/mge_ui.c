@@ -105,25 +105,33 @@ typedef struct Node {
             float   cellW, cellH, mainGap, crossGap;
         } grid;
         struct {
-            uint8_t widget; // 0 gesture 1 button 2 checkbox 3 switch 4 radio 5 slider 6 progress 7 textfield
+            uint8_t widget; // 0 gesture 1 button 2 checkbox 3 switch 4 radio 5 slider 6 progress 7 textfield 8 dropdown 9 segmented 10 tooltip
             bool    enabled, hovered, pressed, panning;
             bool    tapped, changed, submitted; // per-frame latches
+            bool    longFired;
+            uint8_t cursor;
             MgeUiGestureFn onTap, onTapDown, onTapUp;
             MgeUiGestureFn onPanStart, onPanUpdate, onPanEnd;
             MgeUiGestureFn onHoverEnter, onHoverExit;
+            MgeUiGestureFn onTapCancel, onDoubleTap, onLongPress;
             void*   user;
             bool*   boolPtr;
             int*    intPtr;
             float*  floatPtr;
             float   fmin, fmax, fstep, progress;
+            float   pressT, lastTapT;
             int     radioValue;
             MgeUiButtonStyle btn;
-            char*   label; // button text, or a text field's placeholder
+            char*   label; // button text, text field placeholder, or tooltip text
             // text field (widget == 7)
             MgeUiTextBuffer*    buf;
             int                 caret, selA, selB;
             float               scrollX;
             MgeUiTextFieldStyle tf;
+            // dropdown / segmented (widget == 8 / 9)
+            const char* const*  items;
+            int                 itemCount;
+            MgeUiDropdownStyle   dd;
         } interact;
     } v;
 } Node;
@@ -162,6 +170,15 @@ static struct {
     int32_t  focusNode;      // focused NODE_INTERACT text field, or -1
     int      chars[8], nChars; // codepoints typed this frame
     float    caretBlink;
+
+    // overlays (Phase 3c)
+    int32_t  overlayOwner;   // open dropdown node, or -1
+    int      overlayHover;   // hovered row in the open panel, or -1
+    int      overlayPressRow; // row a press landed on, or -1
+    int32_t  tooltipOwner;   // hovered tooltip node, or -1
+    float    tooltipT;       // seconds the cursor has rested on it
+    float    time;           // accumulated dt
+    uint8_t  wantCursor;     // MgeMouseCursor for this frame
 
     // paint-time scissor stack
     Rectangle clipStack[MGE_UI_CLIP_MAX];
@@ -214,6 +231,8 @@ static void ensure_boot(void)
     S.activeScroll = -1;
     S.hotInteract = S.pressInteract = S.hoverInteract = -1;
     S.focusNode = -1;
+    S.overlayOwner = S.tooltipOwner = -1;
+    S.overlayHover = S.overlayPressRow = -1;
 }
 
 static int32_t alloc_node(uint8_t type)
@@ -295,6 +314,8 @@ static void free_rec(int32_t i)
     if (S.hotInteract == i) S.hotInteract = -1;
     if (S.pressInteract == i) S.pressInteract = -1;
     if (S.hoverInteract == i) S.hoverInteract = -1;
+    if (S.overlayOwner == i) S.overlayOwner = -1;
+    if (S.tooltipOwner == i) S.tooltipOwner = -1;
 
     S.gen[i]++;            // stale every outstanding handle
     if (S.gen[i] == 0) S.gen[i] = 1;
@@ -758,8 +779,17 @@ MGE_UI_ON_SETTER(Mge_UiOnPanUpdate, onPanUpdate)
 MGE_UI_ON_SETTER(Mge_UiOnPanEnd, onPanEnd)
 MGE_UI_ON_SETTER(Mge_UiOnHoverEnter, onHoverEnter)
 MGE_UI_ON_SETTER(Mge_UiOnHoverExit, onHoverExit)
+MGE_UI_ON_SETTER(Mge_UiOnTapCancel, onTapCancel)
+MGE_UI_ON_SETTER(Mge_UiOnDoubleTap, onDoubleTap)
+MGE_UI_ON_SETTER(Mge_UiOnLongPress, onLongPress)
 MGE_UI_ON_SETTER(Mge_UiOnPressed, onTap) // button "pressed" == tap completed
 #undef MGE_UI_ON_SETTER
+
+void Mge_UiSetCursor(MgeUiWidget w, MgeMouseCursor cursor)
+{
+    int32_t i = interact_index(w, -1);
+    if (i >= 0) S.nodes[i].v.interact.cursor = (uint8_t)cursor;
+}
 
 bool Mge_UiTapped(MgeUiWidget w)  { int32_t i = interact_index(w, -1); return i >= 0 && S.nodes[i].v.interact.tapped; }
 bool Mge_UiHovered(MgeUiWidget w) { int32_t i = interact_index(w, -1); return i >= 0 && S.nodes[i].v.interact.hovered; }
@@ -903,6 +933,43 @@ bool Mge_UiIsFocused(MgeUiWidget w)
     return i >= 0 && i == S.focusNode;
 }
 
+// ---- overlays (Phase 3c) ----------------------------------------
+
+MgeUiWidget Mge_UiDropdown(const char* const* items, int count, int* index, MgeUiDropdownStyle style)
+{
+    MgeUiWidget h = make_interact(8);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.items = items;
+    S.nodes[i].v.interact.itemCount = count;
+    S.nodes[i].v.interact.intPtr = index;
+    S.nodes[i].v.interact.dd = style;
+    return h;
+}
+
+bool Mge_UiDropdownChanged(MgeUiWidget w) { int32_t i = interact_index(w, 8); return i >= 0 && S.nodes[i].v.interact.changed; }
+bool Mge_UiDropdownOpen(MgeUiWidget w) { int32_t i = interact_index(w, 8); return i >= 0 && i == S.overlayOwner; }
+
+MgeUiWidget Mge_UiSegmentedControl(const char* const* items, int count, int* index, Color accent)
+{
+    MgeUiWidget h = make_interact(9);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.items = items;
+    S.nodes[i].v.interact.itemCount = count;
+    S.nodes[i].v.interact.intPtr = index;
+    S.nodes[i].v.interact.btn.accent = accent;
+    return h;
+}
+
+bool Mge_UiSegmentChanged(MgeUiWidget w) { int32_t i = interact_index(w, 9); return i >= 0 && S.nodes[i].v.interact.changed; }
+
+MgeUiWidget Mge_UiTooltip(const char* text)
+{
+    MgeUiWidget h = make_interact(10);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.label = dup_str(text);
+    return h;
+}
+
 static int32_t scroll_index(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -999,6 +1066,8 @@ void Mge_UiNewFrame(float dt)
         if (c >= 32 && c != 127)
             S.chars[S.nChars++] = c;
     S.caretBlink += dt;
+    S.time += dt;
+    S.wantCursor = MGE_CURSOR_ARROW;
 }
 
 void Mge_UiSetRoot(MgeUiWidget root)
@@ -1017,9 +1086,11 @@ void Mge_UiViewport(float w, float h)
 
 bool Mge_UiWantsPointer(void)
 {
-    return S.pointerOverScroll || S.activeScroll >= 0 || S.hotInteract >= 0 || S.pressInteract >= 0;
+    return S.pointerOverScroll || S.activeScroll >= 0 || S.hotInteract >= 0
+        || S.pressInteract >= 0 || S.overlayOwner >= 0;
 }
 bool Mge_UiWantsKeyboard(void) { return S.focusNode >= 0; }
+bool Mge_UiTooltipShowing(void) { return S.tooltipOwner >= 0 && S.tooltipT >= 0.5f; }
 
 void Mge_UiShutdown(void)
 {
@@ -1657,7 +1728,7 @@ static MgeUiSize layout_layoutbuilder(int32_t i, MgeUiConstraints c)
 static MgeUiSize layout_interact(int32_t i, MgeUiConstraints c)
 {
     const uint8_t widget = S.nodes[i].v.interact.widget;
-    if (widget == 0) // gesture detector
+    if (widget == 0 || widget == 10) // gesture detector / tooltip wrapper
         return layout_passthrough(i, c);
 
     float w = 0.0f, h = 0.0f;
@@ -1682,11 +1753,26 @@ static MgeUiSize layout_interact(int32_t i, MgeUiConstraints c)
     } else if (widget == 6) { // progress bar
         w = (c.maxW < MGE_UI_INF) ? c.maxW : 200.0f;
         h = 8.0f;
-    } else { // widget == 7 text field
+    } else if (widget == 7) { // text field
         const MgeUiTextFieldStyle st = S.nodes[i].v.interact.tf;
         float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
         w = (st.expand && c.maxW < MGE_UI_INF) ? c.maxW : fminf(c.maxW, 200.0f);
         h = ts + 16.0f;
+    } else if (widget == 8) { // dropdown -- widest item + chevron
+        const MgeUiDropdownStyle st = S.nodes[i].v.interact.dd;
+        float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
+        float widest = 0.0f;
+        for (int k = 0; k < S.nodes[i].v.interact.itemCount; k++)
+            widest = fmaxf(widest, Mge_MeasureText(Mge_GetDefaultFont(), S.nodes[i].v.interact.items[k], ts).x);
+        w = (st.expand && c.maxW < MGE_UI_INF) ? c.maxW : (widest + 20.0f + 24.0f);
+        h = ts + 16.0f;
+    } else { // widget == 9 segmented control -- fills a bounded width
+        float ts = 16.0f;
+        float sum = 0.0f;
+        for (int k = 0; k < S.nodes[i].v.interact.itemCount; k++)
+            sum += Mge_MeasureText(Mge_GetDefaultFont(), S.nodes[i].v.interact.items[k], ts).x + 22.0f;
+        w = (c.maxW < MGE_UI_INF) ? c.maxW : sum;
+        h = ts + 14.0f;
     }
 
     w = clampf(w, c.minW, c.maxW);
@@ -1786,7 +1872,8 @@ static int32_t nearest_scroll(int32_t i)
 static int32_t nearest_interact(int32_t i)
 {
     while (i >= 0) {
-        if (S.nodes[i].type == NODE_INTERACT && S.nodes[i].v.interact.enabled)
+        if (S.nodes[i].type == NODE_INTERACT && S.nodes[i].v.interact.enabled
+            && S.nodes[i].v.interact.widget != 10) // tooltip wrapper isn't a pointer target
             return i;
         i = S.nodes[i].parent;
     }
@@ -1880,6 +1967,22 @@ static void interact_tap(int32_t pi)
         if (n->v.interact.intPtr) *n->v.interact.intPtr = n->v.interact.radioValue;
         n->v.interact.changed = true;
         break;
+    case 8: // dropdown -- toggle the floating list
+        S.overlayOwner = (S.overlayOwner == pi) ? -1 : pi;
+        S.overlayHover = -1;
+        break;
+    case 9: { // segmented control -- pick a segment by x
+        int cnt = n->v.interact.itemCount;
+        if (cnt > 0 && n->v.interact.intPtr) {
+            float segW = n->rect.width / (float)cnt;
+            int seg = clampi((int)((S.mouse.x - n->rect.x) / segW), 0, cnt - 1);
+            if (*n->v.interact.intPtr != seg) {
+                *n->v.interact.intPtr = seg;
+                n->v.interact.changed = true;
+            }
+        }
+        break;
+    }
     default: break;
     }
 }
@@ -2104,6 +2207,53 @@ static void tf_edit(int32_t i)
 #undef KEDGE
 }
 
+// ---- overlays (Phase 3c) ----------------------------------------
+
+#define MGE_UI_OVERLAY_MAXROWS 12
+
+// the open dropdown's floating list rect (below the control, flipped above if it
+// would overflow the viewport bottom)
+static Rectangle dropdown_panel_rect(int32_t owner)
+{
+    Rectangle r = S.nodes[owner].rect;
+    int n = S.nodes[owner].v.interact.itemCount;
+    if (n > MGE_UI_OVERLAY_MAXROWS) n = MGE_UI_OVERLAY_MAXROWS;
+    float rowH = r.height;
+    float h = rowH * (float)n;
+    float vpH = (S.vpH > 0.0f) ? S.vpH : (float)Mge_GetScreenHeight();
+    float y = r.y + r.height + 2.0f;
+    if (y + h > vpH && r.y - h - 2.0f >= 0.0f)
+        y = r.y - h - 2.0f; // flip above
+    return (Rectangle){ r.x, y, r.width, h };
+}
+
+static int dropdown_row_at(int32_t owner, Vector2 p)
+{
+    Rectangle panel = dropdown_panel_rect(owner);
+    if (!rect_contains(panel, p)) return -1;
+    float rowH = S.nodes[owner].rect.height;
+    int row = (int)((p.y - panel.y) / rowH);
+    return clampi(row, 0, S.nodes[owner].v.interact.itemCount - 1);
+}
+
+// nearest kind-10 (tooltip) ancestor of `i`, regardless of inner interact nodes
+static int32_t nearest_tooltip(int32_t i)
+{
+    while (i >= 0) {
+        if (S.nodes[i].type == NODE_INTERACT && S.nodes[i].v.interact.widget == 10)
+            return i;
+        i = S.nodes[i].parent;
+    }
+    return -1;
+}
+
+static void interact_double_tap_check(int32_t pi)
+{
+    if (S.time - S.nodes[pi].v.interact.lastTapT < 0.30f)
+        gesture_fire(S.nodes[pi].v.interact.onDoubleTap, pi, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+    S.nodes[pi].v.interact.lastTapT = S.time;
+}
+
 // hit-test + interaction + wheel / drag routing; called after place_node
 static void input_update(void)
 {
@@ -2119,9 +2269,51 @@ static void input_update(void)
     const bool pressed = S.mouseDown && !S.mousePrevDown;
     const bool released = !S.mouseDown && S.mousePrevDown;
 
+    // ---- open dropdown overlay: modal, input first, above the tree ----
+    bool overlayEating = false;
+    if (S.overlayOwner >= 0) {
+        if (S.nodes[S.overlayOwner].type != NODE_INTERACT || S.nodes[S.overlayOwner].v.interact.widget != 8) {
+            S.overlayOwner = -1;
+        } else {
+            int32_t ow = S.overlayOwner;
+            overlayEating = true; // the open dropdown owns the pointer entirely
+            S.overlayHover = dropdown_row_at(ow, S.mouse);
+
+            if (IsKeyPressed(KEY_ESCAPE)) {
+                S.overlayOwner = -1;
+            } else if (pressed) {
+                S.overlayPressRow = S.overlayHover; // -1 => a click-away
+            } else if (released) {
+                if (S.overlayHover >= 0 && S.overlayHover == S.overlayPressRow) {
+                    if (S.nodes[ow].v.interact.intPtr)
+                        *S.nodes[ow].v.interact.intPtr = S.overlayHover;
+                    S.nodes[ow].v.interact.changed = true;
+                    S.dirty = true;
+                }
+                S.overlayOwner = -1; // release always closes
+            }
+            S.pointerOverScroll = false;
+        }
+    }
+
     // ---- interaction routing (runs before scroll so a widget owns its press) ----
-    int32_t hot = nearest_interact(S.pointerNode);
+    int32_t hot = overlayEating ? -1 : nearest_interact(S.pointerNode);
     S.hotInteract = hot;
+
+    // tooltip hover timing (independent of the nearest interact result)
+    int32_t tip = overlayEating ? -1 : nearest_tooltip(S.pointerNode);
+    if (tip >= 0) {
+        if (S.tooltipOwner != tip) { S.tooltipOwner = tip; S.tooltipT = 0.0f; }
+        else S.tooltipT += S.dt;
+    } else {
+        S.tooltipOwner = -1;
+        S.tooltipT = 0.0f;
+    }
+
+    if (overlayEating) {
+        S.wantCursor = MGE_CURSOR_HAND;
+        return; // the open panel owns the pointer this frame
+    }
 
     if (hot != S.hoverInteract) {
         if (S.hoverInteract >= 0 && S.nodes[S.hoverInteract].type == NODE_INTERACT) {
@@ -2141,6 +2333,8 @@ static void input_update(void)
         S.pressPos = S.panPrev = S.mouse;
         S.nodes[hot].v.interact.pressed = true;
         S.nodes[hot].v.interact.panning = false;
+        S.nodes[hot].v.interact.longFired = false;
+        S.nodes[hot].v.interact.pressT = S.time;
         gesture_fire(S.nodes[hot].v.interact.onTapDown, hot, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
         if (S.nodes[hot].v.interact.widget == 5)
             slider_set_from_mouse(hot);
@@ -2152,12 +2346,19 @@ static void input_update(void)
             S.nodes[pi].v.interact.pressed = (hot == pi);
             Vector2 total = { S.mouse.x - S.pressPos.x, S.mouse.y - S.pressPos.y };
             Vector2 delta = { S.mouse.x - S.panPrev.x, S.mouse.y - S.panPrev.y };
-            if (!S.nodes[pi].v.interact.panning && total.x * total.x + total.y * total.y > 16.0f) {
+            bool moved = total.x * total.x + total.y * total.y > 16.0f;
+            if (!S.nodes[pi].v.interact.panning && moved) {
                 S.nodes[pi].v.interact.panning = true;
                 gesture_fire(S.nodes[pi].v.interact.onPanStart, pi, delta, total);
+                gesture_fire(S.nodes[pi].v.interact.onTapCancel, pi, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
             }
             if (S.nodes[pi].v.interact.panning)
                 gesture_fire(S.nodes[pi].v.interact.onPanUpdate, pi, delta, total);
+            else if (!S.nodes[pi].v.interact.longFired && !moved
+                && S.time - S.nodes[pi].v.interact.pressT > 0.5f) {
+                S.nodes[pi].v.interact.longFired = true;
+                gesture_fire(S.nodes[pi].v.interact.onLongPress, pi, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+            }
             if (S.nodes[pi].v.interact.widget == 5)
                 slider_set_from_mouse(pi);
             S.panPrev = S.mouse;
@@ -2166,8 +2367,14 @@ static void input_update(void)
             Vector2 total = { S.mouse.x - S.pressPos.x, S.mouse.y - S.pressPos.y };
             if (S.nodes[pi].v.interact.panning)
                 gesture_fire(S.nodes[pi].v.interact.onPanEnd, pi, (Vector2){ 0, 0 }, total);
-            else if (hot == pi)
+            else if (S.nodes[pi].v.interact.longFired)
+                { /* long press consumed the gesture -- no tap */ }
+            else if (hot == pi) {
                 interact_tap(pi);
+                interact_double_tap_check(pi);
+            } else {
+                gesture_fire(S.nodes[pi].v.interact.onTapCancel, pi, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+            }
             S.nodes[pi].v.interact.pressed = false;
             S.nodes[pi].v.interact.panning = false;
             S.pressInteract = -1;
@@ -2227,6 +2434,20 @@ static void input_update(void)
     if (released) {
         S.activeScroll = -1;
         S.draggingThumb = false;
+    }
+
+    // ---- cursor shape for this frame ----
+    if (S.overlayOwner >= 0) {
+        S.wantCursor = MGE_CURSOR_HAND;
+    } else if (hot >= 0) {
+        uint8_t explicitC = S.nodes[hot].v.interact.cursor;
+        uint8_t wk = S.nodes[hot].v.interact.widget;
+        if (explicitC != MGE_CURSOR_ARROW)
+            S.wantCursor = explicitC;
+        else if (wk == 1 || wk == 2 || wk == 3 || wk == 4 || wk == 8 || wk == 9)
+            S.wantCursor = MGE_CURSOR_HAND;
+        else if (wk == 7)
+            S.wantCursor = MGE_CURSOR_IBEAM;
     }
 }
 
@@ -2306,9 +2527,10 @@ static void paint_interact(int32_t i)
     Node* n = &S.nodes[i];
     const Rectangle r = n->rect;
     const uint8_t widget = n->v.interact.widget;
-    if (widget == 0) return; // gesture detector: invisible
+    if (widget == 0 || widget == 10) return; // gesture detector / tooltip wrapper: invisible
 
-    const Color accent = (n->v.interact.btn.accent.a != 0) ? n->v.interact.btn.accent : Mge_Colors.blue;
+    const Color accent = (n->v.interact.btn.accent.a != 0) ? n->v.interact.btn.accent
+        : (n->v.interact.dd.accent.a != 0 ? n->v.interact.dd.accent : Mge_Colors.blue);
     const Color grey = (Color){ 120, 125, 140, 255 };
     const bool hov = n->v.interact.hovered;
     const bool prs = n->v.interact.pressed;
@@ -2426,11 +2648,118 @@ static void paint_interact(int32_t i)
         return;
     }
 
+    if (widget == 8) { // dropdown -- the closed control
+        const MgeUiDropdownStyle st = n->v.interact.dd;
+        Color bg = (st.bg.a != 0) ? st.bg : (Color){ 18, 20, 28, 255 };
+        Color txtC = (st.textColor.a != 0) ? st.textColor : Mge_Colors.white;
+        float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
+        float rad = (st.radius > 0.0f) ? st.radius : 6.0f;
+        float roundness = clampf(2.0f * rad / fmaxf(1.0f, fminf(r.width, r.height)), 0.0f, 1.0f);
+        bool open = (S.overlayOwner == i);
+
+        Draw_RectangleRounded(r, roundness, 8, hov ? shade(bg, 0.08f) : bg);
+        Draw_RectangleRoundedLines(r, roundness, 8, 1.5f, open ? accent : grey);
+
+        int idx = n->v.interact.intPtr ? *n->v.interact.intPtr : 0;
+        const char* lbl = (idx >= 0 && idx < n->v.interact.itemCount) ? n->v.interact.items[idx] : "";
+        Draw_Text(Mge_GetDefaultFont(), lbl,
+            (Vector2){ r.x + 10.0f, r.y + (r.height - ts) * 0.5f }, ts, txtC);
+
+        // chevron
+        float cxp = r.x + r.width - 16.0f, cyp = r.y + r.height * 0.5f;
+        stroke((Vector2){ cxp - 4.0f, cyp - 2.0f }, (Vector2){ cxp, cyp + 3.0f }, 1.8f, txtC);
+        stroke((Vector2){ cxp, cyp + 3.0f }, (Vector2){ cxp + 4.0f, cyp - 2.0f }, 1.8f, txtC);
+        return;
+    }
+
+    if (widget == 9) { // segmented control
+        Color bg = (Color){ 30, 33, 44, 255 };
+        int cnt = n->v.interact.itemCount;
+        int sel = n->v.interact.intPtr ? *n->v.interact.intPtr : 0;
+        float segW = (cnt > 0) ? r.width / (float)cnt : r.width;
+        float roundness = clampf(2.0f * 6.0f / fmaxf(1.0f, fminf(segW, r.height)), 0.0f, 1.0f);
+        Draw_RectangleRounded(r, roundness, 8, bg);
+        for (int k = 0; k < cnt; k++) {
+            Rectangle seg = { r.x + segW * (float)k, r.y, segW, r.height };
+            if (k == sel)
+                Draw_RectangleRounded(seg, roundness, 8, accent);
+            else if (k > 0)
+                Draw_RectangleRec((Rectangle){ seg.x, seg.y + 4.0f, 1.0f, seg.height - 8.0f }, with_alpha(grey, 90));
+            const char* lbl = n->v.interact.items[k];
+            Vector2 m = Mge_MeasureText(Mge_GetDefaultFont(), lbl, 16.0f);
+            Draw_Text(Mge_GetDefaultFont(), lbl,
+                (Vector2){ seg.x + (segW - m.x) * 0.5f, seg.y + (r.height - m.y) * 0.5f }, 16.0f,
+                k == sel ? Mge_Colors.white : (Color){ 170, 175, 190, 255 });
+        }
+        return;
+    }
+
     // widget == 6 progress bar
     float cy = r.y + r.height * 0.5f;
     Draw_RectangleRounded((Rectangle){ r.x, cy - 3.0f, r.width, 6.0f }, 1.0f, 4, grey);
     if (n->v.interact.progress > 0.0f)
         Draw_RectangleRounded((Rectangle){ r.x, cy - 3.0f, r.width * n->v.interact.progress, 6.0f }, 1.0f, 4, accent);
+}
+
+// the open dropdown list + any active tooltip, painted above the whole tree
+static void paint_overlay(void)
+{
+    if (S.overlayOwner < 0 && !Mge_UiTooltipShowing())
+        return;
+    MgeGL_Draw();            // flush the tree's geometry first
+    MgeGL_DisableScissor();  // overlays are never clipped
+    S.clipTop = 0;
+
+    if (S.overlayOwner >= 0 && S.nodes[S.overlayOwner].type == NODE_INTERACT
+        && S.nodes[S.overlayOwner].v.interact.widget == 8) {
+        int32_t ow = S.overlayOwner;
+        Node* n = &S.nodes[ow];
+        const MgeUiDropdownStyle st = n->v.interact.dd;
+        Color bg = (st.bg.a != 0) ? st.bg : (Color){ 22, 24, 32, 255 };
+        Color txtC = (st.textColor.a != 0) ? st.textColor : Mge_Colors.white;
+        const Color accent = (st.accent.a != 0) ? st.accent : Mge_Colors.blue;
+        const Color grey = (Color){ 120, 125, 140, 255 };
+        float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
+        Rectangle panel = dropdown_panel_rect(ow);
+        float rowH = n->rect.height;
+        int shown = n->v.interact.itemCount;
+        if (shown > MGE_UI_OVERLAY_MAXROWS) shown = MGE_UI_OVERLAY_MAXROWS;
+        int sel = n->v.interact.intPtr ? *n->v.interact.intPtr : -1;
+
+        Draw_RectangleRec((Rectangle){ panel.x + 3.0f, panel.y + 3.0f, panel.width, panel.height },
+            (Color){ 0, 0, 0, 60 }); // shadow
+        Draw_RectangleRounded(panel, 0.12f, 6, bg);
+        Draw_RectangleRoundedLines(panel, 0.12f, 6, 1.0f, grey);
+        for (int k = 0; k < shown; k++) {
+            Rectangle row = { panel.x, panel.y + rowH * (float)k, panel.width, rowH };
+            if (k == S.overlayHover)
+                Draw_RectangleRec(row, with_alpha(accent, 34));
+            Draw_Text(Mge_GetDefaultFont(), n->v.interact.items[k],
+                (Vector2){ row.x + 10.0f, row.y + (rowH - ts) * 0.5f }, ts, txtC);
+            if (k == sel) {
+                float mx = row.x + row.width - 16.0f, my = row.y + rowH * 0.5f;
+                stroke((Vector2){ mx - 5.0f, my }, (Vector2){ mx - 1.0f, my + 4.0f }, 2.0f, accent);
+                stroke((Vector2){ mx - 1.0f, my + 4.0f }, (Vector2){ mx + 5.0f, my - 4.0f }, 2.0f, accent);
+            }
+        }
+    }
+
+    if (S.tooltipOwner >= 0 && S.tooltipT >= 0.5f && S.nodes[S.tooltipOwner].type == NODE_INTERACT) {
+        const char* text = S.nodes[S.tooltipOwner].v.interact.label;
+        if (text && text[0]) {
+            float ts = 14.0f;
+            Vector2 m = Mge_MeasureText(Mge_GetDefaultFont(), text, ts);
+            float pad = 6.0f;
+            float vpW = (S.vpW > 0.0f) ? S.vpW : (float)Mge_GetScreenWidth();
+            float vpH = (S.vpH > 0.0f) ? S.vpH : (float)Mge_GetScreenHeight();
+            Rectangle box = { S.mouse.x + 12.0f, S.mouse.y + 18.0f, m.x + 2.0f * pad, m.y + 2.0f * pad };
+            if (box.x + box.width > vpW) box.x = vpW - box.width;
+            if (box.y + box.height > vpH) box.y = S.mouse.y - box.height - 6.0f;
+            Draw_RectangleRounded(box, 0.35f, 4, (Color){ 30, 32, 40, 245 });
+            Draw_RectangleRoundedLines(box, 0.35f, 4, 1.0f, (Color){ 90, 95, 115, 255 });
+            Draw_Text(Mge_GetDefaultFont(), text, (Vector2){ box.x + pad, box.y + pad }, ts, Mge_Colors.white);
+        }
+    }
 }
 
 static void paint_scrollbar(int32_t i)
@@ -2530,9 +2859,11 @@ void Mge_UiRender(void)
     MgeGL_SetBlend(true);
     S.clipTop = 0;
     paint_node(S.root);
+    paint_overlay(); // dropdown list + tooltip, above everything (no scissor)
     MgeGL_Draw();
     MgeGL_DisableScissor(); // safety net if a clip push was left unbalanced
     MgeGL_SetBlend(false);
 
+    Mge_SetMouseCursor((MgeMouseCursor)S.wantCursor);
     S.dirty = false;
 }
