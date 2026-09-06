@@ -1,11 +1,14 @@
 # MGEngine editor
 
 A scene editor built on top of the engine library — see
-[../docs/](../docs/) for the engine itself. `editor/` is a plain-C consumer
-(`#include <mge.h>` + link `-lmgengine`), split into one unit per concern:
+[../docs/](../docs/) for the engine itself. `editor/` is a `-lmgengine` consumer
+(`#include <mge.h>`), mostly plain C plus its one C++ unit `mge_gui.cpp` (the Dear
+ImGui backend behind the C `Mge_Gui*` API — ImGui lives in `editor.exe`, not the
+shipped library), split into one unit per concern:
 
 | file | contents |
 | --- | --- |
+| `mge_gui.cpp` / `.h` | `Mge_Gui*` immediate-mode UI over Dear ImGui, plain C at the surface. Editor-only; linked into `editor.exe` with `g++`. Drives ImGui off the engine's GLFW window handle |
 | `main.c` | the window (resizable), the frame loop, the docked-panel layout (fixed top strip + draggable left / right / bottom splits), `Scene_Resize` on window resize, the **TAB** mode toggle, the Play-mode branch (hide panels, view through the main camera, Esc = Stop), **F12** screenshot, the close-button guard. Owns the `Project` + active `Scene` + undo `History` |
 | `prefs.c` / `.h` | `EditorPrefs` — window size + panel split positions, read from / written to `~/.mgeeditor.ini` |
 | `editor_camera.c` / `.h` | `EditorCamera`: the yaw/pitch fly-cam. VIEW mode always flies; EDIT mode flies only while **RIGHT mouse** is held. `EditorCamera_SetPose` jumps it to a loaded scene's camera |

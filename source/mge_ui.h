@@ -17,8 +17,8 @@
 //   ... build / mutate the tree ...
 //   Mge_UiRender();
 //
-// This is a separate system from the Mge_Gui* Dear ImGui shim (mge_gui.h),
-// which is editor-facing. Phase 0: Container + Label/Text only.
+// This is a separate system from the Mge_Gui* Dear ImGui shim
+// (editor/mge_gui.h), which is editor-only and not in the shipped engine DLL.
 
 #pragma once
 

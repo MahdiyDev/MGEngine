@@ -12,7 +12,9 @@
 //     Mge_GuiEndSidebar();
 //   Mge_GuiEndFrame();
 //
-// The engine links its GUI backend into libmgengine; nothing extra to build.
+// Editor-only: editor.exe compiles editor/mge_gui.cpp + Dear ImGui and links
+// them itself. This API is NOT in the shipped libmgengine -- the game runtime
+// uses the Mge_Ui* retained widget GUI (mge_ui.h) instead.
 
 #pragma once
 

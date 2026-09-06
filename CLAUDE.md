@@ -3,9 +3,9 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 MGEngine is a small raylib-style 2D/3D rendering engine in C11 (OpenGL 4.4 core,
-GLFW, glad, stb_image, Assimp, Dear ImGui). It builds a shared library plus two
-consumer apps. See `docs/` (engine API, split by area) and `editor/USAGE.md`
-(editor) for in-depth docs; `README.md` maps the repo.
+GLFW, glad, stb_image, Assimp; Dear ImGui is editor-only). It builds a shared
+library plus two consumer apps. See `docs/` (engine API, split by area) and
+`editor/USAGE.md` (editor) for in-depth docs; `README.md` maps the repo.
 
 ## Commands
 
@@ -64,12 +64,15 @@ is `vendor/mlib/test.h` (`TEST(name){ CHECK(cond); } … RUN(name); test_summary
 
 ### One library, three outputs
 
-`source/*.{c,cpp}` all compile into `libmgengine`. `mge_gui.cpp` is the **only**
-C++ translation unit (the Dear ImGui backend behind the C `Mge_Gui*` API), which
-is why the library is linked with `g++` and statically bakes in the C/C++
-runtimes — consumers stay pure C. `editor/` and `runtime/` are plain-C apps that
-`#include <mge.h>` and link `-lmgengine`. `source/platforms/mge_code_desktop.c`
-(the GLFW backend) is `#include`d by `mge_core.c`, not compiled on its own.
+`source/*.c` compile into `libmgengine` — the engine has no C++ of its own. The
+library is still linked with `g++` (the bundled **Assimp** is C++) and statically
+bakes in the C/C++ runtimes, so consumers stay pure C. `runtime/` (the player) is
+a plain-C app that `#include <mge.h>` and links `-lmgengine`. `editor/` is mostly
+plain C but additionally compiles its one C++ unit `editor/mge_gui.cpp` (the Dear
+ImGui backend behind the C `Mge_Gui*` API) + Dear ImGui and links with `g++`
+(`-static-libgcc -static-libstdc++`, `--allow-multiple-definition`); ImGui is
+**not** in the shipped library. `source/platforms/mge_code_desktop.c` (the GLFW
+backend) is `#include`d by `mge_core.c`, not compiled on its own.
 
 The engine is raylib-shaped: an immediate-mode **batched GL renderer**
 (`MgeGL_*` in `mge_gl.c`), its own math library (`mge_math.c`, replaces glm), and

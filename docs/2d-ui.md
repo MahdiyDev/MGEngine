@@ -56,14 +56,15 @@ half; it also shows `Draw_Text3D` on an orbiting camera). Tests:
 `text` / `text3d` / `skybox` scenes in `make render`.
 
 
-## GUI (`mge_gui.h`)
+## GUI (`editor/mge_gui.h`)
 
-An immediate-mode UI abstracted over Dear ImGui — the backend is baked into
-`libmgengine`, so consumers include `<mge_gui.h>` and call plain C. No ImGui
-types leak out.
+An immediate-mode UI abstracted over Dear ImGui, in plain C — no ImGui types leak
+out. **Editor-only**: `editor/mge_gui.cpp` + Dear ImGui are compiled into
+`editor.exe`, *not* `libmgengine`. The shipped game uses the `Mge_Ui*` retained
+widget GUI below.
 
 ```c
-#include <mge_gui.h>
+#include "mge_gui.h"
 
 Mge_GuiBeginFrame();                         // after the 3D/2D scene
     if (Mge_GuiBeginSidebar("Scene", 300, false)) {   // full-height dock on the left

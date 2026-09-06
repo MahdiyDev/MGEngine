@@ -42,8 +42,9 @@ INCLUDES  = -I./source \
             -I$(VENDOR)/stb \
             -I$(VENDOR)/glfw/include \
             -I$(VENDOR)/assimp/include \
-            -I$(VENDOR)/imgui \
             -I$(MLIB) -I$(MLIB)/vec
+# the editor additionally needs Dear ImGui + GLFW headers for editor/mge_gui.cpp
+EDITOR_INCLUDES = $(INCLUDES) -I$(VENDOR)/imgui
 
 # distros using GNUInstallDirs (Fedora, ...) install these to lib64/; keep both
 LIB_DIR   = -L$(VENDOR)/glfw/lib -L$(VENDOR)/glfw/lib64 \
@@ -103,18 +104,24 @@ else
     APP_EXTRA   :=
 endif
 
-# every source/*.{c,cpp} is engine code (the editor app lives in editor/); the
-# desktop platform file is #included by mge_core.c, not compiled on its own.
-# mge_gui.cpp is the one C++ unit (Dear ImGui backend).
+# every source/*.c is engine code (the editor app lives in editor/); the desktop
+# platform file is #included by mge_core.c, not compiled on its own. The engine
+# has no C++ of its own -- Dear ImGui + editor/mge_gui.cpp are the editor's (see
+# the editor target below). The DLL is still linked with g++ because the bundled
+# Assimp is C++.
 CSOURCES   = $(wildcard $(SOURCE_DIR)/*.c)
-CXXSOURCES = $(wildcard $(SOURCE_DIR)/*.cpp)
-# glad + Dear ImGui: vendored source compiled straight into the engine
+# glad: vendored source compiled straight into the engine
 GLAD_SRC  = $(VENDOR)/glad/glad.c
+# Dear ImGui (editor only)
 IMGUI_SRC = $(wildcard $(VENDOR)/imgui/*.cpp)
 IMGUI_OBJ = $(patsubst $(VENDOR)/imgui/%.cpp,$(BUILD_OBJ_DIR)/imgui/%.o,$(IMGUI_SRC))
 COBJECTS = $(patsubst $(SOURCE_DIR)/%.c,$(BUILD_OBJ_DIR)/%.o,$(CSOURCES)) \
-           $(patsubst $(SOURCE_DIR)/%.cpp,$(BUILD_OBJ_DIR)/%.o,$(CXXSOURCES)) \
-           $(IMGUI_OBJ) $(BUILD_OBJ_DIR)/glad.o
+           $(BUILD_OBJ_DIR)/glad.o
+
+# editor objects: its plain-C sources + the one C++ unit (Dear ImGui backend)
+EDITOR_SRC     = $(wildcard editor/*.c)
+EDITOR_C_OBJ   = $(patsubst editor/%.c,$(BUILD_OBJ_DIR)/editor/%.o,$(EDITOR_SRC))
+EDITOR_GUI_OBJ = $(BUILD_OBJ_DIR)/editor/mge_gui.o
 
 ENGINE_LIB = $(CONF_DIR)/$(LIB_NAME)
 APP        = $(CONF_DIR)/editor$(EXE)
@@ -156,25 +163,40 @@ DEPFLAGS = -MMD -MP
 $(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
-$(BUILD_OBJ_DIR)/%.o: $(SOURCE_DIR)/%.cpp | $(BUILD_OBJ_DIR)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
-
 $(BUILD_OBJ_DIR)/glad.o: $(GLAD_SRC) | $(BUILD_OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
 
 -include $(COBJECTS:.o=.d)
+-include $(IMGUI_OBJ:.o=.d) $(EDITOR_C_OBJ:.o=.d) $(EDITOR_GUI_OBJ:.o=.d)
 
-# vendored Dear ImGui -- warnings silenced, own object subdir
+# vendored Dear ImGui -- warnings silenced, own object subdir. Editor-only.
 $(BUILD_OBJ_DIR)/imgui:
 	$(call MKDIR,$(BUILD_OBJ_DIR)/imgui)
 
 $(BUILD_OBJ_DIR)/imgui/%.o: $(VENDOR)/imgui/%.cpp | $(BUILD_OBJ_DIR)/imgui
-	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(DEPFLAGS) $(PICFLAG) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) -std=c++17 -O2 -w -ffunction-sections -fdata-sections $(DEPFLAGS) $(PICFLAG) $(EDITOR_INCLUDES) -c $< -o $@
 
-# --- editor app: a plain-C consumer of the library + its headers ---
-EDITOR_SRC = $(wildcard editor/*.c)
-$(APP): $(EDITOR_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) $(EDITOR_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
+# --- editor app: plain-C editor sources + the one C++ unit (mge_gui.cpp, the
+#     Dear ImGui backend) + Dear ImGui; linked with g++. The player and every
+#     example/test stay pure C -- none of this is in libmgengine. ---
+$(BUILD_OBJ_DIR)/editor:
+	$(call MKDIR,$(BUILD_OBJ_DIR)/editor)
+
+$(BUILD_OBJ_DIR)/editor/%.o: editor/%.c $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) | $(BUILD_OBJ_DIR)/editor
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -I$(SOURCE_DIR) -Ieditor -I$(MLIB) -c $< -o $@
+
+$(EDITOR_GUI_OBJ): editor/mge_gui.cpp editor/mge_gui.h $(wildcard $(SOURCE_DIR)/*.h) | $(BUILD_OBJ_DIR)/editor
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEPFLAGS) $(EDITOR_INCLUDES) -c $< -o $@
+
+# bake the C++ / gcc runtimes into editor.exe so it needs only libmgengine +
+# system DLLs. libmgengine.dll also baked its own libgcc (for Assimp), so its
+# import lib re-exports a few unwinder shims (_Unwind_Resume, ...) that collide
+# with the editor's copy -- --allow-multiple-definition keeps the editor's, which
+# is what its own code was compiled against. (SEH unwinding is OS-level; the two
+# thin shims are interchangeable.)
+EDITOR_STATIC = -static-libgcc -static-libstdc++ -Wl,--allow-multiple-definition
+$(APP): $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) $(ENGINE_LIB)
+	$(CXX) $(CFLAGS) $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) -o $@ $(EDITOR_STATIC) $(APP_LIBS) $(APP_EXTRA) -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive,-Bdynamic
 
 # --- standalone player: runs a built project. Reuses the editor's data layer
 #     (no GUI); what `Build Release` ships as <name>.exe.

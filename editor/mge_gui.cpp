@@ -1,5 +1,7 @@
-// Dear ImGui backend for the abstract UI in mge_gui.h. This is the only C++
-// translation unit in the engine; everything it exposes has C linkage.
+// Dear ImGui backend for the abstract UI in mge_gui.h. Editor-only -- the one
+// C++ translation unit the editor compiles; everything it exposes has C linkage.
+// It links Dear ImGui + imgui_impl_glfw/opengl3 into editor.exe and drives them
+// with the engine's GLFW window handle. Not part of the shipped libmgengine.
 
 #include "mge_gui.h"
 #include "mge_gl.h"

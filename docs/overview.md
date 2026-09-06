@@ -36,7 +36,6 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_msaa.c           MSAA request (Mge_SetMSAA / Mge_GetMSAA)
   mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
   mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
-  mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit; editor)
   mge_ui.h   mge_ui.c      Mge_Ui* retained widget GUI (pure C; game menus / HUD)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / ...HDR (float) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
   mge_screenshot.c     Mge_TakeScreenshot / MgeGL_SaveScreenshot -- framebuffer -> PNG (stb_image_write)
@@ -61,6 +60,7 @@ editor/                THE APP -- project / scene editor (docked panel shell aro
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
   inspector.c/.h       right panel: the type-aware inspector (+ texture slots)
   resources.c/.h       bottom panel: project res/ browser (import / rename / delete / assign)
+  mge_gui.h mge_gui.cpp  Mge_Gui* immediate-mode UI (Dear ImGui backend; editor-only, the one C++ unit)
   USAGE.md             editor docs
 docs/                  engine docs (this folder), split by area
 runtime/
@@ -69,7 +69,7 @@ vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h, stb_image_write.h, stb_truetype.h (single-header, public domain)
   mlib/                MahdiyDev/mlib (containers, test harness)
-  imgui/               Dear ImGui 1.90.5 source (compiled straight into the engine)
+  imgui/               Dear ImGui 1.90.5 source (compiled into the editor, not the engine)
   glfw/                GLFW -- vendored source; `make vendor-glfw` builds lib/ + include/
   assimp/              Assimp OBJ/glTF2/FBX importers -- pruned source under
                        source/; `make vendor-assimp` builds lib/ + include/
@@ -133,12 +133,17 @@ enables only the OBJ / glTF2 / FBX importers (no exporters, tools or tests) for 
 small static lib; adjust the `-DASSIMP_BUILD_*` flags in the `vendor-assimp`
 recipe to add formats.
 
-`make` compiles `source/*.c` with `gcc -std=c11` and `source/mge_gui.cpp` with
-`g++ -std=c++17` (the desktop platform file is `#include`d by `mge_core.c`, not
-compiled on its own), links them into `build/libmgengine.dll` with `g++`
-(`-static-libgcc -static-libstdc++ -static`, so the DLL carries the C/C++ runtime
-and GLFW / Assimp / Dear ImGui are already inside), then builds `editor/*.c`
-against it with plain `gcc -Isource -lmgengine`.
+`make` compiles `source/*.c` with `gcc -std=c11` (the desktop platform file is
+`#include`d by `mge_core.c`, not compiled on its own) and links them into
+`build/libmgengine.dll` with `g++` (`-static-libgcc -static-libstdc++ -static`,
+so the DLL carries the C/C++ runtime and GLFW / Assimp are already inside).
+`libmgengine` has **no C++ of its own** -- the API surface is pure C; C++ is only
+the bundled Assimp. The editor then builds `editor/*.c` with `gcc` plus its one
+C++ unit `editor/mge_gui.cpp` (the Dear ImGui backend) and Dear ImGui, links the
+lot with `g++` (`-static-libgcc -static-libstdc++`, `--allow-multiple-definition`
+for the unwinder shims both it and the DLL bake in), and needs only
+`libmgengine.dll` + system DLLs at run time. `mgeplayer` stays plain
+`gcc -lmgengine` -- Dear ImGui never reaches the shipped game.
 `make_build_dir` stages `assets/` (and `shaders/`) plus the public headers
 (`source/*.h` -> `<conf>/include/`) into the config's own dir, and the DLL sits
 next to `editor.exe` / `mgeplayer.exe` there, so each config runs from its own
@@ -268,12 +273,14 @@ translate / rotate / scale gizmo.
 
 ## Notes / limitations
 
-- Engine sources are C11 (`mge_gui.cpp` is the lone C++ unit); everything builds
-  under `-Wall -Wextra`. The `test/` suite needs no window or GL context; the
-  window / renderer itself does.
+- Engine sources are C11 (no C++ of the engine's own -- `libmgengine`'s only C++
+  is the bundled Assimp); everything builds under `-Wall -Wextra`. The `test/`
+  suite needs no window or GL context; the window / renderer itself does.
 - `make` needs `vendor/{glfw,assimp}/lib` populated first (`make vendor`).
   Dear ImGui (`vendor/imgui/`, v1.90.5) is vendored as source and compiled into
-  the DLL — no separate build step, and header/binary versions can't drift.
+  the **editor** (`editor/mge_gui.cpp` is its backend) — no separate build step,
+  and header/binary versions can't drift; it never reaches `libmgengine` or the
+  shipped game.
 - `glm` is gone; `vendor/glm/` was deleted.
 
 ## References
@@ -295,7 +302,7 @@ External material this engine's design and shaders are based on.
 | [Ben Golus — "Normal Mapping for a Triplanar Shader"](https://bgolus.medium.com/normal-mapping-for-a-triplanar-shader-10bf39dca05a) | the whiteout-blend triplanar normal mapping in `mge_light.c` |
 | [landow.dev — "Triplanar Mapping with Deep Parallax"](https://www.landow.dev/posts/triplanar/) | per-plane parallax-occlusion under triplanar (offset-limiting march) |
 | Unreal Engine editor | the rotate gizmo — full-circle rings with only the camera-facing arc drawn (`mge_gizmo.c`) |
-| [Dear ImGui](https://github.com/ocornut/imgui) | the `Mge_Gui*` UI backend (`mge_gui.cpp`) |
+| [Dear ImGui](https://github.com/ocornut/imgui) | the editor's `Mge_Gui*` UI backend (`editor/mge_gui.cpp`) |
 | [MahdiyDev/mlib](https://github.com/MahdiyDev/mlib) | the `test/` harness and small container helpers |
 
 Vendored libraries: [GLFW](https://www.glfw.org/) (windowing/input), [glad](https://gen.glad.sh/) (GL loader), [Assimp](https://github.com/assimp/assimp) (model import), [stb_image](https://github.com/nothings/stb) (image decode).
