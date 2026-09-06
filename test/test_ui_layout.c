@@ -363,6 +363,154 @@ TEST(visibility_false_collapses_the_subtree)
     Mge_UiDestroy(root);
 }
 
+// ---- Phase 1b ----
+
+TEST(wrap_flows_children_into_runs)
+{
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 100 });
+    MgeUiWidget w = Mge_UiWrap((MgeWrapStyle){ .spacing = 0, .runSpacing = 5 });
+    MgeUiWidget a = fixed(60, 20), b = fixed(60, 24), c = fixed(60, 20);
+    Mge_UiAddChild(w, a);
+    Mge_UiAddChild(w, b);
+    Mge_UiAddChild(w, c);
+    Mge_UiAddChild(box, w);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    CHECK_F(Mge_UiGetRect(a).x, Mge_UiGetRect(w).x);          // run 1: a, b won't fit (60+60 > 100)
+    CHECK_F(Mge_UiGetRect(b).x, Mge_UiGetRect(w).x);          // run 2: b
+    CHECK_F(Mge_UiGetRect(b).y, Mge_UiGetRect(w).y + 20.0f + 5.0f); // run 1 height + runSpacing
+    CHECK_F(Mge_UiGetRect(c).y, Mge_UiGetRect(b).y + 24.0f + 5.0f); // run 3: c
+    CHECK_F(Mge_UiGetRect(w).height, 20.0f + 24.0f + 20.0f + 2.0f * 5.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(table_resolves_columns_and_lays_rows)
+{
+    MgeTableColumn cols[3] = {
+        { MGE_COL_FIXED, 40 },
+        { MGE_COL_INTRINSIC, 0 },
+        { MGE_COL_FLEX, 1 },
+    };
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200 });
+    MgeUiWidget t = Mge_UiTable(cols, 3, 6.0f, 10.0f);
+
+    MgeUiWidget r1 = Mge_UiTableRow();
+    Mge_UiAddChild(r1, fixed(10, 12));
+    MgeUiWidget widecell = Mge_UiText(0, "WWWW", (MgeTextStyle){ .size = 8 }); // intrinsic column driver
+    Mge_UiAddChild(r1, widecell);
+    Mge_UiAddChild(r1, fixed(10, 30)); // sets row height
+    Mge_UiAddChild(t, r1);
+
+    Mge_UiAddChild(box, t);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    float intrinsicW = Mge_MeasureText(Mge_GetDefaultFont(), "WWWW", 8.0f).x;
+    // col0 = 40 fixed, col1 = intrinsicW, col2 = 200 - 20 (spacing) - 40 - intrinsicW
+    CHECK_F(Mge_UiGetRect(widecell).x, Mge_UiGetRect(r1).x + 40.0f + 10.0f);
+    CHECK_F(Mge_UiGetRect(r1).height, 30.0f); // tallest cell
+    float col2x = 40.0f + 10.0f + intrinsicW + 10.0f;
+    CHECK(Mge_UiChildAt(r1, 2) != 0);
+    CHECK_F(Mge_UiGetRect(Mge_UiChildAt(r1, 2)).x, Mge_UiGetRect(r1).x + col2x);
+    Mge_UiDestroy(root);
+}
+
+TEST(intrinsic_width_sizes_to_the_widest_child)
+{
+    Font f = Mge_GetDefaultFont();
+    MgeUiWidget iw = Mge_UiIntrinsicWidth();
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH, .mainSize = MGE_MAIN_SIZE_MIN });
+    Mge_UiText(col, "short", (MgeTextStyle){ .size = 16 });
+    Mge_UiText(col, "a longer line", (MgeTextStyle){ .size = 16 });
+    Mge_UiAddChild(iw, col);
+    MgeUiWidget root = wrap(iw, 800, 600);
+
+    CHECK_F(Mge_UiGetRect(iw).width, Mge_MeasureText(f, "a longer line", 16.0f).x);
+    Mge_UiDestroy(root);
+}
+
+TEST(aspect_ratio_fits_the_box)
+{
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 200 });
+    MgeUiWidget ar = Mge_UiAspectRatio(2.0f);
+    Mge_UiAddChild(ar, Mge_UiContainer((MgeContainerStyle){ 0 }));
+    Mge_UiAddChild(box, ar);
+    MgeUiWidget root = wrap(box, 800, 600);
+    CHECK_F(Mge_UiGetRect(ar).width, 200.0f);
+    CHECK_F(Mge_UiGetRect(ar).height, 100.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(fractionally_sized_box_takes_a_fraction_of_the_box)
+{
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 400, .height = 300 });
+    MgeUiWidget fb = Mge_UiFractionallySizedBox(0.5f, 0.5f, MGE_ALIGN_CENTER);
+    MgeUiWidget inner = Mge_UiContainer((MgeContainerStyle){ 0 });
+    Mge_UiAddChild(fb, inner);
+    Mge_UiAddChild(box, fb);
+    MgeUiWidget root = wrap(box, 800, 600);
+    CHECK_F(Mge_UiGetRect(inner).width, 200.0f);
+    CHECK_F(Mge_UiGetRect(inner).height, 150.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(unconstrained_and_limited_box)
+{
+    // UnconstrainedBox: an oversized child keeps its size
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 50, .height = 50 });
+    MgeUiWidget uc = Mge_UiUnconstrainedBox();
+    Mge_UiAddChild(uc, fixed(300, 20));
+    Mge_UiAddChild(box, uc);
+    MgeUiWidget root = wrap(box, 800, 600);
+    CHECK_F(Mge_UiGetRect(Mge_UiChildAt(uc, 0)).width, 300.0f);
+    Mge_UiDestroy(root);
+
+    // LimitedBox: caps an axis that arrives unbounded (a Row's main-axis pass),
+    // leaves a bounded one alone
+    MgeUiWidget rowL = Mge_UiRow((MgeFlexStyle){ .mainSize = MGE_MAIN_SIZE_MIN });
+    MgeUiWidget lb = Mge_UiLimitedBox(120, 999);
+    MgeUiWidget content = fixed(500, 30);
+    Mge_UiAddChild(lb, content);
+    Mge_UiAddChild(rowL, lb);
+    root = wrap(rowL, 800, 600);
+    CHECK_F(Mge_UiGetRect(content).width, 120.0f);  // width arrived unbounded -> capped
+    CHECK_F(Mge_UiGetRect(content).height, 30.0f);  // height was bounded -> untouched
+    Mge_UiDestroy(root);
+}
+
+TEST(indexed_stack_lays_out_all_but_paints_one)
+{
+    MgeUiWidget is = Mge_UiIndexedStack(1);
+    MgeUiWidget a = fixed(40, 40), b = fixed(80, 20), c = fixed(30, 60);
+    Mge_UiAddChild(is, a);
+    Mge_UiAddChild(is, b);
+    Mge_UiAddChild(is, c);
+    MgeUiWidget root = wrap(is, 800, 600);
+    // stack still sizes to the biggest child on each axis
+    CHECK_F(Mge_UiGetRect(is).width, 80.0f);
+    CHECK_F(Mge_UiGetRect(is).height, 60.0f);
+    // all children laid out (rects set)
+    CHECK_F(Mge_UiGetRect(a).width, 40.0f);
+    CHECK_F(Mge_UiGetRect(c).height, 60.0f);
+    Mge_UiSetStackIndex(is, 2); // no crash; layout unchanged
+    render(root, 800, 600);
+    CHECK_F(Mge_UiGetRect(is).width, 80.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(visibility_maintain_keeps_the_size)
+{
+    MgeUiWidget row = Mge_UiRow((MgeFlexStyle){ .mainSize = MGE_MAIN_SIZE_MIN });
+    MgeUiWidget a = fixed(30, 10);
+    MgeUiWidget vm = Mge_UiVisibilityMaintain(false);
+    Mge_UiAddChild(vm, fixed(50, 10));
+    Mge_UiAddChild(row, a);
+    Mge_UiAddChild(row, vm);
+    MgeUiWidget root = wrap(row, 800, 600);
+    CHECK_F(Mge_UiGetRect(vm).width, 50.0f);   // size kept
+    CHECK_F(Mge_UiGetRect(row).width, 80.0f);
+    Mge_UiDestroy(root);
+}
+
 int main(void)
 {
     MgeGL_Init(800, 600); // the batcher the paint pass feeds
@@ -387,5 +535,14 @@ int main(void)
     RUN(center_and_align_place_the_child);
     RUN(stack_sizes_to_children_and_positions_them);
     RUN(visibility_false_collapses_the_subtree);
+
+    RUN(wrap_flows_children_into_runs);
+    RUN(table_resolves_columns_and_lays_rows);
+    RUN(intrinsic_width_sizes_to_the_widest_child);
+    RUN(aspect_ratio_fits_the_box);
+    RUN(fractionally_sized_box_takes_a_fraction_of_the_box);
+    RUN(unconstrained_and_limited_box);
+    RUN(indexed_stack_lays_out_all_but_paints_one);
+    RUN(visibility_maintain_keeps_the_size);
     return test_summary();
 }

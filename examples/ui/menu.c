@@ -65,6 +65,22 @@ int main(void)
         Mge_UiAddChild(col, s_rows[k]);
     }
 
+    // a small run stats block: a 2-column Table (label -> value)
+    Mge_UiAddChild(col, Mge_UiSizedBox(0, 6));
+    MgeTableColumn cols[2] = { { MGE_COL_INTRINSIC, 0 }, { MGE_COL_FLEX, 1 } };
+    MgeUiWidget stats = Mge_UiTable(cols, 2, 4.0f, 12.0f);
+    const char* sk[2] = { "Time", "Score" };
+    const char* sv[2] = { "12:04", "8,120" };
+    for (int k = 0; k < 2; k++) {
+        MgeUiWidget r = Mge_UiTableRow();
+        Mge_UiText(r, sk[k], (MgeTextStyle){ .size = 15, .color = (Color){ 150, 160, 190, 255 } });
+        MgeUiWidget rightAlign = Mge_UiAlign(MGE_ALIGN_CENTER_RIGHT);
+        Mge_UiText(rightAlign, sv[k], (MgeTextStyle){ .size = 15, .color = Mge_Colors.white });
+        Mge_UiAddChild(r, rightAlign);
+        Mge_UiAddChild(stats, r);
+    }
+    Mge_UiAddChild(col, stats);
+
     Mge_UiAddChild(root, Mge_UiSpacer(1));
     Mge_UiSetRoot(root);
 

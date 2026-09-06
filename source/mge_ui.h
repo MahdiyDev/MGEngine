@@ -200,6 +200,36 @@ typedef struct MgeFlexStyle {
 // "unset" for an Mge_UiPositioned edge / size (a real value is finite)
 #define MGE_UI_NONE MGE_UI_INF
 
+// ---- wrap / table (Phase 1b) --------------------------------------------
+
+typedef enum {
+    MGE_WRAP_START = 0,
+    MGE_WRAP_END,
+    MGE_WRAP_CENTER,
+    MGE_WRAP_SPACE_BETWEEN,
+    MGE_WRAP_SPACE_AROUND,
+    MGE_WRAP_SPACE_EVENLY,
+} MgeWrapAlignment;
+
+typedef struct MgeWrapStyle {
+    MgeAxis          axis;         // main axis of each run
+    float            spacing;      // gap between children in a run
+    float            runSpacing;   // gap between runs
+    MgeWrapAlignment alignment;    // children within a run (main axis)
+    MgeWrapAlignment runAlignment; // runs across the cross axis
+} MgeWrapStyle;
+
+typedef enum {
+    MGE_COL_FLEX = 0,  // value = weight; splits the leftover width
+    MGE_COL_FIXED,     // value = pixels
+    MGE_COL_INTRINSIC, // widest cell in the column
+} MgeTableColumnMode;
+
+typedef struct MgeTableColumn {
+    MgeTableColumnMode mode;
+    float              value;
+} MgeTableColumn;
+
 // ---- handles ------------------------------------------------------------
 
 typedef uint32_t MgeUiWidget; // opaque; 0 == null
@@ -261,6 +291,25 @@ MgeUiWidget Mge_UiPositioned(float left, float top, float right, float bottom,
 MgeUiWidget Mge_UiPositionedFill(void);
 
 MgeUiWidget Mge_UiVisibility(bool visible);              // !visible => zero size, not painted
+MgeUiWidget Mge_UiVisibilityMaintain(bool visible);     // !visible => keeps its size, still not painted
+MgeUiWidget Mge_UiOffstage(bool offstage);              // == Mge_UiVisibility(!offstage)
+
+// --- layout tail (Phase 1b) ---
+MgeUiWidget Mge_UiWrap(MgeWrapStyle style);              // multi-child: children flow into runs
+MgeUiWidget Mge_UiTable(const MgeTableColumn* cols, int nCols,
+    float rowSpacing, float colSpacing);                 // multi-child: add Mge_UiTableRow rows
+MgeUiWidget Mge_UiTableRow(void);                        // multi-child: cells (any widget)
+
+MgeUiWidget Mge_UiIntrinsicWidth(void);                  // size the child to its max-content width
+MgeUiWidget Mge_UiIntrinsicHeight(void);
+
+MgeUiWidget Mge_UiAspectRatio(float ratio);             // largest w/h == ratio box that fits
+MgeUiWidget Mge_UiFractionallySizedBox(float wFactor, float hFactor, MgeAlignment align); // 0 => unset
+MgeUiWidget Mge_UiUnconstrainedBox(void);               // let the child pick any size
+MgeUiWidget Mge_UiLimitedBox(float maxW, float maxH);   // caps only an axis that arrives unbounded
+
+MgeUiWidget Mge_UiIndexedStack(int index);              // a Stack that paints only child `index`
+void        Mge_UiSetStackIndex(MgeUiWidget w, int index);
 
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);

@@ -219,6 +219,58 @@ static void scene_ui(void)
     Mge_UiDestroy(root);
 }
 
+// Phase 1b: a Wrap of pills over a 3-column Table
+static void scene_ui2(void)
+{
+    MgeUiWidget root = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_START, .spacing = 10, .mainSize = MGE_MAIN_SIZE_MIN });
+    MgeUiWidget pad = Mge_UiPadding(Mge_EdgeInsetsAll(12));
+    Mge_UiAddChild(pad, root);
+
+    MgeUiWidget bar = Mge_UiContainer((MgeContainerStyle){ .width = 296 });
+    MgeUiWidget wrapw = Mge_UiWrap((MgeWrapStyle){ .spacing = 6, .runSpacing = 6 });
+    Mge_UiAddChild(bar, wrapw);
+    const Color pc[6] = { { 200, 90, 90, 255 }, { 90, 170, 110, 255 }, { 80, 120, 210, 255 },
+        { 210, 170, 70, 255 }, { 160, 110, 200, 255 }, { 90, 180, 190, 255 } };
+    for (int k = 0; k < 6; k++) {
+        MgeUiWidget pill = Mge_UiContainer((MgeContainerStyle){
+            .padding = Mge_EdgeInsetsSymmetric(12, 6),
+            .decoration = { .color = pc[k], .borderRadius = Mge_BorderRadiusAll(10) } });
+        Mge_UiText(pill, "tag", (MgeTextStyle){ .size = 16, .color = Mge_Colors.white });
+        Mge_UiAddChild(wrapw, pill);
+    }
+    Mge_UiAddChild(root, bar);
+
+    MgeTableColumn cols[3] = { { MGE_COL_INTRINSIC, 0 }, { MGE_COL_FLEX, 1 }, { MGE_COL_FIXED, 60 } };
+    MgeUiWidget tbl = Mge_UiTable(cols, 3, 6.0f, 10.0f);
+    const char* keys[3] = { "Move", "Jump", "Fire" };
+    const char* vals[3] = { "WASD", "Space", "Left Mouse" };
+    for (int r = 0; r < 3; r++) {
+        MgeUiWidget row = Mge_UiTableRow();
+        Mge_UiText(row, keys[r], (MgeTextStyle){ .size = 16, .color = Mge_Colors.white });
+        Mge_UiText(row, vals[r], (MgeTextStyle){ .size = 16, .color = (Color){ 170, 180, 200, 255 } });
+        MgeUiWidget btn = Mge_UiContainer((MgeContainerStyle){
+            .decoration = { .color = (Color){ 50, 54, 70, 255 }, .borderRadius = Mge_BorderRadiusAll(4) } });
+        Mge_UiText(btn, "set", (MgeTextStyle){ .size = 14, .color = Mge_Colors.white });
+        Mge_UiAddChild(row, btn);
+        Mge_UiAddChild(tbl, row);
+    }
+    MgeUiWidget tblBox = Mge_UiContainer((MgeContainerStyle){ .width = 296 });
+    Mge_UiAddChild(tblBox, tbl);
+    Mge_UiAddChild(root, tblBox);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 10, 11, 15, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(pad);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    check("ui2");
+    Mge_EndDrawing();
+
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(pad);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -1035,6 +1087,7 @@ int main(void)
     scene_text();
     scene_text3d();
     scene_ui();
+    scene_ui2();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

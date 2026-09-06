@@ -16,10 +16,20 @@ enum {
     NODE_TEXT,
     NODE_FLEX,       // Row / Column / Flex
     NODE_FLEXIBLE,   // Expanded / Flexible / Spacer wrapper
-    NODE_STACK,
+    NODE_STACK,      // also IndexedStack (index >= 0)
     NODE_POSITIONED, // wrapper, child of a Stack
     NODE_VISIBILITY,
+    NODE_WRAP,
+    NODE_TABLE,
+    NODE_TABLE_ROW,
+    NODE_INTRINSIC,  // v.axis: 0 = width, 1 = height
+    NODE_ASPECT,
+    NODE_FRACTIONAL,
+    NODE_UNCONSTRAINED,
+    NODE_LIMITED,
 };
+
+#define MGE_UI_TABLE_MAX_COLS 16
 
 typedef struct Node {
     uint8_t   type;
@@ -44,11 +54,29 @@ typedef struct Node {
         struct {
             MgeStackFit  fit;
             MgeAlignment alignment;
+            int          index; // -1 = paint all (a plain Stack)
         } stack;
         struct {
             float l, t, r, b, w, h; // MGE_UI_NONE == unset
         } positioned;
-        bool visible;
+        struct {
+            bool visible, maintainSize;
+        } visibility;
+        MgeWrapStyle wrap;
+        struct {
+            MgeTableColumn cols[MGE_UI_TABLE_MAX_COLS];
+            int            nCols;
+            float          rowSpacing, colSpacing;
+        } table;
+        uint8_t axis; // NODE_INTRINSIC: 0 = width, 1 = height
+        float   ratio; // NODE_ASPECT
+        struct {
+            float wf, hf;
+            MgeAlignment align;
+        } fractional;
+        struct {
+            float maxW, maxH;
+        } limited;
     } v;
 } Node;
 
@@ -363,8 +391,27 @@ MgeUiWidget Mge_UiStack(MgeStackFit fit, MgeAlignment alignment)
     int32_t i = alloc_node(NODE_STACK);
     S.nodes[i].v.stack.fit = fit;
     S.nodes[i].v.stack.alignment = alignment;
+    S.nodes[i].v.stack.index = -1; // paint all
     S.dirty = true;
     return h_make(i);
+}
+
+MgeUiWidget Mge_UiIndexedStack(int index)
+{
+    int32_t i = alloc_node(NODE_STACK);
+    S.nodes[i].v.stack.fit = MGE_STACK_LOOSE;
+    S.nodes[i].v.stack.alignment = (MgeAlignment){ 0, 0 };
+    S.nodes[i].v.stack.index = index < 0 ? 0 : index;
+    S.dirty = true;
+    return h_make(i);
+}
+
+void Mge_UiSetStackIndex(MgeUiWidget w, int index)
+{
+    int32_t i = h_index(w);
+    if (i < 0 || S.nodes[i].type != NODE_STACK) return;
+    S.nodes[i].v.stack.index = index;
+    S.dirty = true;
 }
 
 MgeUiWidget Mge_UiPositioned(float left, float top, float right, float bottom,
@@ -385,20 +432,100 @@ MgeUiWidget Mge_UiPositionedFill(void)
     return Mge_UiPositioned(0.0f, 0.0f, 0.0f, 0.0f, MGE_UI_NONE, MGE_UI_NONE);
 }
 
-MgeUiWidget Mge_UiVisibility(bool visible)
+static MgeUiWidget make_visibility(bool visible, bool maintainSize)
 {
     int32_t i = alloc_node(NODE_VISIBILITY);
-    S.nodes[i].v.visible = visible;
+    S.nodes[i].v.visibility.visible = visible;
+    S.nodes[i].v.visibility.maintainSize = maintainSize;
     S.dirty = true;
     return h_make(i);
 }
+
+MgeUiWidget Mge_UiVisibility(bool visible)         { return make_visibility(visible, false); }
+MgeUiWidget Mge_UiVisibilityMaintain(bool visible) { return make_visibility(visible, true); }
+MgeUiWidget Mge_UiOffstage(bool offstage)          { return make_visibility(!offstage, false); }
 
 void Mge_UiSetVisible(MgeUiWidget w, bool visible)
 {
     int32_t i = h_index(w);
     if (i < 0 || S.nodes[i].type != NODE_VISIBILITY) return;
-    S.nodes[i].v.visible = visible;
+    S.nodes[i].v.visibility.visible = visible;
     S.dirty = true;
+}
+
+// ---- layout tail (Phase 1b) --------------------------------------
+
+MgeUiWidget Mge_UiWrap(MgeWrapStyle style)
+{
+    int32_t i = alloc_node(NODE_WRAP);
+    S.nodes[i].v.wrap = style;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiTable(const MgeTableColumn* cols, int nCols, float rowSpacing, float colSpacing)
+{
+    int32_t i = alloc_node(NODE_TABLE);
+    if (nCols < 1) nCols = 1;
+    if (nCols > MGE_UI_TABLE_MAX_COLS) nCols = MGE_UI_TABLE_MAX_COLS;
+    S.nodes[i].v.table.nCols = nCols;
+    S.nodes[i].v.table.rowSpacing = rowSpacing;
+    S.nodes[i].v.table.colSpacing = colSpacing;
+    for (int k = 0; k < nCols; k++)
+        S.nodes[i].v.table.cols[k] = cols ? cols[k] : (MgeTableColumn){ MGE_COL_FLEX, 1.0f };
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiTableRow(void)
+{
+    int32_t i = alloc_node(NODE_TABLE_ROW);
+    S.dirty = true;
+    return h_make(i);
+}
+
+static MgeUiWidget make_intrinsic(uint8_t axis)
+{
+    int32_t i = alloc_node(NODE_INTRINSIC);
+    S.nodes[i].v.axis = axis;
+    S.dirty = true;
+    return h_make(i);
+}
+MgeUiWidget Mge_UiIntrinsicWidth(void)  { return make_intrinsic(0); }
+MgeUiWidget Mge_UiIntrinsicHeight(void) { return make_intrinsic(1); }
+
+MgeUiWidget Mge_UiAspectRatio(float ratio)
+{
+    int32_t i = alloc_node(NODE_ASPECT);
+    S.nodes[i].v.ratio = (ratio > 0.0f) ? ratio : 1.0f;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiFractionallySizedBox(float wFactor, float hFactor, MgeAlignment align)
+{
+    int32_t i = alloc_node(NODE_FRACTIONAL);
+    S.nodes[i].v.fractional.wf = wFactor;
+    S.nodes[i].v.fractional.hf = hFactor;
+    S.nodes[i].v.fractional.align = align;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiUnconstrainedBox(void)
+{
+    int32_t i = alloc_node(NODE_UNCONSTRAINED);
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiLimitedBox(float maxW, float maxH)
+{
+    int32_t i = alloc_node(NODE_LIMITED);
+    S.nodes[i].v.limited.maxW = maxW;
+    S.nodes[i].v.limited.maxH = maxH;
+    S.dirty = true;
+    return h_make(i);
 }
 
 Rectangle Mge_UiGetRect(MgeUiWidget w)
@@ -646,29 +773,252 @@ static MgeUiSize layout_stack(int32_t i, MgeUiConstraints c)
     sh = clampf(sh, c.minH, c.maxH);
 
     for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
-        Node* p = &S.nodes[k];
-        if (p->type != NODE_POSITIONED) {
+        if (S.nodes[k].type != NODE_POSITIONED) {
             float fx = al.x * 0.5f + 0.5f, fy = al.y * 0.5f + 0.5f;
-            p->rect.x = (sw - p->rect.width) * fx;
-            p->rect.y = (sh - p->rect.height) * fy;
+            S.nodes[k].rect.x = (sw - S.nodes[k].rect.width) * fx;
+            S.nodes[k].rect.y = (sh - S.nodes[k].rect.height) * fy;
             continue;
         }
-        float L = p->v.positioned.l, R = p->v.positioned.r, W = p->v.positioned.w;
-        float T = p->v.positioned.t, B = p->v.positioned.b, H = p->v.positioned.h;
+        const float L = S.nodes[k].v.positioned.l, R = S.nodes[k].v.positioned.r, W = S.nodes[k].v.positioned.w;
+        const float T = S.nodes[k].v.positioned.t, B = S.nodes[k].v.positioned.b, H = S.nodes[k].v.positioned.h;
         float cw = (pos_set(L) && pos_set(R)) ? fmaxf(0.0f, sw - L - R) : (pos_set(W) ? W : -1.0f);
         float ch = (pos_set(T) && pos_set(B)) ? fmaxf(0.0f, sh - T - B) : (pos_set(H) ? H : -1.0f);
         MgeUiConstraints pc = {
             cw >= 0.0f ? cw : 0.0f, cw >= 0.0f ? cw : sw,
             ch >= 0.0f ? ch : 0.0f, ch >= 0.0f ? ch : sh,
         };
-        MgeUiSize s = layout_node(k, pc);
-        p->rect.x = pos_set(L) ? L : (pos_set(R) ? sw - R - s.w : (sw - s.w) * (al.x * 0.5f + 0.5f));
-        p->rect.y = pos_set(T) ? T : (pos_set(B) ? sh - B - s.h : (sh - s.h) * (al.y * 0.5f + 0.5f));
+        MgeUiSize s = layout_node(k, pc); // may realloc the pool -- re-index below
+        S.nodes[k].rect.x = pos_set(L) ? L : (pos_set(R) ? sw - R - s.w : (sw - s.w) * (al.x * 0.5f + 0.5f));
+        S.nodes[k].rect.y = pos_set(T) ? T : (pos_set(B) ? sh - B - s.h : (sh - s.h) * (al.y * 0.5f + 0.5f));
     }
 
     S.nodes[i].rect.width = sw;
     S.nodes[i].rect.height = sh;
     return (MgeUiSize){ sw, sh };
+}
+
+// ---- Phase 1b layout ----------------------------------------------
+
+static float wrap_lead(MgeWrapAlignment a, float leftover, int n, float* gapAdd)
+{
+    *gapAdd = 0.0f;
+    if (n <= 0) return 0.0f;
+    switch (a) {
+    case MGE_WRAP_END:           return leftover;
+    case MGE_WRAP_CENTER:        return leftover * 0.5f;
+    case MGE_WRAP_SPACE_BETWEEN: if (n > 1) *gapAdd = leftover / (float)(n - 1); return 0.0f;
+    case MGE_WRAP_SPACE_AROUND:  { float e = leftover / (float)n; *gapAdd = e; return e * 0.5f; }
+    case MGE_WRAP_SPACE_EVENLY:  { float e = leftover / (float)(n + 1); *gapAdd = e; return e; }
+    default:                     return 0.0f; // START
+    }
+}
+
+// Wrap: children flow along `axis`; a child that won't fit starts a new run.
+static MgeUiSize layout_wrap(int32_t i, MgeUiConstraints c)
+{
+    const MgeWrapStyle st = S.nodes[i].v.wrap;
+    const int horiz = (st.axis == MGE_AXIS_HORIZONTAL);
+    const float mainMax = (horiz ? c.maxW : c.maxH);
+    const float crossMax = (horiz ? c.maxH : c.maxW);
+
+    // measure every child (loose), then walk them into runs
+    int32_t kids[256];
+    int nKids = 0;
+    for (int32_t k = S.nodes[i].firstChild; k >= 0 && nKids < 256; k = S.nodes[k].nextSibling) {
+        layout_node(k, (MgeUiConstraints){ 0.0f, mainMax, 0.0f, crossMax });
+        kids[nKids++] = k;
+    }
+
+    float totalMain = 0.0f, totalCross = 0.0f;
+    int idx = 0;
+    while (idx < nKids) {
+        // fill a run
+        int start = idx;
+        float runMain = 0.0f, runCross = 0.0f;
+        while (idx < nKids) {
+            float m = horiz ? S.nodes[kids[idx]].rect.width : S.nodes[kids[idx]].rect.height;
+            float add = (idx > start ? st.spacing : 0.0f) + m;
+            if (idx > start && runMain + add > mainMax) break;
+            runMain += add;
+            runCross = fmaxf(runCross, horiz ? S.nodes[kids[idx]].rect.height : S.nodes[kids[idx]].rect.width);
+            idx++;
+        }
+        int runN = idx - start;
+        float gapAdd, lead = wrap_lead(st.alignment, fmaxf(0.0f, mainMax - runMain), runN, &gapAdd);
+        // only distribute along a bounded main axis
+        if (mainMax >= MGE_UI_INF) { lead = 0.0f; gapAdd = 0.0f; }
+        float pos = lead;
+        for (int j = start; j < idx; j++) {
+            float m = horiz ? S.nodes[kids[j]].rect.width : S.nodes[kids[j]].rect.height;
+            float csz = horiz ? S.nodes[kids[j]].rect.height : S.nodes[kids[j]].rect.width;
+            float crossPos = totalCross + (runCross - csz) * 0.5f;
+            S.nodes[kids[j]].rect.x = horiz ? pos : crossPos;
+            S.nodes[kids[j]].rect.y = horiz ? crossPos : pos;
+            pos += m + st.spacing + gapAdd;
+        }
+        totalMain = fmaxf(totalMain, runMain);
+        totalCross += runCross + st.runSpacing;
+    }
+    if (idx > 0) totalCross -= st.runSpacing; // trailing gap
+
+    float w = clampf(horiz ? totalMain : totalCross, c.minW, c.maxW);
+    float h = clampf(horiz ? totalCross : totalMain, c.minH, c.maxH);
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
+// Table: resolve column widths, then lay each row's cells at those widths.
+static MgeUiSize layout_table(int32_t i, MgeUiConstraints c)
+{
+    const int n = S.nodes[i].v.table.nCols;
+    const float rowSp = S.nodes[i].v.table.rowSpacing, colSp = S.nodes[i].v.table.colSpacing;
+    MgeTableColumn cols[MGE_UI_TABLE_MAX_COLS];
+    memcpy(cols, S.nodes[i].v.table.cols, sizeof(cols));
+
+    float avail = fmaxf(0.0f, c.maxW - colSp * (float)(n - 1));
+    float colW[MGE_UI_TABLE_MAX_COLS] = { 0 };
+    float fixedSum = 0.0f, flexSum = 0.0f;
+    for (int k = 0; k < n; k++) {
+        if (cols[k].mode == MGE_COL_FIXED) { colW[k] = cols[k].value; fixedSum += cols[k].value; }
+        else if (cols[k].mode == MGE_COL_FLEX) flexSum += fmaxf(0.0f, cols[k].value);
+        else { // INTRINSIC -- widest dry cell in this column
+            float mx = 0.0f;
+            for (int32_t r = S.nodes[i].firstChild; r >= 0; r = S.nodes[r].nextSibling) {
+                if (S.nodes[r].type != NODE_TABLE_ROW) continue;
+                int32_t cell = S.nodes[r].firstChild;
+                for (int cc = 0; cc < k && cell >= 0; cc++) cell = S.nodes[cell].nextSibling;
+                if (cell >= 0) mx = fmaxf(mx, layout_node(cell, Mge_ConstraintsUnbounded()).w);
+            }
+            colW[k] = mx;
+            fixedSum += mx;
+        }
+    }
+    float flexSpace = fmaxf(0.0f, avail - fixedSum);
+    for (int k = 0; k < n; k++)
+        if (cols[k].mode == MGE_COL_FLEX)
+            colW[k] = (flexSum > 0.0f) ? flexSpace * fmaxf(0.0f, cols[k].value) / flexSum : 0.0f;
+
+    float tableW = colSp * (float)(n - 1);
+    for (int k = 0; k < n; k++) tableW += colW[k];
+
+    float y = 0.0f;
+    for (int32_t r = S.nodes[i].firstChild; r >= 0; r = S.nodes[r].nextSibling) {
+        if (S.nodes[r].type != NODE_TABLE_ROW) continue;
+        float rowH = 0.0f, x = 0.0f;
+        int k = 0;
+        for (int32_t cell = S.nodes[r].firstChild; cell >= 0 && k < n; cell = S.nodes[cell].nextSibling, k++) {
+            MgeUiSize s = layout_node(cell, (MgeUiConstraints){ colW[k], colW[k], 0.0f, MGE_UI_INF });
+            rowH = fmaxf(rowH, s.h);
+        }
+        k = 0;
+        x = 0.0f;
+        for (int32_t cell = S.nodes[r].firstChild; cell >= 0 && k < n; cell = S.nodes[cell].nextSibling, k++) {
+            S.nodes[cell].rect.x = x;
+            S.nodes[cell].rect.y = (rowH - S.nodes[cell].rect.height) * 0.5f;
+            x += colW[k] + colSp;
+        }
+        S.nodes[r].rect.x = 0.0f;
+        S.nodes[r].rect.y = y;
+        S.nodes[r].rect.width = tableW;
+        S.nodes[r].rect.height = rowH;
+        y += rowH + rowSp;
+    }
+    if (y > 0.0f) y -= rowSp;
+
+    float w = clampf(tableW, c.minW, c.maxW);
+    float h = clampf(y, c.minH, c.maxH);
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
+// Intrinsic{Width,Height}: dry-measure the child unbounded, then lay it out for
+// real tightened to that content size on the chosen axis.
+static MgeUiSize layout_intrinsic(int32_t i, MgeUiConstraints c)
+{
+    int32_t child = S.nodes[i].firstChild;
+    if (child < 0) {
+        S.nodes[i].rect.width = clampf(0.0f, c.minW, c.maxW);
+        S.nodes[i].rect.height = clampf(0.0f, c.minH, c.maxH);
+        return (MgeUiSize){ S.nodes[i].rect.width, S.nodes[i].rect.height };
+    }
+    MgeUiSize dry = layout_node(child, Mge_ConstraintsUnbounded());
+    if (S.nodes[i].v.axis == 0) {
+        float w = clampf(dry.w, c.minW, c.maxW);
+        c.minW = c.maxW = w;
+    } else {
+        float h = clampf(dry.h, c.minH, c.maxH);
+        c.minH = c.maxH = h;
+    }
+    MgeUiSize s = layout_node(child, c);
+    S.nodes[child].rect.x = 0.0f;
+    S.nodes[child].rect.y = 0.0f;
+    S.nodes[i].rect.width = s.w;
+    S.nodes[i].rect.height = s.h;
+    return s;
+}
+
+static MgeUiSize layout_aspect(int32_t i, MgeUiConstraints c)
+{
+    float ratio = S.nodes[i].v.ratio;
+    // start from the widest allowed, derive height, then fit
+    float w = (c.maxW < MGE_UI_INF) ? c.maxW : (c.maxH < MGE_UI_INF ? c.maxH * ratio : 0.0f);
+    float h = w / ratio;
+    if (c.maxH < MGE_UI_INF && h > c.maxH) { h = c.maxH; w = h * ratio; }
+    w = clampf(w, c.minW, c.maxW);
+    h = clampf(h, c.minH, c.maxH);
+    int32_t child = S.nodes[i].firstChild;
+    if (child >= 0) {
+        layout_node(child, Mge_ConstraintsTight(w, h));
+        S.nodes[child].rect.x = 0.0f;
+        S.nodes[child].rect.y = 0.0f;
+    }
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
+static MgeUiSize layout_fractional(int32_t i, MgeUiConstraints c)
+{
+    const float wf = S.nodes[i].v.fractional.wf, hf = S.nodes[i].v.fractional.hf;
+    const MgeAlignment al = S.nodes[i].v.fractional.align;
+    MgeUiConstraints cc = { 0.0f, c.maxW, 0.0f, c.maxH };
+    if (wf > 0.0f && c.maxW < MGE_UI_INF) { float w = wf * c.maxW; cc.minW = cc.maxW = w; }
+    if (hf > 0.0f && c.maxH < MGE_UI_INF) { float h = hf * c.maxH; cc.minH = cc.maxH = h; }
+
+    float ownW = 0.0f, ownH = 0.0f;
+    int32_t child = S.nodes[i].firstChild;
+    if (child >= 0) {
+        MgeUiSize s = layout_node(child, cc);
+        ownW = s.w;
+        ownH = s.h;
+    }
+    float w = clampf(ownW, c.minW, c.maxW);
+    float h = clampf(ownH, c.minH, c.maxH);
+    if (child >= 0) {
+        S.nodes[child].rect.x = (w - S.nodes[child].rect.width) * (al.x * 0.5f + 0.5f);
+        S.nodes[child].rect.y = (h - S.nodes[child].rect.height) * (al.y * 0.5f + 0.5f);
+    }
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
+static MgeUiSize layout_unconstrained(int32_t i, MgeUiConstraints c)
+{
+    int32_t child = S.nodes[i].firstChild;
+    MgeUiSize s = { 0, 0 };
+    if (child >= 0) {
+        s = layout_node(child, Mge_ConstraintsUnbounded());
+        S.nodes[child].rect.x = 0.0f;
+        S.nodes[child].rect.y = 0.0f;
+    }
+    float w = clampf(s.w, c.minW, c.maxW);
+    float h = clampf(s.h, c.minH, c.maxH);
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
 }
 
 static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
@@ -678,10 +1028,21 @@ static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
     case NODE_TEXT:      return layout_text(i, c);
     case NODE_FLEX:      return layout_flex(i, c);
     case NODE_STACK:     return layout_stack(i, c);
+    case NODE_WRAP:      return layout_wrap(i, c);
+    case NODE_TABLE:     return layout_table(i, c);
+    case NODE_INTRINSIC: return layout_intrinsic(i, c);
+    case NODE_ASPECT:    return layout_aspect(i, c);
+    case NODE_FRACTIONAL: return layout_fractional(i, c);
+    case NODE_UNCONSTRAINED: return layout_unconstrained(i, c);
+    case NODE_LIMITED:
+        if (c.maxW >= MGE_UI_INF) c.maxW = S.nodes[i].v.limited.maxW;
+        if (c.maxH >= MGE_UI_INF) c.maxH = S.nodes[i].v.limited.maxH;
+        return layout_passthrough(i, c);
     case NODE_FLEXIBLE:  return layout_passthrough(i, c);
     case NODE_POSITIONED: return layout_passthrough(i, c);
+    case NODE_TABLE_ROW: return layout_passthrough(i, c);
     case NODE_VISIBILITY:
-        if (!S.nodes[i].v.visible) {
+        if (!S.nodes[i].v.visibility.visible && !S.nodes[i].v.visibility.maintainSize) {
             S.nodes[i].rect = (Rectangle){ 0, 0, 0, 0 };
             return (MgeUiSize){ 0, 0 };
         }
@@ -705,8 +1066,17 @@ static void paint_node(int32_t i)
 {
     Node* n = &S.nodes[i];
 
-    if (n->type == NODE_VISIBILITY && !n->v.visible)
+    if (n->type == NODE_VISIBILITY && !n->v.visibility.visible)
         return; // hidden subtree
+
+    if (n->type == NODE_STACK && n->v.stack.index >= 0) {
+        // IndexedStack: paint just the one child
+        int32_t c = n->firstChild;
+        for (int k = 0; k < n->v.stack.index && c >= 0; k++)
+            c = S.nodes[c].nextSibling;
+        if (c >= 0) paint_node(c);
+        return;
+    }
 
     if (n->type == NODE_CONTAINER) {
         const MgeBoxDecoration d = n->v.container.decoration;

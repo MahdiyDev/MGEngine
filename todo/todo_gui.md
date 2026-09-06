@@ -106,22 +106,34 @@ Row/Column/Stack are multi-child; the rest take one child. Two-pass flex
 - [x] `Mge_UiVisibility(bool)` + `Mge_UiSetVisible` (`!visible` -> zero size, not
       painted).
 
-## Phase 1b -- layout tail (deferred)
+## Phase 1b -- layout tail   [MOSTLY LANDED]
 
-Niche for game UI; each is a self-contained sub-algorithm.
+Each is a self-contained sub-algorithm. `test/test_ui_layout.c` (+8 cases),
+`render_smoke` `ui2` scene, `examples/ui/menu.c` stats table.
 
-- [ ] `Mge_UiWrap(MgeAxis, spacing, runSpacing, MgeWrapAlignment)` -- run packing.
-- [ ] `Mge_UiTable(int columns, MgeTableStyle)` / `TableRow` / `TableCell`
-      (fixed / flex / intrinsic column widths).
-- [ ] `Mge_UiIntrinsicWidth` / `IntrinsicHeight` -- needs a dry-layout pass;
-      `Mge_UiBaseline` + `MGE_CROSS_BASELINE` + `MgeTextBaseline`.
-- [ ] `Mge_UiLayoutBuilder(void (*build)(MgeUiWidget slot, MgeUiConstraints, void*), void*)`.
-- [ ] `Mge_UiAspectRatio(float ratio)` /
-      `Mge_UiFractionallySizedBox(float wf, float hf, MgeAlignment)`.
-- [ ] `Mge_UiIndexedStack(int* index)`; `Mge_UiOffstage`;
-      `Mge_UiVisibility` `maintainSize` variant.
-- [ ] `Mge_UiUnconstrainedBox` / `LimitedBox` / `OverflowBox` / `SizedOverflowBox`.
-- [ ] `MgeVerticalDirection` / `MgeWrapAlignment` enums (with Wrap).
+- [x] `Mge_UiWrap(MgeWrapStyle { axis, spacing, runSpacing, alignment,
+      runAlignment })` -- children flow into runs; `MgeWrapAlignment` enum.
+- [x] `Mge_UiTable(const MgeTableColumn* cols, int nCols, rowSpacing, colSpacing)`
+      + `Mge_UiTableRow()` -- per-column `MGE_COL_FIXED` (px) / `_FLEX` (weight) /
+      `_INTRINSIC` (widest dry-measured cell). Cells are any widget.
+- [x] `Mge_UiIntrinsicWidth()` / `Mge_UiIntrinsicHeight()` -- dry-measure the
+      child unbounded, then re-lay-out tight to that content size.
+- [x] `Mge_UiAspectRatio(float ratio)` /
+      `Mge_UiFractionallySizedBox(float wf, float hf, MgeAlignment)` (0 = unset).
+- [x] `Mge_UiUnconstrainedBox()` / `Mge_UiLimitedBox(maxW, maxH)` (caps only an
+      axis that arrives unbounded).
+- [x] `Mge_UiIndexedStack(int index)` + `Mge_UiSetStackIndex` (lays out all
+      children, paints one); `Mge_UiOffstage(bool)`;
+      `Mge_UiVisibilityMaintain(bool)` (hidden but keeps its size).
+- [ ] `Mge_UiLayoutBuilder(void (*build)(MgeUiWidget slot, MgeUiConstraints,
+      void*), void*)` -- deferred: builds a subtree *during* layout, needs a
+      re-entrancy audit (a `build` that reallocs the pool mid-`layout_*`). The
+      Phase-7 MediaQuery/breakpoint model covers most of the use case.
+- [ ] `Mge_UiBaseline` + `MGE_CROSS_BASELINE` + `MgeTextBaseline` -- deferred:
+      needs first-line-baseline propagation through every `layout_*` return.
+- [ ] `OverflowBox` / `SizedOverflowBox` -- not planned (deliberately breaking
+      layout bounds is an anti-pattern). `MgeVerticalDirection` -- not planned
+      (add children in reverse order instead).
 
 ## Phase 2 -- scrolling & viewports
 
