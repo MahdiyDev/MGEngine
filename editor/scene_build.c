@@ -129,6 +129,63 @@ bool SceneBuild_FindSDK(char* out, int outSize)
 
 // ------------------------------------------------------------------ compile
 
+#if defined(_WIN32)
+// Write a Win32 VERSIONINFO resource for the scene DLL and compile it to a COFF
+// .res with windres. Returns true and fills `resOut` with the .res path on
+// success; on any failure logs one note and returns false (metadata is
+// best-effort -- a build never fails over it). The resource gives freshly-built
+// scene DLLs real PE metadata, which quiets Windows Defender / SmartScreen
+// heuristics (real trust still needs code signing).
+static bool build_scene_res(const char* buildDir, const char* projName,
+    const char* dllPath, BuildLog* log, char* resOut, int resOutSize)
+{
+    char dllLeaf[128];
+    Path_Base(dllPath, dllLeaf, sizeof(dllLeaf));
+
+    char rcPath[820];
+    snprintf(rcPath, sizeof(rcPath), "%s/_scene.rc", buildDir);
+    FILE* f = fopen(rcPath, "w");
+    if (f == NULL) {
+        BuildLog_Line(log, "note: could not write %s -- scene DLL gets no version info", rcPath);
+        return false;
+    }
+    fprintf(f,
+        "1 VERSIONINFO\n"
+        "FILEVERSION 1,0,0,0\nPRODUCTVERSION 1,0,0,0\n"
+        "FILEFLAGSMASK 0x3fL\nFILEFLAGS 0x0L\nFILEOS 0x40004L\nFILETYPE 0x2L\nFILESUBTYPE 0x0L\n"
+        "BEGIN\n"
+        " BLOCK \"StringFileInfo\"\n BEGIN\n  BLOCK \"040904b0\"\n  BEGIN\n"
+        "   VALUE \"CompanyName\", \"MGEngine\"\n"
+        "   VALUE \"ProductName\", \"%s\"\n"
+        "   VALUE \"FileDescription\", \"%s scene module\"\n"
+        "   VALUE \"FileVersion\", \"1.0.0.0\"\n"
+        "   VALUE \"ProductVersion\", \"1.0.0.0\"\n"
+        "   VALUE \"InternalName\", \"%s\"\n"
+        "   VALUE \"OriginalFilename\", \"%s\"\n"
+        "   VALUE \"LegalCopyright\", \"MGEngine\"\n"
+        "  END\n END\n"
+        " BLOCK \"VarFileInfo\"\n BEGIN\n  VALUE \"Translation\", 0x409, 1200\n END\n"
+        "END\n",
+        projName, projName, dllLeaf, dllLeaf);
+    fclose(f);
+
+    const char* wr = getenv("WINDRES");
+    if (wr == NULL || wr[0] == '\0')
+        wr = "windres";
+    snprintf(resOut, (size_t)resOutSize, "%s/_scene.res", buildDir);
+
+    char wcmd[1900];
+    snprintf(wcmd, sizeof(wcmd), "%s -O coff \"%s\" \"%s\" 2>nul", wr, rcPath, resOut);
+    if (system(wcmd) != 0) {
+        BuildLog_Line(log, "note: windres unavailable -- scene DLL built without version info");
+        remove(rcPath);
+        resOut[0] = '\0';
+        return false;
+    }
+    return true;
+}
+#endif
+
 // Assemble the compiler command line for a scene (no shell redirection appended).
 // Also creates <sceneDir>/build and reports the produced .dll path. Returns false
 // (writing the reason into `log`) when the build can't be set up.
@@ -178,6 +235,12 @@ static bool build_command(const Project* proj, const char* sceneName, bool relea
         n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s/%s\"", sceneDir, names[i]);
     n += snprintf(cmd + n, (size_t)cmdSize - n,
         " -o \"%s\" -L\"%s/%s\" -lmgengine", outDll, sdk, libDir);
+
+#if defined(_WIN32)
+    char res[820];
+    if (build_scene_res(buildDir, proj->name, outDll, log, res, sizeof(res)))
+        n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s\"", res);
+#endif
     return true;
 }
 
@@ -371,5 +434,13 @@ void SceneBuild_Clear(SceneBuildJob* job)
         child_reap(job->proc, job->finished);
     if (job->logFile[0] != '\0')
         remove(job->logFile);
+    if (job->outDll[0] != '\0') { // the generated version-info scratch (Windows)
+        char dir[820], p[900];
+        Path_Dir(job->outDll, dir, sizeof(dir));
+        Path_Join(dir, "_scene.rc", p, sizeof(p));
+        remove(p);
+        Path_Join(dir, "_scene.res", p, sizeof(p));
+        remove(p);
+    }
     memset(job, 0, sizeof(*job));
 }

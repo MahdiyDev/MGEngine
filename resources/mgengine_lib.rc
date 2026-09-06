@@ -1,0 +1,4 @@
+#define RC_FILEDESC "MGEngine runtime library"
+#define RC_ORIGNAME "libmgengine.dll"
+#define RC_FILETYPE 0x2L
+#include "version.rc.h"

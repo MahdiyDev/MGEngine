@@ -1,0 +1,4 @@
+#define RC_FILEDESC "MGEngine project player"
+#define RC_ORIGNAME "mgeplayer.exe"
+#define RC_MANIFEST 1
+#include "version.rc.h"

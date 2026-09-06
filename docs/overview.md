@@ -150,6 +150,14 @@ next to `editor.exe` / `mgeplayer.exe` there, so each config runs from its own
 folder (`build/` or `build/release/`). The staged headers let an editor project
 point its `compile_flags.txt` at `<conf>/include` for scene-script IntelliSense.
 
+On Windows, `windres` compiles `resources/*.rc` (a shared `VERSIONINFO` body +
+`resources/app.manifest` for the two exes: `asInvoker`, DPI-aware, per-monitor,
+long-path aware, UTF-8) into each of `libmgengine.dll` / `editor.exe` /
+`mgeplayer.exe`; the editor generates the same kind of `VERSIONINFO` into every
+scene DLL it builds. This is so Windows Defender / SmartScreen have real PE
+metadata to read -- it does not replace Authenticode signing, which the project
+does not do.
+
 Your own app is the same one-liner: `gcc yours.c -Isource -Lbuild -lmgengine`
 plus `libmgengine.dll` on the path (or beside the exe). The `examples/` still
 link the engine object files directly (`build/obj/*.o`) so each example exe is

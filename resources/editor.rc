@@ -1,0 +1,4 @@
+#define RC_FILEDESC "MGEngine scene editor"
+#define RC_ORIGNAME "editor.exe"
+#define RC_MANIFEST 1
+#include "version.rc.h"

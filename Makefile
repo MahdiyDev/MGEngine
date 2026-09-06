@@ -74,6 +74,15 @@ ifeq ($(OS),Windows_NT)
     # libmgengine.dll + system DLLs at run time
     SHAREDFLAGS := -shared -static -static-libgcc -static-libstdc++ -Wl,--out-implib,$(IMPLIB)
     APP_LIBS := -L$(CONF_DIR) -lmgengine
+    # embed a Win32 VERSIONINFO (all three) + an app manifest (the two exes) so
+    # AV / SmartScreen heuristics have real PE metadata to read
+    WINDRES  ?= windres
+    # -P on the preprocessor drops '# line' markers, which the RC parser chokes on
+    WINDRESFLAGS := --preprocessor=gcc --preprocessor-arg=-E --preprocessor-arg=-xc \
+                    --preprocessor-arg=-P --preprocessor-arg=-DRC_INVOKED -I resources -O coff
+    RES_LIB    := $(BUILD_OBJ_DIR)/mgengine_lib.res
+    RES_EDITOR := $(BUILD_OBJ_DIR)/editor.res
+    RES_PLAYER := $(BUILD_OBJ_DIR)/mgeplayer.res
     MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
     CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
     CPHDR = copy /Y "$(subst /,\,$1)\*.h" "$(subst /,\,$2)\" >nul
@@ -86,6 +95,9 @@ else
     IMPLIB   :=
     SHAREDFLAGS := -shared
     APP_LIBS := -L$(CONF_DIR) -lmgengine -lm -Wl,-rpath,'$$ORIGIN'
+    RES_LIB :=
+    RES_EDITOR :=
+    RES_PLAYER :=
     MKDIR = mkdir -p $1
     CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
     CPHDR = cp $1/*.h "$2"/
@@ -149,11 +161,17 @@ make_build_dir:
 	$(call CPDIR,assets,$(CONF_DIR)/assets)
 
 # --- engine library ---
-$(ENGINE_LIB): $(COBJECTS)
-	$(LINK) $(CFLAGS) $(SHAREDFLAGS) -o $@ $(COBJECTS) $(LIB_DIR) $(LIB_LINKS)
+$(ENGINE_LIB): $(COBJECTS) $(RES_LIB)
+	$(LINK) $(CFLAGS) $(SHAREDFLAGS) -o $@ $(COBJECTS) $(RES_LIB) $(LIB_DIR) $(LIB_LINKS)
 
 $(BUILD_OBJ_DIR):
 	$(call MKDIR,$(BUILD_OBJ_DIR))
+
+# Win32 resources (VERSIONINFO + manifest) -> COFF the linker embeds. windres
+# runs the C preprocessor over the .rc, so -I resources resolves version.rc.h /
+# app.manifest. POSIX: RES_* are empty and this rule is never triggered.
+$(BUILD_OBJ_DIR)/%.res: resources/%.rc resources/version.rc.h resources/app.manifest | $(BUILD_OBJ_DIR)
+	$(WINDRES) $(WINDRESFLAGS) $< $@
 
 # -MMD -MP writes a .d beside each .o listing the headers it #included, so editing
 # a header (e.g. mge.h, which changes struct sizes) rebuilds every dependent .o.
@@ -195,15 +213,15 @@ $(EDITOR_GUI_OBJ): editor/mge_gui.cpp editor/mge_gui.h $(wildcard $(SOURCE_DIR)/
 # is what its own code was compiled against. (SEH unwinding is OS-level; the two
 # thin shims are interchangeable.)
 EDITOR_STATIC = -static-libgcc -static-libstdc++ -Wl,--allow-multiple-definition
-$(APP): $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) $(ENGINE_LIB)
-	$(CXX) $(CFLAGS) $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) -o $@ $(EDITOR_STATIC) $(APP_LIBS) $(APP_EXTRA) -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive,-Bdynamic
+$(APP): $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) $(RES_EDITOR) $(ENGINE_LIB)
+	$(CXX) $(CFLAGS) $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) $(RES_EDITOR) -o $@ $(EDITOR_STATIC) $(APP_LIBS) $(APP_EXTRA) -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive,-Bdynamic
 
 # --- standalone player: runs a built project. Reuses the editor's data layer
 #     (no GUI); what `Build Release` ships as <name>.exe.
 PLAYER_SRC = runtime/player.c editor/scene.c editor/scene_io.c editor/project.c \
              editor/project_io.c editor/pathutil.c editor/editor_camera.c editor/scene_runtime.c
-$(PLAYER): $(PLAYER_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor -I$(MLIB) $(PLAYER_SRC) -o $@ $(APP_LIBS) $(APP_EXTRA)
+$(PLAYER): $(PLAYER_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(RES_PLAYER) $(ENGINE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor -I$(MLIB) $(PLAYER_SRC) $(RES_PLAYER) -o $@ $(APP_LIBS) $(APP_EXTRA)
 
 vendor: vendor-glfw vendor-assimp
 
