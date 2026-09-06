@@ -83,6 +83,10 @@ ifeq ($(OS),Windows_NT)
     RES_LIB    := $(BUILD_OBJ_DIR)/mgengine_lib.res
     RES_EDITOR := $(BUILD_OBJ_DIR)/editor.res
     RES_PLAYER := $(BUILD_OBJ_DIR)/mgeplayer.res
+    # the shipped game is a GUI-subsystem app: no console window. It keeps int
+    # main() (mingw provides the WinMain shim); stdout still works when launched
+    # from a shell, just no window is allocated on a double-click.
+    PLAYER_LDFLAGS := -mwindows
     MKDIR = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
     CPDIR = if exist "$(subst /,\,$1)" xcopy /E /I /Y /Q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
     CPHDR = copy /Y "$(subst /,\,$1)\*.h" "$(subst /,\,$2)\" >nul
@@ -98,6 +102,7 @@ else
     RES_LIB :=
     RES_EDITOR :=
     RES_PLAYER :=
+    PLAYER_LDFLAGS :=
     MKDIR = mkdir -p $1
     CPDIR = test -d "$1" && { mkdir -p "$2" && cp -r "$1"/. "$2"/; } || true
     CPHDR = cp $1/*.h "$2"/
@@ -221,7 +226,7 @@ $(APP): $(EDITOR_C_OBJ) $(EDITOR_GUI_OBJ) $(IMGUI_OBJ) $(RES_EDITOR) $(ENGINE_LI
 PLAYER_SRC = runtime/player.c editor/scene.c editor/scene_io.c editor/project.c \
              editor/project_io.c editor/pathutil.c editor/editor_camera.c editor/scene_runtime.c
 $(PLAYER): $(PLAYER_SRC) $(wildcard editor/*.h) $(wildcard $(SOURCE_DIR)/*.h) $(RES_PLAYER) $(ENGINE_LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor -I$(MLIB) $(PLAYER_SRC) $(RES_PLAYER) -o $@ $(APP_LIBS) $(APP_EXTRA)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I$(SOURCE_DIR) -Ieditor -I$(MLIB) $(PLAYER_SRC) $(RES_PLAYER) -o $@ $(APP_LIBS) $(APP_EXTRA) $(PLAYER_LDFLAGS)
 
 vendor: vendor-glfw vendor-assimp
 

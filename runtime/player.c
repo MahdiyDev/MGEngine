@@ -18,10 +18,24 @@
 #if defined(_WIN32)
     #include <direct.h>
     #define CHDIR _chdir
+    // one Win32 call, forward-declared -- <windows.h> can't be included here
+    // (its Rectangle / ShowCursor collide with the engine's mge.h)
+    __declspec(dllimport) int __stdcall MessageBoxA(void*, const char*, const char*, unsigned int);
 #else
     #include <unistd.h>
     #define CHDIR chdir
 #endif
+
+// The player is a GUI-subsystem app (-mwindows) -- no console window. A startup
+// failure would otherwise be invisible, so surface it: a message box on Windows
+// (still prints to stderr too, which shows when launched from a shell).
+static void fatal(const char* msg)
+{
+    fprintf(stderr, "player: %s\n", msg);
+#if defined(_WIN32)
+    MessageBoxA(0, msg, "MGEngine player", 0x10 /* MB_ICONERROR | MB_OK */);
+#endif
+}
 
 #include "hashmap/hashmap.h"
 
@@ -125,6 +139,10 @@ int main(int argc, char** argv)
 {
     chdir_to_exe(argv[0]);
 
+#ifdef NDEBUG
+    Mge_SetTraceLogLevel(LOG_WARNING); // a shipped game shouldn't spam stdout
+#endif
+
     const char* projPath = (argc > 1) ? argv[1] : "project.mgproject";
 
     // mount the data pak FIRST, under a fixed name, so everything below -- the
@@ -143,7 +161,7 @@ int main(int argc, char** argv)
     // project.mgproject: from the pak in a shipped bundle, loose on disk in dev
     Project project;
     if (!Project_Load(&project, projPath)) {
-        fprintf(stderr, "player: cannot load %s\n", projPath);
+        fatal("cannot load the project -- is packs/data.pak next to this exe?");
         return 1;
     }
 
@@ -189,9 +207,20 @@ int main(int argc, char** argv)
     const char* shotAtEnv = getenv("MGE_PLAYER_SHOT_AT");
     int shotAt = (shotAtEnv != NULL && atoi(shotAtEnv) > 0) ? atoi(shotAtEnv) : 60;
     int frame = 0;
+    int prevW = Mge_GetScreenWidth(), prevH = Mge_GetScreenHeight();
     while (!Mge_WindowShouldClose()) {
         if (IsKeyPressed(KEY_F11))
             Mge_ToggleFullscreen();
+
+        // window resized (F11, or a scene module calling Mge_SetWindowSize /
+        // Mge_ToggleFullscreen for a resolution option) -> rebuild the
+        // framebuffer-sized HDR / bloom render targets
+        int curW = Mge_GetScreenWidth(), curH = Mge_GetScreenHeight();
+        if (curW != prevW || curH != prevH) {
+            Scene_Resize(&scene, curW, curH);
+            prevW = curW;
+            prevH = curH;
+        }
 
         Camera3D view;
         if (!Scene_MainCamera(&scene, &view)) {

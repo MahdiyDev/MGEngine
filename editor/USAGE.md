@@ -248,6 +248,13 @@ module moves that object to move the camera. There is no fly-camera or cursor
 grab in the shipped game; the debug fly-cam only appears when a scene has no main
 camera. Debug iteration stays loose-file; the pak is a release concern.
 
+The player is a **GUI-subsystem** exe — no console window pops up on a
+double-click (a fatal startup error shows a message box instead). Built
+`-DNDEBUG` (the Release bundle) it also raises the trace-log level so it doesn't
+write to stdout, and it calls `Scene_Resize` when the window changes size, so a
+scene module can offer a resolution / fullscreen option with `Mge_SetWindowSize`
+/ `Mge_ToggleFullscreen`.
+
 A `.mgscene` file is a flat, indentation-cosmetic, line-based text format —
 diffable, no JSON dependency. One `object` / `light` block per entity, plus
 `camera` and `render` sections (the leading `mgescene 1` line is the format id):

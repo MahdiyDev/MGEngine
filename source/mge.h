@@ -41,6 +41,7 @@ typedef enum {
 	LOG_FATAL,			// Fatal logging, used to abort program: exit(EXIT_FAILURE)
 	LOG_NONE			// Disable logging
 } TraceLogLevel;
+void Mge_SetTraceLogLevel(int logLevel); // messages below this level are dropped (default LOG_INFO)
 
 typedef enum {
 	KEY_NULL				= 0,		// Key: NULL, used for no key pressed

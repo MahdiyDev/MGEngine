@@ -18,6 +18,8 @@
 static int logTypeLevel = LOG_INFO;        // Minimum log type level
 static Trace_Log_Callback traceLog = NULL; // TraceLog callback function pointer
 
+void Mge_SetTraceLogLevel(int logLevel) { logTypeLevel = logLevel; }
+
 // Show trace log messages (LOG_INFO, LOG_WARNING, LOG_ERROR, LOG_DEBUG)
 void Trace_Log(int logType, const char* text, ...)
 {

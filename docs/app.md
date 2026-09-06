@@ -15,6 +15,13 @@ registers a synchronous `glDebugMessageCallback`; the `SEVERITY_NOTIFICATION`
 chatter is muted. It catches *invalid* GL, not *valid-but-wrong* rendering — a
 screenshot check is what catches that.
 
+## Trace log
+
+`Trace_Log(level, fmt, ...)` prints `INFO:` / `WARNING:` / … lines to stdout;
+`Mge_SetTraceLogLevel(LOG_*)` drops everything below `level` (default `LOG_INFO`).
+The shipped player calls `Mge_SetTraceLogLevel(LOG_WARNING)` when built `-DNDEBUG`
+so a released game doesn't spam stdout.
+
 ## Cursor
 
 | Function | Effect |
@@ -77,9 +84,12 @@ primary monitor and back (`Mge_IsFullscreen()` reports it; the editor and player
 bind it to **F11**). Either way `Mge_GetScreenWidth/Height` and the GL viewport
 follow the window, so 2D layout and `Mge_BeginMode3D`'s aspect stay correct.
 Anything **you** sized to the framebuffer — a `RenderTexture` for a post-fx pass,
-a `BloomFX` — must be recreated when the size changes (`editor/main.c` compares
-the size each frame and calls `Scene_Resize`). `editor/prefs.c` shows persisting
-the window size across runs.
+a `BloomFX` — must be recreated when the size changes: compare
+`Mge_GetScreenWidth/Height` each frame and rebuild (both `editor/main.c` and
+`runtime/player.c` call `Scene_Resize` this way, so a scene module can offer a
+resolution / fullscreen option just by calling `Mge_SetWindowSize` /
+`Mge_ToggleFullscreen`). `editor/prefs.c` shows persisting the window size across
+runs.
 
 ## Frame pacing
 

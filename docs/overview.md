@@ -64,7 +64,7 @@ editor/                THE APP -- project / scene editor (docked panel shell aro
   USAGE.md             editor docs
 docs/                  engine docs (this folder), split by area
 runtime/
-  player.c             standalone project runner -- reuses the editor data layer; what Build Bundle ships
+  player.c             standalone project runner -- reuses the editor data layer; what Build Bundle ships. GUI-subsystem (no console); quiet stdout + resize-aware in release
 vendor/
   glad/                glad GL loader -- include/ + glad.c (compiled into the engine)
   stb/                 stb_image.h, stb_image_write.h, stb_truetype.h (single-header, public domain)
