@@ -10,7 +10,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { NODE_FREE = 0, NODE_CONTAINER, NODE_TEXT };
+enum {
+    NODE_FREE = 0,
+    NODE_CONTAINER,
+    NODE_TEXT,
+    NODE_FLEX,       // Row / Column / Flex
+    NODE_FLEXIBLE,   // Expanded / Flexible / Spacer wrapper
+    NODE_STACK,
+    NODE_POSITIONED, // wrapper, child of a Stack
+    NODE_VISIBILITY,
+};
 
 typedef struct Node {
     uint8_t   type;
@@ -24,6 +33,22 @@ typedef struct Node {
             char*        text;
             MgeTextStyle style;
         } text;
+        struct {
+            MgeAxis      axis;
+            MgeFlexStyle style;
+        } flex;
+        struct {
+            int        flex;
+            MgeFlexFit fit;
+        } flexible;
+        struct {
+            MgeStackFit  fit;
+            MgeAlignment alignment;
+        } stack;
+        struct {
+            float l, t, r, b, w, h; // MGE_UI_NONE == unset
+        } positioned;
+        bool visible;
     } v;
 } Node;
 
@@ -286,6 +311,96 @@ void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style)
     S.dirty = true;
 }
 
+// ---- layout widgets (Phase 1) --------------------------------------
+
+MgeUiWidget Mge_UiFlex(MgeAxis axis, MgeFlexStyle style)
+{
+    int32_t i = alloc_node(NODE_FLEX);
+    S.nodes[i].v.flex.axis = axis;
+    S.nodes[i].v.flex.style = style;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiRow(MgeFlexStyle style)    { return Mge_UiFlex(MGE_AXIS_HORIZONTAL, style); }
+MgeUiWidget Mge_UiColumn(MgeFlexStyle style) { return Mge_UiFlex(MGE_AXIS_VERTICAL, style); }
+
+MgeUiWidget Mge_UiFlexible(int flex, MgeFlexFit fit)
+{
+    int32_t i = alloc_node(NODE_FLEXIBLE);
+    S.nodes[i].v.flexible.flex = flex < 1 ? 1 : flex;
+    S.nodes[i].v.flexible.fit = fit;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiExpanded(int flex) { return Mge_UiFlexible(flex, MGE_FLEX_TIGHT); }
+MgeUiWidget Mge_UiSpacer(int flex)   { return Mge_UiFlexible(flex, MGE_FLEX_TIGHT); }
+
+MgeUiWidget Mge_UiSizedBox(float w, float h)
+{
+    return Mge_UiContainer((MgeContainerStyle){ .width = w, .height = h });
+}
+MgeUiWidget Mge_UiCenter(void)
+{
+    return Mge_UiContainer((MgeContainerStyle){ .expand = true });
+}
+MgeUiWidget Mge_UiAlign(MgeAlignment alignment)
+{
+    return Mge_UiContainer((MgeContainerStyle){ .expand = true, .alignment = alignment });
+}
+MgeUiWidget Mge_UiPadding(MgeEdgeInsets insets)
+{
+    return Mge_UiContainer((MgeContainerStyle){ .padding = insets });
+}
+MgeUiWidget Mge_UiConstrainedBox(MgeUiConstraints constraints)
+{
+    return Mge_UiContainer((MgeContainerStyle){ .constraints = constraints });
+}
+
+MgeUiWidget Mge_UiStack(MgeStackFit fit, MgeAlignment alignment)
+{
+    int32_t i = alloc_node(NODE_STACK);
+    S.nodes[i].v.stack.fit = fit;
+    S.nodes[i].v.stack.alignment = alignment;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiPositioned(float left, float top, float right, float bottom,
+    float width, float height)
+{
+    int32_t i = alloc_node(NODE_POSITIONED);
+    S.nodes[i].v.positioned.l = left;
+    S.nodes[i].v.positioned.t = top;
+    S.nodes[i].v.positioned.r = right;
+    S.nodes[i].v.positioned.b = bottom;
+    S.nodes[i].v.positioned.w = width;
+    S.nodes[i].v.positioned.h = height;
+    S.dirty = true;
+    return h_make(i);
+}
+MgeUiWidget Mge_UiPositionedFill(void)
+{
+    return Mge_UiPositioned(0.0f, 0.0f, 0.0f, 0.0f, MGE_UI_NONE, MGE_UI_NONE);
+}
+
+MgeUiWidget Mge_UiVisibility(bool visible)
+{
+    int32_t i = alloc_node(NODE_VISIBILITY);
+    S.nodes[i].v.visible = visible;
+    S.dirty = true;
+    return h_make(i);
+}
+
+void Mge_UiSetVisible(MgeUiWidget w, bool visible)
+{
+    int32_t i = h_index(w);
+    if (i < 0 || S.nodes[i].type != NODE_VISIBILITY) return;
+    S.nodes[i].v.visible = visible;
+    S.dirty = true;
+}
+
 Rectangle Mge_UiGetRect(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -345,6 +460,11 @@ static MgeUiSize layout_container(int32_t i, MgeUiConstraints c)
     if (st.constraints.maxH > 0.0f) c.maxH = fminf(c.maxH, st.constraints.maxH);
     if (st.width > 0.0f)  { float w = clampf(st.width, c.minW, c.maxW);  c.minW = c.maxW = w; }
     if (st.height > 0.0f) { float h = clampf(st.height, c.minH, c.maxH); c.minH = c.maxH = h; }
+    // Center / Align: fill the available box instead of shrink-wrapping
+    if (st.expand) {
+        if (st.width <= 0.0f && c.maxW < MGE_UI_INF) c.minW = c.maxW;
+        if (st.height <= 0.0f && c.maxH < MGE_UI_INF) c.minH = c.maxH;
+    }
 
     // the child gets a loosened, padding-deflated box
     MgeUiConstraints inner = {
@@ -392,12 +512,181 @@ static MgeUiSize layout_text(int32_t i, MgeUiConstraints c)
     return (MgeUiSize){ w, h };
 }
 
+// a wrapper that just sizes to (and positions at the origin of) its one child
+static MgeUiSize layout_passthrough(int32_t i, MgeUiConstraints c)
+{
+    int32_t child = S.nodes[i].firstChild;
+    MgeUiSize s = { clampf(0.0f, c.minW, c.maxW), clampf(0.0f, c.minH, c.maxH) };
+    if (child >= 0) {
+        s = layout_node(child, c);
+        S.nodes[child].rect.x = 0.0f;
+        S.nodes[child].rect.y = 0.0f;
+    }
+    S.nodes[i].rect.width = s.w;
+    S.nodes[i].rect.height = s.h;
+    return s;
+}
+
+// Row / Column / Flex: two passes -- size the inflexible children, then hand the
+// leftover main space to the Expanded / Flexible ones by flex factor.
+static MgeUiSize layout_flex(int32_t i, MgeUiConstraints c)
+{
+    const MgeAxis ax = S.nodes[i].v.flex.axis;
+    const MgeFlexStyle st = S.nodes[i].v.flex.style;
+    const int horiz = (ax == MGE_AXIS_HORIZONTAL);
+
+    const float mainMin = horiz ? c.minW : c.minH;
+    const float mainMax = horiz ? c.maxW : c.maxH;
+    const float crossMin = horiz ? c.minH : c.minW;
+    const float crossMax = horiz ? c.maxH : c.maxW;
+
+    int n = 0, totalFlex = 0;
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        n++;
+        if (S.nodes[k].type == NODE_FLEXIBLE)
+            totalFlex += S.nodes[k].v.flexible.flex;
+    }
+    const float gapTotal = (n > 1) ? st.spacing * (float)(n - 1) : 0.0f;
+
+    const bool stretch = (st.crossAxis == MGE_CROSS_STRETCH) && (crossMax < MGE_UI_INF);
+    const float crossLo = stretch ? crossMax : 0.0f;
+    MgeUiConstraints childCross = { crossLo, crossMax, crossLo, crossMax }; // one axis used
+
+    float used = gapTotal, crossSize = 0.0f;
+
+    // pass 1 -- inflexible children
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        if (S.nodes[k].type == NODE_FLEXIBLE) continue;
+        MgeUiConstraints cc;
+        if (horiz)
+            cc = (MgeUiConstraints){ 0.0f, MGE_UI_INF, childCross.minH, childCross.maxH };
+        else
+            cc = (MgeUiConstraints){ childCross.minW, childCross.maxW, 0.0f, MGE_UI_INF };
+        MgeUiSize s = layout_node(k, cc);
+        used += horiz ? s.w : s.h;
+        crossSize = fmaxf(crossSize, horiz ? s.h : s.w);
+    }
+
+    // pass 2 -- flexible children share the remaining main space
+    float freeSpace = (mainMax < MGE_UI_INF) ? fmaxf(0.0f, mainMax - used) : 0.0f;
+    float per = (totalFlex > 0) ? freeSpace / (float)totalFlex : 0.0f;
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        if (S.nodes[k].type != NODE_FLEXIBLE) continue;
+        float ext = per * (float)S.nodes[k].v.flexible.flex;
+        float lo = (S.nodes[k].v.flexible.fit == MGE_FLEX_TIGHT) ? ext : 0.0f;
+        MgeUiConstraints cc;
+        if (horiz)
+            cc = (MgeUiConstraints){ lo, ext, childCross.minH, childCross.maxH };
+        else
+            cc = (MgeUiConstraints){ childCross.minW, childCross.maxW, lo, ext };
+        MgeUiSize s = layout_node(k, cc);
+        used += horiz ? s.w : s.h;
+        crossSize = fmaxf(crossSize, horiz ? s.h : s.w);
+    }
+
+    float mainSize = (st.mainSize == MGE_MAIN_SIZE_MAX && mainMax < MGE_UI_INF)
+        ? mainMax
+        : clampf(used, mainMin, mainMax);
+    crossSize = clampf(crossSize, crossMin, crossMax);
+
+    // pass 3 -- position
+    float leftover = fmaxf(0.0f, mainSize - used);
+    float first = 0.0f, gap = st.spacing;
+    switch (st.mainAxis) {
+    case MGE_MAIN_END:           first = leftover; break;
+    case MGE_MAIN_CENTER:        first = leftover * 0.5f; break;
+    case MGE_MAIN_SPACE_BETWEEN: if (n > 1) gap += leftover / (float)(n - 1); break;
+    case MGE_MAIN_SPACE_AROUND:  if (n > 0) { float e = leftover / (float)n; first = e * 0.5f; gap += e; } break;
+    case MGE_MAIN_SPACE_EVENLY:  { float e = leftover / (float)(n + 1); first = e; gap += e; } break;
+    default: break; // MGE_MAIN_START
+    }
+
+    float mainPos = first;
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        float cm = horiz ? S.nodes[k].rect.width : S.nodes[k].rect.height;
+        float cc = horiz ? S.nodes[k].rect.height : S.nodes[k].rect.width;
+        float crossPos;
+        switch (st.crossAxis) {
+        case MGE_CROSS_END:    crossPos = crossSize - cc; break;
+        case MGE_CROSS_CENTER: crossPos = (crossSize - cc) * 0.5f; break;
+        default:              crossPos = 0.0f; break; // START / STRETCH
+        }
+        S.nodes[k].rect.x = horiz ? mainPos : crossPos;
+        S.nodes[k].rect.y = horiz ? crossPos : mainPos;
+        mainPos += cm + gap;
+    }
+
+    MgeUiSize out = { horiz ? mainSize : crossSize, horiz ? crossSize : mainSize };
+    S.nodes[i].rect.width = out.w;
+    S.nodes[i].rect.height = out.h;
+    return out;
+}
+
+static bool pos_set(float v) { return v < MGE_UI_INF; }
+
+// Stack: non-positioned children pile up aligned to `alignment` and set the
+// stack's size; Positioned children are placed against that size.
+static MgeUiSize layout_stack(int32_t i, MgeUiConstraints c)
+{
+    const MgeStackFit fit = S.nodes[i].v.stack.fit;
+    const MgeAlignment al = S.nodes[i].v.stack.alignment;
+
+    MgeUiConstraints nonPos = (fit == MGE_STACK_EXPAND)
+        ? (MgeUiConstraints){ c.maxW, c.maxW, c.maxH, c.maxH }
+        : (MgeUiConstraints){ 0.0f, c.maxW, 0.0f, c.maxH };
+
+    float sw = 0.0f, sh = 0.0f;
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        if (S.nodes[k].type == NODE_POSITIONED) continue;
+        MgeUiSize s = layout_node(k, nonPos);
+        sw = fmaxf(sw, s.w);
+        sh = fmaxf(sh, s.h);
+    }
+    sw = clampf(sw, c.minW, c.maxW);
+    sh = clampf(sh, c.minH, c.maxH);
+
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        Node* p = &S.nodes[k];
+        if (p->type != NODE_POSITIONED) {
+            float fx = al.x * 0.5f + 0.5f, fy = al.y * 0.5f + 0.5f;
+            p->rect.x = (sw - p->rect.width) * fx;
+            p->rect.y = (sh - p->rect.height) * fy;
+            continue;
+        }
+        float L = p->v.positioned.l, R = p->v.positioned.r, W = p->v.positioned.w;
+        float T = p->v.positioned.t, B = p->v.positioned.b, H = p->v.positioned.h;
+        float cw = (pos_set(L) && pos_set(R)) ? fmaxf(0.0f, sw - L - R) : (pos_set(W) ? W : -1.0f);
+        float ch = (pos_set(T) && pos_set(B)) ? fmaxf(0.0f, sh - T - B) : (pos_set(H) ? H : -1.0f);
+        MgeUiConstraints pc = {
+            cw >= 0.0f ? cw : 0.0f, cw >= 0.0f ? cw : sw,
+            ch >= 0.0f ? ch : 0.0f, ch >= 0.0f ? ch : sh,
+        };
+        MgeUiSize s = layout_node(k, pc);
+        p->rect.x = pos_set(L) ? L : (pos_set(R) ? sw - R - s.w : (sw - s.w) * (al.x * 0.5f + 0.5f));
+        p->rect.y = pos_set(T) ? T : (pos_set(B) ? sh - B - s.h : (sh - s.h) * (al.y * 0.5f + 0.5f));
+    }
+
+    S.nodes[i].rect.width = sw;
+    S.nodes[i].rect.height = sh;
+    return (MgeUiSize){ sw, sh };
+}
+
 static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
 {
     switch (S.nodes[i].type) {
     case NODE_CONTAINER: return layout_container(i, c);
     case NODE_TEXT:      return layout_text(i, c);
-    default:             return (MgeUiSize){ 0, 0 };
+    case NODE_FLEX:      return layout_flex(i, c);
+    case NODE_STACK:     return layout_stack(i, c);
+    case NODE_FLEXIBLE:  return layout_passthrough(i, c);
+    case NODE_POSITIONED: return layout_passthrough(i, c);
+    case NODE_VISIBILITY:
+        if (!S.nodes[i].v.visible) {
+            S.nodes[i].rect = (Rectangle){ 0, 0, 0, 0 };
+            return (MgeUiSize){ 0, 0 };
+        }
+        return layout_passthrough(i, c);
+    default: return (MgeUiSize){ 0, 0 };
     }
 }
 
@@ -415,6 +704,9 @@ static void place_node(int32_t i, float absX, float absY)
 static void paint_node(int32_t i)
 {
     Node* n = &S.nodes[i];
+
+    if (n->type == NODE_VISIBILITY && !n->v.visible)
+        return; // hidden subtree
 
     if (n->type == NODE_CONTAINER) {
         const MgeBoxDecoration d = n->v.container.decoration;

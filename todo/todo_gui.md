@@ -81,39 +81,47 @@ RenderView model); Container is single-child (Row/Column are Phase 1).
       `editor/play.{h,c}` + `editor/main.c` call it between `Mge_UiNewFrame` and
       `Mge_UiRender`, after the scene.
 
-## Phase 1 -- layout widgets
+## Phase 1 -- core layout widgets   [LANDED]
 
-- [ ] Enums: `MgeMainAxisAlignment` (start/end/center/spaceBetween/spaceAround/
-      spaceEvenly); `MgeCrossAxisAlignment` (start/end/center/stretch/baseline);
-      `MgeMainAxisSize` (min/max); `MgeAxis`; `MgeFlexFit` (tight/loose);
-      `MgeStackFit`; `MgeWrapAlignment`; `MgeVerticalDirection`; `MgeTextBaseline`.
-- [ ] `Mge_GuiRow(parent, MgeFlexStyle)` / `Mge_GuiColumn(parent, MgeFlexStyle)` /
-      `Mge_GuiFlex(parent, MgeAxis, MgeFlexStyle)` (mainAxisAlignment,
-      crossAxisAlignment, mainAxisSize, `spacing`).
-- [ ] `Mge_GuiExpanded(parent, int flex)` / `Mge_GuiFlexible(parent, int flex,
-      MgeFlexFit)` / `Mge_GuiSpacer(parent, int flex)`.
-- [ ] `Mge_GuiSizedBox(parent, float w, float h)` (NaN = pass through) /
-      `Mge_GuiSizedBoxExpand` / `Mge_GuiSizedBoxShrink`.
-- [ ] `Mge_GuiCenter(parent)` / `Mge_GuiAlign(parent, MgeAlignment)` /
-      `Mge_GuiPadding(parent, MgeEdgeInsets)`.
-- [ ] `Mge_GuiConstrainedBox(parent, MgeUiConstraints)` /
-      `Mge_GuiUnconstrainedBox` / `Mge_GuiLimitedBox` / `Mge_GuiOverflowBox` /
-      `Mge_GuiSizedOverflowBox`.
-- [ ] `Mge_GuiAspectRatio(parent, float ratio)` /
-      `Mge_GuiFractionallySizedBox(parent, float wf, float hf, MgeAlignment)`.
-- [ ] `Mge_GuiStack(parent, MgeStackFit, MgeAlignment)` /
-      `Mge_GuiPositioned(parent, l, t, r, b, w, h)` (NaN = unset) /
-      `Mge_GuiPositionedFill` / `Mge_GuiIndexedStack(parent, int* index)`.
-- [ ] `Mge_GuiWrap(parent, MgeAxis, float spacing, float runSpacing,
-      MgeWrapAlignment)`.
-- [ ] `Mge_GuiIntrinsicWidth(parent)` / `Mge_GuiIntrinsicHeight(parent)` /
-      `Mge_GuiBaseline(parent, float baseline, MgeTextBaseline)`.
-- [ ] `Mge_GuiTable(parent, int columns, MgeTableStyle)` / `Mge_GuiTableRow` /
-      `Mge_GuiTableCell` (column widths: fixed / flex / intrinsic).
-- [ ] `Mge_GuiLayoutBuilder(parent, void (*build)(MgeUiWidget slot,
-      MgeUiConstraints, void*), void* user)`.
-- [ ] `Mge_GuiVisibility(parent, bool visible, bool maintainSize)` /
-      `Mge_GuiOffstage`.
+Detached constructors (like `Mge_UiContainer`) -- `Mge_UiAddChild` them in.
+Row/Column/Stack are multi-child; the rest take one child. Two-pass flex
+(inflexible measured, then Expanded/Spacer split the leftover by factor), a
+`bool expand` on `MgeContainerStyle` for Center/Align. `test/test_ui_layout.c`
+(+10 cases), `render_smoke` `ui` scene, `examples/ui/menu.c`.
+
+- [x] Enums: `MgeAxis`, `MgeMainAxisAlignment` (start/end/center/spaceBetween/
+      spaceAround/spaceEvenly), `MgeCrossAxisAlignment` (center/start/end/stretch),
+      `MgeMainAxisSize` (max/min), `MgeFlexFit` (tight/loose), `MgeStackFit`
+      (loose/expand). `MgeFlexStyle` { mainAxis, crossAxis, mainSize, spacing }.
+- [x] `Mge_UiRow(MgeFlexStyle)` / `Mge_UiColumn(MgeFlexStyle)` /
+      `Mge_UiFlex(MgeAxis, MgeFlexStyle)`.
+- [x] `Mge_UiExpanded(int flex)` / `Mge_UiFlexible(int flex, MgeFlexFit)` /
+      `Mge_UiSpacer(int flex)`.
+- [x] `Mge_UiSizedBox(float w, float h)` (0 on an axis = pass through);
+      `Mge_UiCenter()` / `Mge_UiAlign(MgeAlignment)` / `Mge_UiPadding(MgeEdgeInsets)` /
+      `Mge_UiConstrainedBox(MgeUiConstraints)`.
+- [x] `Mge_UiStack(MgeStackFit, MgeAlignment)` /
+      `Mge_UiPositioned(l, t, r, b, w, h)` (`MGE_UI_NONE` = unset) /
+      `Mge_UiPositionedFill()`.
+- [x] `Mge_UiVisibility(bool)` + `Mge_UiSetVisible` (`!visible` -> zero size, not
+      painted).
+
+## Phase 1b -- layout tail (deferred)
+
+Niche for game UI; each is a self-contained sub-algorithm.
+
+- [ ] `Mge_UiWrap(MgeAxis, spacing, runSpacing, MgeWrapAlignment)` -- run packing.
+- [ ] `Mge_UiTable(int columns, MgeTableStyle)` / `TableRow` / `TableCell`
+      (fixed / flex / intrinsic column widths).
+- [ ] `Mge_UiIntrinsicWidth` / `IntrinsicHeight` -- needs a dry-layout pass;
+      `Mge_UiBaseline` + `MGE_CROSS_BASELINE` + `MgeTextBaseline`.
+- [ ] `Mge_UiLayoutBuilder(void (*build)(MgeUiWidget slot, MgeUiConstraints, void*), void*)`.
+- [ ] `Mge_UiAspectRatio(float ratio)` /
+      `Mge_UiFractionallySizedBox(float wf, float hf, MgeAlignment)`.
+- [ ] `Mge_UiIndexedStack(int* index)`; `Mge_UiOffstage`;
+      `Mge_UiVisibility` `maintainSize` variant.
+- [ ] `Mge_UiUnconstrainedBox` / `LimitedBox` / `OverflowBox` / `SizedOverflowBox`.
+- [ ] `MgeVerticalDirection` / `MgeWrapAlignment` enums (with Wrap).
 
 ## Phase 2 -- scrolling & viewports
 

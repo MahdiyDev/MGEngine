@@ -157,7 +157,48 @@ typedef struct MgeContainerStyle {
     float            height;      // 0 => size to child
     MgeUiConstraints constraints; // all 0 => unconstrained
     MgeBoxDecoration decoration;
+    bool             expand;      // fill the max constraints instead of shrink-wrapping
 } MgeContainerStyle;
+
+// ---- flex / stack ---------------------------------------------------------
+
+typedef enum { MGE_AXIS_HORIZONTAL = 0, MGE_AXIS_VERTICAL } MgeAxis;
+
+// distribution of children along the main axis (Row: x, Column: y)
+typedef enum {
+    MGE_MAIN_START = 0,
+    MGE_MAIN_END,
+    MGE_MAIN_CENTER,
+    MGE_MAIN_SPACE_BETWEEN,
+    MGE_MAIN_SPACE_AROUND,
+    MGE_MAIN_SPACE_EVENLY,
+} MgeMainAxisAlignment;
+
+// alignment of each child across the other axis
+typedef enum {
+    MGE_CROSS_CENTER = 0,
+    MGE_CROSS_START,
+    MGE_CROSS_END,
+    MGE_CROSS_STRETCH, // child is forced to the cross size
+} MgeCrossAxisAlignment;
+
+typedef enum {
+    MGE_MAIN_SIZE_MAX = 0, // fill the available main extent
+    MGE_MAIN_SIZE_MIN,     // shrink-wrap the children
+} MgeMainAxisSize;
+
+typedef enum { MGE_FLEX_TIGHT = 0, MGE_FLEX_LOOSE } MgeFlexFit;
+typedef enum { MGE_STACK_LOOSE = 0, MGE_STACK_EXPAND } MgeStackFit;
+
+typedef struct MgeFlexStyle {
+    MgeMainAxisAlignment  mainAxis;
+    MgeCrossAxisAlignment crossAxis;
+    MgeMainAxisSize       mainSize;
+    float                 spacing; // gap inserted between children
+} MgeFlexStyle;
+
+// "unset" for an Mge_UiPositioned edge / size (a real value is finite)
+#define MGE_UI_NONE MGE_UI_INF
 
 // ---- handles ------------------------------------------------------------
 
@@ -198,8 +239,32 @@ MgeUiWidget Mge_UiContainer(MgeContainerStyle style);              // detached
 MgeUiWidget Mge_UiLabel(MgeUiWidget parent, const char* text);     // default text style
 MgeUiWidget Mge_UiText(MgeUiWidget parent, const char* text, MgeTextStyle style);
 
+// --- layout (Phase 1). All detached -- Mge_UiAddChild them into a parent.
+// Row / Column / Flex / Stack are multi-child; everything else takes one child
+// (extra children are ignored -- use a Row/Column).
+MgeUiWidget Mge_UiRow(MgeFlexStyle style);
+MgeUiWidget Mge_UiColumn(MgeFlexStyle style);
+MgeUiWidget Mge_UiFlex(MgeAxis axis, MgeFlexStyle style);
+MgeUiWidget Mge_UiExpanded(int flex);                    // fill a share of the free main space (fit = tight)
+MgeUiWidget Mge_UiFlexible(int flex, MgeFlexFit fit);
+MgeUiWidget Mge_UiSpacer(int flex);                      // an Expanded with no child
+
+MgeUiWidget Mge_UiSizedBox(float w, float h);            // 0 on an axis => size to child
+MgeUiWidget Mge_UiCenter(void);
+MgeUiWidget Mge_UiAlign(MgeAlignment alignment);
+MgeUiWidget Mge_UiPadding(MgeEdgeInsets insets);
+MgeUiWidget Mge_UiConstrainedBox(MgeUiConstraints constraints);
+
+MgeUiWidget Mge_UiStack(MgeStackFit fit, MgeAlignment alignment);
+MgeUiWidget Mge_UiPositioned(float left, float top, float right, float bottom,
+    float width, float height);                          // MGE_UI_NONE = unset; child of a Stack
+MgeUiWidget Mge_UiPositionedFill(void);
+
+MgeUiWidget Mge_UiVisibility(bool visible);              // !visible => zero size, not painted
+
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);
+void Mge_UiSetVisible(MgeUiWidget w, bool visible);      // on an Mge_UiVisibility node
 
 // the widget's computed screen rect after the last Mge_UiRender ({0} if unlaid)
 Rectangle Mge_UiGetRect(MgeUiWidget w);

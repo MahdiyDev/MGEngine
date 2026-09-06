@@ -1693,14 +1693,19 @@ at 16 px / opaque white.
 | --- | --- |
 | lifecycle | `Mge_UiNewFrame(dt)` (lazy-boots) / `Mge_UiRender` / `Mge_UiShutdown`; `Mge_UiSetRoot`, `Mge_UiViewport(w,h)` (0,0 → screen size); `Mge_UiWantsPointer` / `Mge_UiWantsKeyboard` (input gate; always `false` until interactive widgets land) |
 | tree | `Mge_UiContainer(style)`, `Mge_UiLabel(parent, text)`, `Mge_UiText(parent, text, style)`; `Mge_UiAddChild` / `Mge_UiRemoveChild` / `Mge_UiClearChildren` / `Mge_UiChildCount` / `Mge_UiChildAt` / `Mge_UiParentOf` / `Mge_UiDestroy` (frees the subtree; the handle goes stale) / `Mge_UiIsValid` |
-| mutate | `Mge_UiSetText`, `Mge_UiSetContainerStyle`, `Mge_UiMarkNeedsBuild/Layout/Paint`; `Mge_UiGetRect(w)` reads the laid-out screen rect |
-| values | `Mge_Colors.<name>`, `Mge_EdgeInsets{All,Symmetric,LTRB}`, `Mge_Alignment(x,y)` + `MGE_ALIGN_*`, `Mge_ConstraintsTight/Loose`, `Mge_BorderAll`, `Mge_BorderRadiusAll` |
+| layout | `Mge_UiRow` / `Mge_UiColumn` / `Mge_UiFlex(axis, MgeFlexStyle)` (main/cross alignment, `mainSize` MAX\|MIN, `spacing`); `Mge_UiExpanded(flex)` / `Mge_UiFlexible(flex, fit)` / `Mge_UiSpacer(flex)` inside a Row/Column; `Mge_UiCenter` / `Mge_UiAlign(a)` / `Mge_UiPadding(insets)` / `Mge_UiSizedBox(w,h)` / `Mge_UiConstrainedBox(c)`; `Mge_UiStack(fit, align)` + `Mge_UiPositioned(l,t,r,b,w,h)` (`MGE_UI_NONE` = unset) / `Mge_UiPositionedFill`; `Mge_UiVisibility(bool)` + `Mge_UiSetVisible` |
+| mutate | `Mge_UiSetText`, `Mge_UiSetContainerStyle`, `Mge_UiSetVisible`, `Mge_UiMarkNeedsBuild/Layout/Paint`; `Mge_UiGetRect(w)` reads the laid-out screen rect |
+| values | `Mge_Colors.<name>`, `Mge_EdgeInsets{All,Symmetric,LTRB}`, `Mge_Alignment(x,y)` + `MGE_ALIGN_*`, `Mge_ConstraintsTight/Loose`, `Mge_BorderAll`, `Mge_BorderRadiusAll`, `MgeFlexStyle` |
 
 The **root is always laid out to fill the viewport** (like Flutter's
-`RenderView`) — to size or place something, wrap it (a full-screen root
-Container with `alignment` set, or a child with a fixed `width`/`height`).
-Container is **single-child** for now; Row / Column and the rest are on the
-roadmap in [todo/todo_gui.md](todo/todo_gui.md).
+`RenderView`) — to size or place something, wrap it. **Row / Column / Stack are
+multi-child**; every other node takes one child (extra children are ignored —
+use a Row/Column). Flex is the standard model: inflexible children measure
+first, then `Mge_UiExpanded` / `Spacer` split the leftover main-axis space by
+`flex` factor. `Mge_UiCenter` / `Align` fill their box and place the child;
+`Mge_UiPadding` / `SizedBox` / `ConstrainedBox` are thin `Container` presets.
+The Phase-1 tail (Wrap, Table, intrinsics, LayoutBuilder, …) is in
+[todo/todo_gui.md](todo/todo_gui.md).
 
 From a scene module, build the HUD in the optional `MgeScene_DrawGui(MgeSceneCtx*)`
 export (see below) — the host calls `Mge_UiNewFrame` / `Mge_UiRender` around it.

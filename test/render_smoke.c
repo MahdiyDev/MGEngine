@@ -161,19 +161,50 @@ static void scene_text3d(void)
 
 // retained widget GUI: a centred rounded card (Container decoration + border +
 // padding + MGE_ALIGN_CENTER) holding a Label, over a dim full-screen root
+static MgeUiWidget ui_pill(Color c)
+{
+    return Mge_UiContainer((MgeContainerStyle){
+        .expand = true, .decoration = { .color = c, .borderRadius = Mge_BorderRadiusAll(6) } });
+}
+
+// a full-screen Column: header Row, a centred card in an Expanded middle, footer
+// Row of two Expanded pills -- exercises Row/Column/Expanded/Spacer/Center
 static void scene_ui(void)
 {
-    MgeUiWidget root = Mge_UiContainer((MgeContainerStyle){
-        .decoration = Mge_UiBoxDecoration((Color){ 18, 20, 28, 255 }),
-        .alignment = MGE_ALIGN_CENTER });
+    MgeUiWidget root = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH });
+
+    MgeUiWidget headerPad = Mge_UiPadding(Mge_EdgeInsetsAll(14));
+    MgeUiWidget header = Mge_UiRow((MgeFlexStyle){ .crossAxis = MGE_CROSS_CENTER });
+    Mge_UiAddChild(headerPad, header);
+    Mge_UiText(header, "MGEngine UI", (MgeTextStyle){ .size = 22, .color = Mge_Colors.white });
+    Mge_UiAddChild(header, Mge_UiSpacer(1));
+    Mge_UiText(header, "Phase 1", (MgeTextStyle){ .size = 18, .color = (Color){ 150, 160, 190, 255 } });
+    Mge_UiAddChild(root, headerPad);
+
+    MgeUiWidget mid = Mge_UiExpanded(1);
+    MgeUiWidget center = Mge_UiCenter();
+    Mge_UiAddChild(mid, center);
     MgeUiWidget card = Mge_UiContainer((MgeContainerStyle){
-        .padding = Mge_EdgeInsetsAll(24),
+        .padding = Mge_EdgeInsetsSymmetric(28, 18),
         .decoration = { .color = Mge_Colors.white,
             .border = Mge_BorderAll((Color){ 120, 140, 200, 255 }, 3.0f),
             .borderRadius = Mge_BorderRadiusAll(12.0f) } });
-    Mge_UiAddChild(root, card);
-    Mge_UiText(card, "MGEngine UI - Phase 0",
-        (MgeTextStyle){ .size = 24, .color = (Color){ 30, 34, 48, 255 } });
+    Mge_UiAddChild(center, card);
+    Mge_UiText(card, "Row / Column / Expanded", (MgeTextStyle){ .size = 20, .color = (Color){ 30, 34, 48, 255 } });
+    Mge_UiAddChild(root, mid);
+
+    MgeUiWidget footerPad = Mge_UiPadding(Mge_EdgeInsetsAll(14));
+    MgeUiWidget footer = Mge_UiRow((MgeFlexStyle){ .spacing = 12, .crossAxis = MGE_CROSS_STRETCH });
+    Mge_UiAddChild(footerPad, footer);
+    MgeUiWidget e1 = Mge_UiExpanded(1), e2 = Mge_UiExpanded(2);
+    Mge_UiAddChild(e1, ui_pill((Color){ 60, 110, 200, 255 }));
+    Mge_UiAddChild(e2, ui_pill((Color){ 70, 170, 110, 255 }));
+    Mge_UiAddChild(footer, e1);
+    Mge_UiAddChild(footer, e2);
+    // give the footer a fixed height
+    MgeUiWidget footerBox = Mge_UiContainer((MgeContainerStyle){ .height = 56 });
+    Mge_UiAddChild(footerBox, footerPad);
+    Mge_UiAddChild(root, footerBox);
 
     Mge_BeginDrawing();
     Mge_ClearBackground((Color){ 8, 9, 12, 255 });
