@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MGEngine is a small raylib-style 2D/3D rendering engine in C11 (OpenGL 4.4 core,
 GLFW, glad, stb_image, Assimp, Dear ImGui). It builds a shared library plus two
-consumer apps. See `USAGE.md` (engine API) and `editor/USAGE.md` (editor) for
-in-depth docs; `README.md` maps the repo.
+consumer apps. See `docs/` (engine API, split by area) and `editor/USAGE.md`
+(editor) for in-depth docs; `README.md` maps the repo.
 
 ## Commands
 

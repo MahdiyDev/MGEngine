@@ -1,7 +1,7 @@
 # MGEngine editor
 
 A scene editor built on top of the engine library — see
-[../USAGE.md](../USAGE.md) for the engine itself. `editor/` is a plain-C consumer
+[../docs/](../docs/) for the engine itself. `editor/` is a plain-C consumer
 (`#include <mge.h>` + link `-lmgengine`), split into one unit per concern:
 
 | file | contents |
@@ -152,8 +152,9 @@ state. The module links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`
   that isn't an Object (game boards, actors — no `SCENE_MAX_OBJECTS` limit).
 - **`MgeScene_DrawGui`** (optional) runs after `MgeScene_Draw` and the scene
   composite, in **2D screen space** (pixel coords, top-left). Build the game's
-  HUD / menus here with the `Mge_Ui*` widget API (`<mge_ui.h>` — see the engine
-  USAGE); the host wraps it in `Mge_UiNewFrame` / `Mge_UiRender`. Both the built
+  HUD / menus here with the `Mge_Ui*` widget API (`<mge_ui.h>` — see
+  [../docs/2d-ui.md](../docs/2d-ui.md)); the host wraps it in `Mge_UiNewFrame` /
+  `Mge_UiRender`. Both the built
   player and Play mode call it. Not the place for `Mge_Gui*` (that's the editor's
   ImGui shim).
 - **`ctx->requestedScene`** — write a scene name and the game switches scenes.

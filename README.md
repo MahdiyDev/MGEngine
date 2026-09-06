@@ -37,9 +37,9 @@ On Windows use `mingw32-make`.
 
 ## Docs
 
-- **[USAGE.md](USAGE.md)** — the engine: rendering, lighting, meshes, model
-  loading, depth/stencil, the `Mge_Gui*` UI abstraction, and how to link the
-  library from your own app.
+- **[docs/](docs/)** — the engine, split by area: building, rendering, HDR &
+  bloom, lighting & materials, meshes, the scene/component/physics model, text &
+  GUI, and how to link the library from your own app.
 - **[editor/USAGE.md](editor/USAGE.md)** — the editor: projects & scenes, the
   panels, scene code / Play / hot reload, Build Bundle + the player.
 - **[todo/](todo/)** — what's done and what's next, split by area (engine,
