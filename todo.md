@@ -50,6 +50,7 @@
 - [x] PBR + IBL: mge_pbr.c (Cook-Torrance BRDF: GGX/Smith/Schlick, PBRMaterial albedo/normal/metallic/roughness/ao, Mge_BeginPBR3D / Mge_BeginPBR3DIBL / Mge_SetPBRMaterial) + mge_ibl.c (Mge_LoadEnvironment: equirect->cube, 32^2 irradiance, 5-mip prefilter, 512^2 BRDF LUT; Mge_DrawEnvironmentSkybox). Mge_LoadTextureHDR (stbi_loadf -> RGB16F). assets/hdr/newport_loft.hdr + assets/pbr/rusted_iron/; examples/pbr/spheres.c. (LearnOpenGL PBR/Theory + PBR/Lighting + PBR/IBL x2). Forward-only, no shadows in the PBR path.
 - [x] builder starts in EDIT mode (was VIEW/fly)
 - [x] text rendering: mge_text.c -- stb_truetype (vendored single header, in place of FreeType) bakes ASCII 32..126 into one coverage atlas (RG8, swizzled so the default batch shader alpha-blends it -- no text shader); Font + Mge_LoadFont/FromMemory + Mge_GetDefaultFont (a built-in 8x8 bitmap font, no asset) + Draw_Text / Mge_MeasureText (screen space, top-left origin, like Draw_Rectangle). examples/text/draw_text.c; test/test_text.c + the `text` render-smoke scene. (LearnOpenGL In-Practice/Text-Rendering)
+- [x] world-space text: Draw_Text3D (camera-facing billboard, world units, call inside Mge_BeginMode3D; unlit, depth-tests + blooms). New COMPONENT_TEXT (Text: string/size/color) -> a "Text" entry in the editor "+ add" menu + inspector section + .mgscene round-trip; default batch shader now discards fully-transparent fragments so glyph-quad gaps don't leave a depth hole a later skybox can't fill. render-smoke `text3d` / `skybox` / `text_object` scenes.
 
 ---
 

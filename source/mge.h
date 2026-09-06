@@ -662,6 +662,7 @@ typedef enum {
 	COMPONENT_MATERIAL,    // surface response (Material)
 	COMPONENT_COLLIDER,    // physics volume (Collider)
 	COMPONENT_RIGIDBODY,   // physics motion (RigidBody)
+	COMPONENT_TEXT,        // world-space billboard label (Text)
 	COMPONENT_TYPE_COUNT
 } ComponentType;
 
@@ -673,6 +674,13 @@ typedef struct Shape {
 	bool polyStrip;    // PRIM_POLYGON: false = triangle fan, true = strip
 	bool wireframe;    // draw as wire / outline instead of solid
 } Shape;
+
+// A world-space text label drawn at the object's transform (see Draw_Text3D).
+typedef struct Text {
+	char  text[64];
+	float size;   // glyph cell height in world units, scaled by transform.scale.x
+	Color color;
+} Text;
 
 typedef enum { COLLIDER_BOX = 0, COLLIDER_SPHERE } ColliderKind;
 
@@ -699,6 +707,7 @@ typedef struct Component {
 		Material  material;
 		Collider  collider;
 		RigidBody body;
+		Text      text;
 	};
 } Component;
 
@@ -895,6 +904,12 @@ void Mge_UnloadFont(Font font);
 void Draw_Text(Font font, const char *text, Vector2 pos, float fontSize, Color tint);
 // {max line width, total height} of `text` at `fontSize`, without drawing.
 Vector2 Mge_MeasureText(Font font, const char *text, float fontSize);
+// Draw `text` in world space as a camera-facing billboard centred on `pos`.
+// `size` is the glyph cell height in world units; '\n' starts a new line. Call
+// inside Mge_BeginMode3D (the billboard basis is read from the active view
+// matrix); the text lights and blooms like any other geometry. Manages its own
+// blend state like Draw_Text.
+void Draw_Text3D(Font font, const char *text, Vector3 pos, float size, Color tint);
 
 // Texture wrap mode (see TextureWrap). Mge_SetTextureWrap sets both axes;
 // Mge_SetTextureWrapEx sets U (horizontal) and V (vertical) independently.
@@ -1342,6 +1357,7 @@ Shape*      Mge_GetShapeComponent(Object* o);
 Material*   Mge_GetMaterialComponent(Object* o);
 Collider*   Mge_GetColliderComponent(Object* o);
 RigidBody*  Mge_GetRigidBodyComponent(Object* o);
+Text*       Mge_GetTextComponent(Object* o);
 
 // Unit forward vector for an OBJECT_CAMERA: its orientation applied to local -Z
 // (identity looks toward -Z). Pair with Quaternion_LookRotation to aim one.

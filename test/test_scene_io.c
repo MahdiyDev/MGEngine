@@ -523,6 +523,39 @@ TEST(physics_components_round_trip)
     remove("scene_io_tmp/phys.c");
 }
 
+// a Text component (world-space label) survives the .mgscene round-trip
+TEST(text_component_round_trips)
+{
+    Path_MakeDirs("scene_io_tmp");
+    const char* path = "scene_io_tmp/text.mgscene";
+
+    Scene a;
+    memset(&a, 0, sizeof(a));
+    a.objects[0] = Mge_MakeShape3D(PRIM_CUBE, (Vector3){ 0, 1, 0 }, (Vector3){ 1, 1, 1 }, WHITE);
+    Mge_RemoveComponent(&a.objects[0], COMPONENT_SHAPE);
+    Mge_RemoveComponent(&a.objects[0], COMPONENT_MATERIAL);
+    Text* tx = Mge_AddComponent(&a.objects[0], COMPONENT_TEXT);
+    strcpy(tx->text, "Hello world");
+    tx->size = 2.5f;
+    tx->color = (Color){ 10, 20, 30, 255 };
+    strcpy(a.objectNames[0], "Label");
+    a.objectCount = 1;
+
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 60.0f };
+    CHECK(Scene_Save(&a, path, cam, NULL));
+
+    Scene b;
+    CHECK(Scene_Load(&b, path, NULL));
+    Text* bt = Mge_GetTextComponent(&b.objects[0]);
+    CHECK(bt != NULL);
+    CHECK(strcmp(bt->text, "Hello world") == 0);
+    CHECK_F(bt->size, 2.5f);
+    CHECK(bt->color.r == 10 && bt->color.g == 20 && bt->color.b == 30);
+
+    remove(path);
+    remove("scene_io_tmp/text.c");
+}
+
 int main(void)
 {
     RUN(path_helpers);
@@ -535,6 +568,7 @@ int main(void)
     RUN(save_keeps_res_paths_and_imports_only_outside_files);
     RUN(shape_variants_round_trip);
     RUN(physics_components_round_trip);
+    RUN(text_component_round_trips);
 
     RMDIR("scene_io_tmp/res"); // best-effort tidy-up
     RMDIR("scene_io_tmp");

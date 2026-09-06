@@ -29,6 +29,8 @@ void Draw_Quad3DWires(Vector3 a, Vector2 s, Quaternion q, Color c) { (void)a; (v
 void Draw_Polygon3D(const Vector3* p, int n, bool st, Color c) { (void)p; (void)n; (void)st; (void)c; }
 void Draw_Polygon3DWires(const Vector3* p, int n, bool cl, Color c) { (void)p; (void)n; (void)cl; (void)c; }
 void Mge_DrawObjectOutline(Object o, float t, Color c) { (void)o; (void)t; (void)c; }
+Font Mge_GetDefaultFont(void) { return (Font){ 0 }; }
+void Draw_Text3D(Font f, const char* s, Vector3 p, float sz, Color c) { (void)f; (void)s; (void)p; (void)sz; (void)c; }
 
 // lighting backend (mge_light.c is not linked here; mge_material.c provides the
 // real Mge_DefaultMaterial / Mge_SetMaterialTexture)

@@ -5,6 +5,7 @@
 #include "mge_math.h"
 
 #include <stddef.h>
+#include <stdio.h>
 
 bool Mge_HasComponent(const Object* o, ComponentType t)
 {
@@ -23,6 +24,7 @@ Shape*     Mge_GetShapeComponent(Object* o)     { return (Shape*)Mge_GetComponen
 Material*  Mge_GetMaterialComponent(Object* o)  { return (Material*)Mge_GetComponent(o, COMPONENT_MATERIAL); }
 Collider*  Mge_GetColliderComponent(Object* o)  { return (Collider*)Mge_GetComponent(o, COMPONENT_COLLIDER); }
 RigidBody* Mge_GetRigidBodyComponent(Object* o) { return (RigidBody*)Mge_GetComponent(o, COMPONENT_RIGIDBODY); }
+Text*      Mge_GetTextComponent(Object* o)      { return (Text*)Mge_GetComponent(o, COMPONENT_TEXT); }
 
 const char* Mge_ComponentName(ComponentType t)
 {
@@ -31,6 +33,7 @@ const char* Mge_ComponentName(ComponentType t)
     case COMPONENT_MATERIAL:  return "Material";
     case COMPONENT_COLLIDER:  return "Collider";
     case COMPONENT_RIGIDBODY: return "RigidBody";
+    case COMPONENT_TEXT:      return "Text";
     default:                  return "?";
     }
 }
@@ -61,6 +64,11 @@ void* Mge_AddComponent(Object* o, ComponentType t)
             fresh.body.mass = 1.0f;
             fresh.body.restitution = 0.3f;
             fresh.body.useGravity = true;
+            break;
+        case COMPONENT_TEXT:
+            snprintf(fresh.text.text, sizeof(fresh.text.text), "Text");
+            fresh.text.size = 1.0f;
+            fresh.text.color = (Color){ 255, 255, 255, 255 };
             break;
         default:
             break;

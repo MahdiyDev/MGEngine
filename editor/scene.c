@@ -317,6 +317,23 @@ void Scene_AddPolygon(Scene* s, int mode, bool wireframe)
         o->wireframe = true;
 }
 
+void Scene_AddText(Scene* s)
+{
+    int i = add_object_slot(s, "Text");
+    if (i < 0)
+        return;
+
+    Object o = { 0 };
+    o.kind = OBJECT_3D;
+    o.active = true;
+    o.transform.position = (Vector3){ 0.0f, 1.0f, 0.0f };
+    o.transform.rotation = Quaternion_Identity();
+    o.transform.scale = (Vector3){ 1.0f, 1.0f, 1.0f };
+    o.transform.parent = -1;
+    Mge_AddComponent(&o, COMPONENT_TEXT); // seeds text "Text", size 1, white
+    s->objects[i] = o;
+}
+
 void Scene_AddCamera(Scene* s)
 {
     if (s->objectCount >= SCENE_MAX_OBJECTS)

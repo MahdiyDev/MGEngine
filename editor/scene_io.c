@@ -220,6 +220,13 @@ bool Scene_Save(Scene* s, const char* path, Camera3D camera, const char* project
             fprintf(f, "  rigidbody %g %g %d\n",
                 (double)rb->mass, (double)rb->restitution, rb->useGravity ? 1 : 0);
 
+        const Text* tx = Mge_GetTextComponent(o);
+        if (tx != NULL) {
+            fprintf(f, "  text \"%s\"\n", tx->text);
+            wf(f, "textSize", tx->size);
+            fprintf(f, "  textColor %d %d %d %d\n", tx->color.r, tx->color.g, tx->color.b, tx->color.a);
+        }
+
         fprintf(f, "\n");
     }
 
@@ -458,6 +465,20 @@ bool Scene_Load(Scene* s, const char* path, Camera3D* outCamera)
                 b->mass = mass;
                 b->restitution = rest_;
                 b->useGravity = grav != 0;
+            }
+            else if (strcmp(key, "text") == 0) {
+                Text* t = Mge_AddComponent(obj, COMPONENT_TEXT);
+                quoted(a, t->text, (int)sizeof(t->text));
+            }
+            else if (strcmp(key, "textSize") == 0) {
+                Text* t = Mge_AddComponent(obj, COMPONENT_TEXT);
+                t->size = (float)atof(rest);
+            }
+            else if (strcmp(key, "textColor") == 0) {
+                int r = 255, g = 255, b = 255, al = 255;
+                sscanf(rest, "%d %d %d %d", &r, &g, &b, &al);
+                Text* t = Mge_AddComponent(obj, COMPONENT_TEXT);
+                t->color = (Color){ (unsigned char)r, (unsigned char)g, (unsigned char)b, (unsigned char)al };
             }
             else if (strcmp(key, "active") == 0)
                 obj->active = atoi(rest) != 0;

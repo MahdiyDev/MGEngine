@@ -159,6 +159,7 @@ static void add_menu(Scene* s, History* h)
     }
     if (Mge_GuiMenuItem("Line"))  { History_Record(h); Scene_AddPolygon(s, POLY_LINE, true); }
     if (Mge_GuiMenuItem("Arrow")) { History_Record(h); Scene_AddShape(s, PRIM_ARROW, false); }
+    if (Mge_GuiMenuItem("Text"))  { History_Record(h); Scene_AddText(s); }
 
     Mge_GuiSeparator();
     if (Mge_GuiBeginSubmenu("Light")) {

@@ -49,6 +49,18 @@ int main(void)
         Draw_Rectangle((int)lp.x - 6, (int)lp.y - 4, (int)sz.x + 12, (int)sz.y + 8, (Color){ 40, 40, 60, 255 });
         Draw_Text(builtin, label, lp, 24, (Color){ 255, 220, 120, 255 });
 
+        // world-space billboard text: Draw_Text3D inside Mge_BeginMode3D, always
+        // facing the orbiting camera
+        Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 45.0f, .projection = CAMERA_PERSPECTIVE };
+        float a = (float)t * 0.7f;
+        cam.position = (Vector3){ 3.5f * sinf(a), 1.2f, 3.5f * cosf(a) };
+        cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0, 0 }, cam.position));
+        Mge_BeginMode3D(cam);
+        Draw_CubeWires((Vector3){ 0, 0, 0 }, (Vector3){ 1.4f, 1.4f, 1.4f }, (Color){ 70, 90, 130, 255 });
+        Draw_Text3D(builtin, "Draw_Text3D", (Vector3){ 0.0f, 0.0f, 0.0f }, 0.4f,
+            (Color){ 255, 240, 180, 255 });
+        Mge_EndMode3D();
+
         // scalable TrueType, if provided
         if (haveTTF) {
             float pulse = 32.0f + 24.0f * (0.5f + 0.5f * sinf((float)t * 2.0f));

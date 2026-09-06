@@ -87,6 +87,10 @@ void Scene_AddPolygon(Scene* s, int mode, bool wireframe);
 // origin, name it, and select it. No-op when full.
 void Scene_AddLight(Scene* s, int type);
 
+// Spawn a world-space Text object (COMPONENT_TEXT) above the origin, name it,
+// and select it. No-op when the scene is full.
+void Scene_AddText(Scene* s);
+
 // Add an OBJECT_CAMERA (position + look direction), name it, select it. If the
 // scene has no main camera yet, this one becomes it.
 void Scene_AddCamera(Scene* s);

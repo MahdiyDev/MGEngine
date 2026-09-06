@@ -103,6 +103,25 @@ TEST(draw_text_emits_six_verts_per_glyph)
     CHECK(drawn_verts() == 0);
 }
 
+TEST(draw_text3d_emits_six_verts_per_glyph)
+{
+    Font f = Mge_GetDefaultFont();
+
+    glstub_reset();
+    Draw_Text3D(f, "Hi", (Vector3){ 0, 0, 0 }, 1.0f, WHITE);
+    CHECK(drawn_verts() == 2 * 6);
+
+    glstub_reset();
+    Draw_Text3D(f, "a\nbc", (Vector3){ 0, 0, 0 }, 2.0f, WHITE); // '\n' isn't a glyph
+    CHECK(drawn_verts() == 3 * 6);
+
+    // invalid font / empty string draw nothing
+    glstub_reset();
+    Draw_Text3D((Font){ 0 }, "x", (Vector3){ 0, 0, 0 }, 1.0f, WHITE);
+    Draw_Text3D(f, "", (Vector3){ 0, 0, 0 }, 1.0f, WHITE);
+    CHECK(drawn_verts() == 0);
+}
+
 TEST(unload_default_font_is_a_no_op)
 {
     Font f = Mge_GetDefaultFont();
@@ -121,6 +140,7 @@ int main(void)
     RUN(invalid_font_reports_and_no_ops);
     RUN(measure_text_advances_and_scales);
     RUN(draw_text_emits_six_verts_per_glyph);
+    RUN(draw_text3d_emits_six_verts_per_glyph);
     RUN(unload_default_font_is_a_no_op);
     return test_summary();
 }

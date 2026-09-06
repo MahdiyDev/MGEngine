@@ -136,6 +136,28 @@ static void scene_text(void)
     Mge_UnloadFont(ttf);
 }
 
+static void scene_text3d(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0.0f, 1.5f, 6.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0.5f, 0 }, cam.position));
+    Light sun = Mge_MakeDirectionalLight((Vector3){ -0.3f, -1.0f, -0.4f }, (Vector3){ 1, 1, 1 });
+    sun.ambient = 0.35f;
+    Font f = Mge_GetDefaultFont();
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 16, 18, 24, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3DEx(&sun, 1, cam);
+    Draw_Cube((Vector3){ 0, 0, 0 }, (Vector3){ 1.5f, 1.5f, 1.5f }, (Color){ 90, 120, 160, 255 });
+    Mge_EndLighting3D();
+    Draw_Text3D(f, "WORLD SPACE", (Vector3){ 0.0f, 1.6f, 0.0f }, 0.5f, (Color){ 255, 240, 180, 255 });
+    Draw_Text3D(f, "line one\nline two", (Vector3){ 0.0f, -1.4f, 0.0f }, 0.35f, (Color){ 180, 230, 255, 255 });
+    Mge_EndMode3D();
+    check("text3d");
+    Mge_EndDrawing();
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -223,12 +245,49 @@ static void scene_skybox(void)
     Mge_BeginDrawing();
     Mge_ClearBackground((Color){ 0, 0, 0, 255 });
     Mge_BeginMode3D(cam);
+    // text before the skybox: its transparent glyph-quad texels must not leave a
+    // depth hole the skybox then fails to fill (Draw_Text3D disables depth-write)
+    Draw_Text3D(Mge_GetDefaultFont(), "SKY 3D", (Vector3){ 0.6f, 0.1f, -0.8f }, 0.06f,
+        (Color){ 255, 240, 180, 255 });
     Mge_DrawSkybox(sky, cam);
     Mge_EndMode3D();
     check("skybox");
     Mge_EndDrawing();
 
     Mge_UnloadCubemap(sky);
+}
+
+// an Object carrying a Text component, drawn the way the editor draws it
+static void scene_text_object(void)
+{
+    Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 55.0f, .projection = CAMERA_PERSPECTIVE };
+    cam.position = (Vector3){ 0, 1.0f, 5.0f };
+    cam.target = Vector3Normalize(Vector3_Subtract((Vector3){ 0, 0.5f, 0 }, cam.position));
+
+    Object label = { 0 };
+    label.kind = OBJECT_3D;
+    label.active = true;
+    label.transform.position = (Vector3){ 0, 0.8f, 0 };
+    label.transform.rotation = Quaternion_Identity();
+    label.transform.scale = (Vector3){ 1, 1, 1 };
+    label.transform.parent = -1;
+    Text* tx = Mge_AddComponent(&label, COMPONENT_TEXT);
+    strcpy(tx->text, "Text Object");
+    tx->size = 0.5f;
+    tx->color = (Color){ 255, 235, 170, 255 };
+
+    Object cube = Mge_MakeObject3D((Vector3){ 0, -0.6f, 0 }, (Vector3){ 1, 1, 1 }, (Color){ 90, 120, 160, 255 });
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 20, 22, 28, 255 });
+    Mge_BeginMode3D(cam);
+    Mge_BeginLighting3D(Mge_MakeDirectionalLight((Vector3){ -0.3f, -1, -0.4f }, (Vector3){ 1, 1, 1 }), cam);
+    Mge_DrawObject(cube);
+    Mge_EndLighting3D();
+    Mge_DrawObject(label); // routes to Draw_Text3D
+    Mge_EndMode3D();
+    check("text_object");
+    Mge_EndDrawing();
 }
 
 // the three 3D primitive kinds -- cube, sphere, plane -- lit in one frame
@@ -913,6 +972,7 @@ int main(void)
 
     scene_shapes();
     scene_text();
+    scene_text3d();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();
@@ -926,6 +986,7 @@ int main(void)
     scene_deferred();
     scene_ssao();
     scene_pbr();
+    scene_text_object();
     scene_primitives();
     scene_gizmo(GIZMO_TRANSLATE, "gizmo_translate");
     scene_gizmo(GIZMO_ROTATE, "gizmo_rotate");

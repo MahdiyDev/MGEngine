@@ -33,6 +33,8 @@ void Draw_Polygon3D(const Vector3* p, int n, bool st, Color c) { (void)p; (void)
 void Draw_Polygon3DWires(const Vector3* p, int n, bool cl, Color c) { (void)p; (void)n; (void)cl; (void)c; }
 void Mge_DrawObjectOutline(Object o, float t, Color c) { (void)o; (void)t; (void)c; }
 void Mge_SetMaterial(Material m) { (void)m; }
+Font Mge_GetDefaultFont(void) { return (Font){ 0 }; }
+void Draw_Text3D(Font f, const char* s, Vector3 p, float sz, Color c) { (void)f; (void)s; (void)p; (void)sz; (void)c; }
 
 static Vector2 g_mouse;
 Vector2 GetMousePosition(void) { return g_mouse; }
@@ -113,6 +115,11 @@ TEST(seeded_defaults)
     CHECK_F(rb->mass, 1.0f);
     CHECK_F(rb->restitution, 0.3f);
     CHECK(rb->useGravity);
+
+    Text* tx = Mge_AddComponent(&o, COMPONENT_TEXT);
+    CHECK(strcmp(tx->text, "Text") == 0);
+    CHECK_F(tx->size, 1.0f);
+    CHECK(tx->color.r == 255 && tx->color.a == 255);
 }
 
 TEST(collider_autofit_falls_back_when_scale_is_zero)
@@ -145,6 +152,7 @@ TEST(component_name)
     CHECK(strcmp(Mge_ComponentName(COMPONENT_MATERIAL), "Material") == 0);
     CHECK(strcmp(Mge_ComponentName(COMPONENT_COLLIDER), "Collider") == 0);
     CHECK(strcmp(Mge_ComponentName(COMPONENT_RIGIDBODY), "RigidBody") == 0);
+    CHECK(strcmp(Mge_ComponentName(COMPONENT_TEXT), "Text") == 0);
 }
 
 TEST(make_shape3d_attaches_shape_and_material)

@@ -20,7 +20,7 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_math.h mge_math.c  Vector2/3/4, Matrix, Quaternion, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
   mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
-  mge_text.c            Font + Draw_Text / Mge_MeasureText -- stb_truetype atlas + a built-in bitmap font
+  mge_text.c            Font + Draw_Text / Draw_Text3D / Mge_MeasureText -- stb_truetype atlas + a built-in bitmap font
   mge_object.c          Object struct (Transform + components, active flag) + 3D picking
   mge_component.c       Object components (Shape / Material / Collider / RigidBody) + accessors
   mge_body.c            linear rigid-body step + box/sphere collider overlap + resolution
@@ -191,8 +191,8 @@ nearest-hit object sweep, screen→ray unprojection, box/sphere collider overlap
 and one linear rigid-body step; `test_component` covers the component array —
 add / remove / has / get, typed vs generic accessors, the seeded defaults and
 what the `Mge_Make*` constructors attach; `test_text` covers the built-in font,
-glyph metrics, `Mge_MeasureText`'s cursor walk and `Draw_Text`'s batch emission
-(also against the fake glad).
+glyph metrics, `Mge_MeasureText`'s cursor walk and the batch emission of
+`Draw_Text` / `Draw_Text3D` (also against the fake glad).
 
 `test_gl` is the odd one out: it compiles `source/mge_gl.c` itself against a fake
 `<glad/glad.h>` (`test/glstub/`) that records every GL call, and checks the
@@ -592,6 +592,7 @@ void    Mge_UnloadFont(Font font);
 
 void    Draw_Text(Font font, const char* text, Vector2 pos, float fontSize, Color tint);
 Vector2 Mge_MeasureText(Font font, const char* text, float fontSize); // {max line width, total height}
+void    Draw_Text3D(Font font, const char* text, Vector3 pos, float size, Color tint);
 ```
 
 `Draw_Text` works in the same **screen space as `Draw_Rectangle`** — pixel
@@ -600,6 +601,12 @@ coordinates, top-left origin, +Y down. `pos` is the top-left of the first line;
 `font.size` for 1:1 — sharpest for the bitmap font at integer multiples). It
 enables alpha blending for its own draw and restores the previous state, and
 flushes its batch, so it composes with any 2D drawing around it.
+
+`Draw_Text3D` is the **world-space** form: a camera-facing billboard centred on
+`pos`, with `size` the glyph cell height in world units. Call it inside
+`Mge_BeginMode3D` (the billboard basis comes from the active view matrix); the
+text depth-tests against the scene and blooms like any other geometry. It draws
+unlit — a lighting pass, if active, is bypassed for its own draw.
 
 ```c
 Font font = Mge_GetDefaultFont();               // or Mge_LoadFont("res/ui.ttf", 32)
@@ -610,8 +617,9 @@ Draw_Text(font, label, (Vector2){ x, y }, 20, WHITE);
 ```
 
 Demo: `examples/text/draw_text.c` (`MGE_FONT=path/to/font.ttf` for the scalable
-half). Tests: `test/test_text.c` (metrics / measure / batch emission, hermetic)
-and the `text` scene in `make render`.
+half; it also shows `Draw_Text3D` on an orbiting camera). Tests:
+`test/test_text.c` (metrics / measure / batch emission, hermetic) and the
+`text` / `text3d` / `skybox` scenes in `make render`.
 
 ### Objects & the manipulation gizmo
 

@@ -252,6 +252,16 @@ static bool rigidbody_section(Object* o)
     return ch;
 }
 
+static bool text_section(Object* o)
+{
+    Text* tx = Mge_GetTextComponent(o);
+    bool ch = false;
+    ch |= Mge_GuiInputText("text", tx->text, (int)sizeof(tx->text));
+    ch |= Mge_GuiInputFloat("size", &tx->size);
+    ch |= Mge_GuiInputColor("color", &tx->color);
+    return ch;
+}
+
 static bool inspect_object(Scene* s, Project* proj)
 {
     Object* o = &s->objects[s->selIndex];
@@ -293,6 +303,7 @@ static bool inspect_object(Scene* s, Project* proj)
         case COMPONENT_MATERIAL:  ch |= material_section(s, o, root); break;
         case COMPONENT_COLLIDER:  ch |= collider_section(o); break;
         case COMPONENT_RIGIDBODY: ch |= rigidbody_section(o); break;
+        case COMPONENT_TEXT:      ch |= text_section(o); break;
         default: break;
         }
     }

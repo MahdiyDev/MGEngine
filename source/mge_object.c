@@ -191,6 +191,12 @@ void Mge_DrawObject(Object obj)
         if (obj.selected && solid)
             Mge_DrawObjectOutline(obj, MGE_SELECT_OUTLINE_3D, MGE_SELECT_OUTLINE_COLOR);
     }
+
+    Text* tx = Mge_GetTextComponent(&obj);
+    if (tx != NULL) {
+        Color c = obj.selected ? MGE_SELECT_OUTLINE_COLOR : tx->color;
+        Draw_Text3D(Mge_GetDefaultFont(), tx->text, p, tx->size * s.x, c);
+    }
 }
 
 void Mge_DrawObjectGizmo2D(Object obj, float axisLength)

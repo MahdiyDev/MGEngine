@@ -277,6 +277,9 @@ object "Floor"
   scale 24 0.2 24
   collider box 0 0 0 24 0.2 24 0    # Collider: kind, offset xyz, size xyz, isTrigger
   # rigidbody 1 0.3 1              # RigidBody: mass, restitution, useGravity
+  # text "Score"                  # Text component: the string,
+  # textSize 1                    #   size in world units,
+  # textColor 255 255 255 255     #   and rgba tint
   material                 # Material component marker; the keys below need it
   shininess 32
   tiling 1 1
@@ -353,6 +356,7 @@ pass depends on.
 | **Rectangle** | Solid / Outline — a `PRIM_PLANE` you stand up and rotate |
 | **Triangle** | Solid / Outline / Fan / Strip (`Scene_AddPolygon(mode, wire)`) |
 | **Line**, **Arrow** | a 2-point polygon; a `PRIM_ARROW` |
+| **Text** | a world-space label — an object with a `Text` component (`Scene_AddText`), drawn as a camera-facing billboard |
 | **Light** | Point / Spot / Directional (`Scene_AddLight(type)`) |
 | **Camera** | `Scene_AddCamera` |
 
@@ -385,7 +389,7 @@ The current selection's fields, live:
 | selection | fields |
 | --- | --- |
 | **Environment** | sun (`lights[0]`) direction / colour / ambient / diffuse / specular; skybox (`choose folder...` / `use engine default` / `reload`); **main camera** combo |
-| **Object** | **active** toggle + the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo — always; then **one section per present component**, each with an `x` to remove it, and a **+ Add Component** menu listing the ones it lacks. **Shape**: primitive dropdown, wireframe checkbox, and for a polygon a fan/strip toggle + editable `p0…pN` list (`+ point` / `- point`). **Material**: `shininess`, **tiling** / **offset**, a **triplanar** toggle (+ scale), then one **group per material map** (drop an image from Resources on the thumbnail to assign it). **Collider**: box/sphere kind, `offset`, extents/`radius`, `trigger`. **RigidBody**: `mass` (0 = static), `restitution`, `use gravity`, and a read-only velocity readout |
+| **Object** | **active** toggle + the `Transform` — position, **rotation** (shown as XYZ euler degrees, stored as a quaternion; the shown euler is cached per selection so it doesn't jump while you type), size (= `transform.scale`), a **parent** combo — always; then **one section per present component**, each with an `x` to remove it, and a **+ Add Component** menu listing the ones it lacks. **Shape**: primitive dropdown, wireframe checkbox, and for a polygon a fan/strip toggle + editable `p0…pN` list (`+ point` / `- point`). **Material**: `shininess`, **tiling** / **offset**, a **triplanar** toggle (+ scale), then one **group per material map** (drop an image from Resources on the thumbnail to assign it). **Collider**: box/sphere kind, `offset`, extents/`radius`, `trigger`. **RigidBody**: `mass` (0 = static), `restitution`, `use gravity`, and a read-only velocity readout. **Text**: the string, `size` (world units, scaled by `transform.scale.x`), and `color` |
 | **Camera** | active, position, rotation (euler °); **main camera** toggle. fov is fixed at 60°; the editor always uses its own fly-cam |
 | **Light** | kind, enabled, colour, ambient / diffuse / specular; position + attenuation (point/spot); direction (directional/spot) |
 

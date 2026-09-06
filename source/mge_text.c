@@ -389,3 +389,70 @@ Vector2 Mge_MeasureText(Font font, const char* text, float fontSize)
 {
     return walk_text(font, text, fontSize, NULL);
 }
+
+// --- world-space text (billboard) --------------------------------------------
+
+static Vector3 s_o3d, s_right3d, s_up3d; // block top-left corner + billboard basis
+
+static void emit_glyph_3d(const stbtt_packedchar* g, float x, float baseline, float s, float aw, float ah)
+{
+    float x0 = x + g->xoff * s, y0 = baseline + g->yoff * s;
+    float x1 = x + g->xoff2 * s, y1 = baseline + g->yoff2 * s;
+    float u0 = g->x0 / aw, v0 = g->y0 / ah;
+    float u1 = g->x1 / aw, v1 = g->y1 / ah;
+
+    // 2D layout coords (+Y down) -> world: origin + right*lx - up*ly
+#define MGE_TEXT_W(lx, ly)                                              \
+    Vector3_Add(s_o3d, Vector3_Add(Vector3_Scale(s_right3d, (lx)),      \
+                           Vector3_Scale(s_up3d, -(ly))))
+    Vector3 tl = MGE_TEXT_W(x0, y0), bl = MGE_TEXT_W(x0, y1);
+    Vector3 tr = MGE_TEXT_W(x1, y0), br = MGE_TEXT_W(x1, y1);
+#undef MGE_TEXT_W
+
+    // same winding as emit_glyph: TL, BL, TR / TR, BL, BR
+    MgeGL_TexCoord2f(u0, v0); MgeGL_Vertex3f(tl.x, tl.y, tl.z);
+    MgeGL_TexCoord2f(u0, v1); MgeGL_Vertex3f(bl.x, bl.y, bl.z);
+    MgeGL_TexCoord2f(u1, v0); MgeGL_Vertex3f(tr.x, tr.y, tr.z);
+    MgeGL_TexCoord2f(u1, v0); MgeGL_Vertex3f(tr.x, tr.y, tr.z);
+    MgeGL_TexCoord2f(u0, v1); MgeGL_Vertex3f(bl.x, bl.y, bl.z);
+    MgeGL_TexCoord2f(u1, v1); MgeGL_Vertex3f(br.x, br.y, br.z);
+}
+
+void Draw_Text3D(Font font, const char* text, Vector3 pos, float size, Color tint)
+{
+    if (!Mge_IsFontValid(font) || text == NULL || text[0] == '\0')
+        return;
+
+    Vector2 ext = walk_text(font, text, size, NULL); // block extent, world units
+
+    // billboard basis from the active view matrix (row 0 = right, row 1 = up)
+    Matrix mv = MgeGL_GetMatrixModelview();
+    s_right3d = Vector3Normalize((Vector3){ mv.m0, mv.m4, mv.m8 });
+    s_up3d = Vector3Normalize((Vector3){ mv.m1, mv.m5, mv.m9 });
+
+    // pos is the block centre; walk from its top-left corner
+    s_o3d = Vector3_Add(pos, Vector3_Add(Vector3_Scale(s_right3d, -ext.x * 0.5f),
+                                 Vector3_Scale(s_up3d, ext.y * 0.5f)));
+
+    // the glyph atlas needs the default batch shader (texture * vertexColor) for
+    // its coverage alpha -- force it in case a lighting pass is active, since a
+    // lit shader would render every glyph quad as an opaque billboard. That
+    // shader also discards fully-transparent fragments, so the gaps between
+    // glyphs don't leave a depth hole a later skybox pass can't fill.
+    unsigned int prevShader = MgeGL_GetCurrentShaderId();
+    MgeGL_SetShader(MgeGL_GetDefaultShaderId());
+
+    Mge_SetBlend(true);
+    MgeGL_SetTexture(font.atlas.id);
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(tint.r, tint.g, tint.b, tint.a);
+
+    walk_text(font, text, size, emit_glyph_3d);
+
+    MgeGL_TexCoord2f(0.0f, 0.0f);
+    MgeGL_End();
+    MgeGL_Draw();
+    MgeGL_SetTexture(MgeGL_GetWhiteTexture());
+    Mge_SetBlend(false);
+    MgeGL_SetShader(prevShader);
+}

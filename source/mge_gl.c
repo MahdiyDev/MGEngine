@@ -83,6 +83,7 @@ static const char* fragmentShaderCode = "#version 330 core\n"
                                         "void main()\n"
                                         "{\n"
                                         "	FragColor = texture(sampleTex, texCoord) * vertexColor;\n"
+                                        "	if (FragColor.a < (1.0 / 255.0)) discard;\n" // no color, no depth write
                                         "}\n";
 
 static GlData MGEGL = { 0 };
