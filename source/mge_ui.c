@@ -31,6 +31,7 @@ enum {
     NODE_CLIPRECT,
     NODE_LAYOUTBUILDER,
     NODE_GRIDVIEW,
+    NODE_INTERACT,
 };
 
 #define MGE_UI_TABLE_MAX_COLS 16
@@ -103,6 +104,22 @@ typedef struct Node {
             int32_t crossCount;
             float   cellW, cellH, mainGap, crossGap;
         } grid;
+        struct {
+            uint8_t widget; // 0 gesture 1 button 2 checkbox 3 switch 4 radio 5 slider 6 progress
+            bool    enabled, hovered, pressed, panning;
+            bool    tapped, changed; // per-frame latches
+            MgeUiGestureFn onTap, onTapDown, onTapUp;
+            MgeUiGestureFn onPanStart, onPanUpdate, onPanEnd;
+            MgeUiGestureFn onHoverEnter, onHoverExit;
+            void*   user;
+            bool*   boolPtr;
+            int*    intPtr;
+            float*  floatPtr;
+            float   fmin, fmax, fstep, progress;
+            int     radioValue;
+            MgeUiButtonStyle btn;
+            char*   label;
+        } interact;
     } v;
 } Node;
 
@@ -128,6 +145,13 @@ static struct {
     bool     draggingThumb;  // the active scroll's drag is on its scrollbar thumb
     float    dragAnchorMouse, dragAnchorOffset;
     bool     pointerOverScroll;
+
+    // interaction (Phase 3)
+    int32_t  hotInteract;    // enabled NODE_INTERACT under the cursor, or -1
+    int32_t  pressInteract;  // NODE_INTERACT holding pointer capture, or -1
+    int32_t  hoverInteract;  // for hover enter / exit edges
+    Vector2  pressPos, panPrev;
+    float    dt;
 
     // paint-time scissor stack
     Rectangle clipStack[MGE_UI_CLIP_MAX];
@@ -175,6 +199,7 @@ static void ensure_boot(void)
     S.booted = true;
     S.pointerNode = -1;
     S.activeScroll = -1;
+    S.hotInteract = S.pressInteract = S.hoverInteract = -1;
 }
 
 static int32_t alloc_node(uint8_t type)
@@ -250,6 +275,8 @@ static void free_rec(int32_t i)
     }
     if (n->type == NODE_TEXT)
         free(n->v.text.text);
+    if (n->type == NODE_INTERACT)
+        free(n->v.interact.label);
 
     S.gen[i]++;            // stale every outstanding handle
     if (S.gen[i] == 0) S.gen[i] = 1;
@@ -677,6 +704,143 @@ MgeUiWidget Mge_UiGridView(MgeAxis axis, int crossAxisCount,
     return h_make(i);
 }
 
+// ---- interaction (Phase 3) ---------------------------------------
+
+static int32_t interact_index(MgeUiWidget w, int widget) // widget < 0 => any
+{
+    int32_t i = h_index(w);
+    if (i < 0 || S.nodes[i].type != NODE_INTERACT) return -1;
+    return (widget < 0 || S.nodes[i].v.interact.widget == (uint8_t)widget) ? i : -1;
+}
+
+static MgeUiWidget make_interact(uint8_t widget)
+{
+    int32_t i = alloc_node(NODE_INTERACT);
+    S.nodes[i].v.interact.widget = widget;
+    S.nodes[i].v.interact.enabled = true;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiGestureDetector(void) { return make_interact(0); }
+
+#define MGE_UI_ON_SETTER(NAME, FIELD)                                    \
+    void NAME(MgeUiWidget w, MgeUiGestureFn cb, void* user)              \
+    {                                                                   \
+        int32_t i = interact_index(w, -1);                              \
+        if (i < 0) return;                                              \
+        S.nodes[i].v.interact.FIELD = cb;                               \
+        S.nodes[i].v.interact.user = user;                              \
+    }
+MGE_UI_ON_SETTER(Mge_UiOnTap, onTap)
+MGE_UI_ON_SETTER(Mge_UiOnTapDown, onTapDown)
+MGE_UI_ON_SETTER(Mge_UiOnTapUp, onTapUp)
+MGE_UI_ON_SETTER(Mge_UiOnPanStart, onPanStart)
+MGE_UI_ON_SETTER(Mge_UiOnPanUpdate, onPanUpdate)
+MGE_UI_ON_SETTER(Mge_UiOnPanEnd, onPanEnd)
+MGE_UI_ON_SETTER(Mge_UiOnHoverEnter, onHoverEnter)
+MGE_UI_ON_SETTER(Mge_UiOnHoverExit, onHoverExit)
+MGE_UI_ON_SETTER(Mge_UiOnPressed, onTap) // button "pressed" == tap completed
+#undef MGE_UI_ON_SETTER
+
+bool Mge_UiTapped(MgeUiWidget w)  { int32_t i = interact_index(w, -1); return i >= 0 && S.nodes[i].v.interact.tapped; }
+bool Mge_UiHovered(MgeUiWidget w) { int32_t i = interact_index(w, -1); return i >= 0 && S.nodes[i].v.interact.hovered; }
+bool Mge_UiPressed(MgeUiWidget w) { int32_t i = interact_index(w, -1); return i >= 0 && S.nodes[i].v.interact.pressed; }
+
+MgeUiWidget Mge_UiButton(const char* label, MgeUiButtonStyle style)
+{
+    MgeUiWidget h = make_interact(1);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.label = dup_str(label);
+    S.nodes[i].v.interact.btn = style;
+    return h;
+}
+
+bool Mge_UiButtonClicked(MgeUiWidget w) { int32_t i = interact_index(w, 1); return i >= 0 && S.nodes[i].v.interact.tapped; }
+
+void Mge_UiSetEnabled(MgeUiWidget w, bool enabled)
+{
+    int32_t i = interact_index(w, -1);
+    if (i < 0) return;
+    S.nodes[i].v.interact.enabled = enabled;
+    S.dirty = true;
+}
+
+void Mge_UiSetButtonLabel(MgeUiWidget w, const char* label)
+{
+    int32_t i = interact_index(w, 1);
+    if (i < 0) return;
+    free(S.nodes[i].v.interact.label);
+    S.nodes[i].v.interact.label = dup_str(label);
+    S.dirty = true;
+}
+
+MgeUiWidget Mge_UiCheckbox(bool* value, Color accent)
+{
+    MgeUiWidget h = make_interact(2);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.boolPtr = value;
+    S.nodes[i].v.interact.btn.accent = accent;
+    return h;
+}
+
+MgeUiWidget Mge_UiSwitch(bool* value, Color accent)
+{
+    MgeUiWidget h = make_interact(3);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.boolPtr = value;
+    S.nodes[i].v.interact.btn.accent = accent;
+    return h;
+}
+
+MgeUiWidget Mge_UiRadio(int* group, int value, Color accent)
+{
+    MgeUiWidget h = make_interact(4);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.intPtr = group;
+    S.nodes[i].v.interact.radioValue = value;
+    S.nodes[i].v.interact.btn.accent = accent;
+    return h;
+}
+
+bool Mge_UiToggleChanged(MgeUiWidget w) { int32_t i = interact_index(w, -1); return i >= 0 && S.nodes[i].v.interact.changed; }
+
+MgeUiWidget Mge_UiSlider(float* value, float min, float max, float step)
+{
+    MgeUiWidget h = make_interact(5);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.floatPtr = value;
+    S.nodes[i].v.interact.fmin = min;
+    S.nodes[i].v.interact.fmax = (max > min) ? max : min + 1.0f;
+    S.nodes[i].v.interact.fstep = (step > 0.0f) ? step : 0.0f;
+    return h;
+}
+
+bool Mge_UiSliderChanged(MgeUiWidget w) { int32_t i = interact_index(w, 5); return i >= 0 && S.nodes[i].v.interact.changed; }
+
+MgeUiWidget Mge_UiProgressBar(float t01)
+{
+    MgeUiWidget h = make_interact(6);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.enabled = false;
+    S.nodes[i].v.interact.progress = clampf(t01, 0.0f, 1.0f);
+    return h;
+}
+
+void Mge_UiSetProgress(MgeUiWidget w, float t01)
+{
+    int32_t i = interact_index(w, 6);
+    if (i < 0) return;
+    S.nodes[i].v.interact.progress = clampf(t01, 0.0f, 1.0f);
+    S.dirty = true;
+}
+
+float Mge_UiGetProgress(MgeUiWidget w)
+{
+    int32_t i = interact_index(w, 6);
+    return i >= 0 ? S.nodes[i].v.interact.progress : 0.0f;
+}
+
 static int32_t scroll_index(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -759,8 +923,8 @@ Rectangle Mge_UiGetRect(MgeUiWidget w)
 
 void Mge_UiNewFrame(float dt)
 {
-    (void)dt; // animation lands in a later phase
     ensure_boot();
+    S.dt = dt; // caret blink / animation lands in a later phase
 
     S.mousePrev = S.mouse;
     S.mousePrevDown = S.mouseDown;
@@ -783,15 +947,21 @@ void Mge_UiViewport(float w, float h)
     S.dirty = true;
 }
 
-bool Mge_UiWantsPointer(void)  { return S.pointerOverScroll || S.activeScroll >= 0; }
-bool Mge_UiWantsKeyboard(void) { return false; } // Phase 3
+bool Mge_UiWantsPointer(void)
+{
+    return S.pointerOverScroll || S.activeScroll >= 0 || S.hotInteract >= 0 || S.pressInteract >= 0;
+}
+bool Mge_UiWantsKeyboard(void) { return false; } // Phase 3b
 
 void Mge_UiShutdown(void)
 {
     if (!S.booted) return;
-    for (int i = 0; i < S.count; i++)
+    for (int i = 0; i < S.count; i++) {
         if (S.nodes[i].type == NODE_TEXT)
             free(S.nodes[i].v.text.text);
+        if (S.nodes[i].type == NODE_INTERACT)
+            free(S.nodes[i].v.interact.label);
+    }
     free(S.nodes);
     free(S.gen);
     memset(&S, 0, sizeof(S));
@@ -1414,6 +1584,45 @@ static MgeUiSize layout_layoutbuilder(int32_t i, MgeUiConstraints c)
     return layout_passthrough(i, c);
 }
 
+// Interactive widgets: a GestureDetector is a passthrough; the rest have an
+// intrinsic size and paint their own chrome (paint_interact).
+static MgeUiSize layout_interact(int32_t i, MgeUiConstraints c)
+{
+    const uint8_t widget = S.nodes[i].v.interact.widget;
+    if (widget == 0) // gesture detector
+        return layout_passthrough(i, c);
+
+    float w = 0.0f, h = 0.0f;
+    if (widget == 1) { // button -- label + padding
+        const MgeUiButtonStyle st = S.nodes[i].v.interact.btn;
+        MgeEdgeInsets pad = st.padding;
+        if (pad.left == 0.0f && pad.right == 0.0f && pad.top == 0.0f && pad.bottom == 0.0f)
+            pad = Mge_EdgeInsetsSymmetric(16.0f, 10.0f);
+        float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
+        Vector2 m = Mge_MeasureText(Mge_GetDefaultFont(),
+            S.nodes[i].v.interact.label ? S.nodes[i].v.interact.label : "", ts);
+        w = m.x + pad.left + pad.right;
+        h = m.y + pad.top + pad.bottom;
+        if (st.expand && c.maxW < MGE_UI_INF) w = c.maxW;
+    } else if (widget == 2 || widget == 4) { // checkbox / radio
+        w = h = 20.0f;
+    } else if (widget == 3) { // switch
+        w = 40.0f; h = 24.0f;
+    } else if (widget == 5) { // slider
+        w = (c.maxW < MGE_UI_INF) ? c.maxW : 200.0f;
+        h = 24.0f;
+    } else { // widget == 6 progress bar
+        w = (c.maxW < MGE_UI_INF) ? c.maxW : 200.0f;
+        h = 8.0f;
+    }
+
+    w = clampf(w, c.minW, c.maxW);
+    h = clampf(h, c.minH, c.maxH);
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
 static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
 {
     switch (S.nodes[i].type) {
@@ -1430,6 +1639,7 @@ static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
     case NODE_SCROLL:    return layout_scroll(i, c);
     case NODE_GRIDVIEW:  return layout_gridview(i, c);
     case NODE_LAYOUTBUILDER: return layout_layoutbuilder(i, c);
+    case NODE_INTERACT:  return layout_interact(i, c);
     case NODE_LIMITED:
         if (c.maxW >= MGE_UI_INF) c.maxW = S.nodes[i].v.limited.maxW;
         if (c.maxH >= MGE_UI_INF) c.maxH = S.nodes[i].v.limited.maxH;
@@ -1500,6 +1710,47 @@ static int32_t nearest_scroll(int32_t i)
     return i;
 }
 
+static int32_t nearest_interact(int32_t i)
+{
+    while (i >= 0) {
+        if (S.nodes[i].type == NODE_INTERACT && S.nodes[i].v.interact.enabled)
+            return i;
+        i = S.nodes[i].parent;
+    }
+    return -1;
+}
+
+// map the cursor's x across a slider's rect to its bound value
+static void slider_set_from_mouse(int32_t i)
+{
+    Node* n = &S.nodes[i];
+    if (!n->v.interact.floatPtr) return;
+    float t = (n->rect.width > 1.0f) ? (S.mouse.x - n->rect.x) / n->rect.width : 0.0f;
+    t = clampf(t, 0.0f, 1.0f);
+    float v = n->v.interact.fmin + t * (n->v.interact.fmax - n->v.interact.fmin);
+    if (n->v.interact.fstep > 0.0f) {
+        float steps = roundf((v - n->v.interact.fmin) / n->v.interact.fstep);
+        v = n->v.interact.fmin + steps * n->v.interact.fstep;
+    }
+    *n->v.interact.floatPtr = clampf(v, n->v.interact.fmin, n->v.interact.fmax);
+    n->v.interact.changed = true;
+    S.dirty = true;
+}
+
+// fill a gesture-info struct for `node` and invoke `cb`
+static void gesture_fire(MgeUiGestureFn cb, int32_t node, Vector2 delta, Vector2 total)
+{
+    if (!cb) return;
+    Rectangle r = S.nodes[node].rect;
+    MgeUiGestureInfo g = {
+        .position = S.mouse,
+        .localPos = { S.mouse.x - r.x, S.mouse.y - r.y },
+        .delta = delta,
+        .totalDelta = total,
+    };
+    cb(&g, S.nodes[node].v.interact.user);
+}
+
 static float scroll_axis_mouse(int32_t sc)
 {
     return (S.nodes[sc].v.scroll.axis == MGE_AXIS_HORIZONTAL) ? S.mouse.x : S.mouse.y;
@@ -1539,20 +1790,104 @@ static void scroll_by(int32_t sc, float delta)
     S.dirty = true;
 }
 
-// hit-test + wheel / drag routing; called after place_node (needs absolute rects)
+// route a completed tap to the widget's bound state
+static void interact_tap(int32_t pi)
+{
+    Node* n = &S.nodes[pi];
+    gesture_fire(n->v.interact.onTapUp, pi, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+    gesture_fire(n->v.interact.onTap, pi, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+    n->v.interact.tapped = true;
+    switch (n->v.interact.widget) {
+    case 2: // checkbox
+    case 3: // switch
+        if (n->v.interact.boolPtr) *n->v.interact.boolPtr = !*n->v.interact.boolPtr;
+        n->v.interact.changed = true;
+        break;
+    case 4: // radio
+        if (n->v.interact.intPtr) *n->v.interact.intPtr = n->v.interact.radioValue;
+        n->v.interact.changed = true;
+        break;
+    default: break;
+    }
+}
+
+// hit-test + interaction + wheel / drag routing; called after place_node
 static void input_update(void)
 {
+    for (int32_t k = 0; k < S.count; k++)
+        if (S.nodes[k].type == NODE_INTERACT) {
+            S.nodes[k].v.interact.tapped = false;
+            S.nodes[k].v.interact.changed = false;
+        }
+
     S.pointerNode = (S.root >= 0) ? hit_test(S.root, S.mouse) : -1;
-    int32_t target = nearest_scroll(S.pointerNode);
-    S.pointerOverScroll = (target >= 0);
 
     const bool pressed = S.mouseDown && !S.mousePrevDown;
     const bool released = !S.mouseDown && S.mousePrevDown;
 
+    // ---- interaction routing (runs before scroll so a widget owns its press) ----
+    int32_t hot = nearest_interact(S.pointerNode);
+    S.hotInteract = hot;
+
+    if (hot != S.hoverInteract) {
+        if (S.hoverInteract >= 0 && S.nodes[S.hoverInteract].type == NODE_INTERACT) {
+            S.nodes[S.hoverInteract].v.interact.hovered = false;
+            gesture_fire(S.nodes[S.hoverInteract].v.interact.onHoverExit, S.hoverInteract,
+                (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+        }
+        if (hot >= 0) {
+            S.nodes[hot].v.interact.hovered = true;
+            gesture_fire(S.nodes[hot].v.interact.onHoverEnter, hot, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+        }
+        S.hoverInteract = hot;
+    }
+
+    if (pressed && hot >= 0) {
+        S.pressInteract = hot;
+        S.pressPos = S.panPrev = S.mouse;
+        S.nodes[hot].v.interact.pressed = true;
+        S.nodes[hot].v.interact.panning = false;
+        gesture_fire(S.nodes[hot].v.interact.onTapDown, hot, (Vector2){ 0, 0 }, (Vector2){ 0, 0 });
+        if (S.nodes[hot].v.interact.widget == 5)
+            slider_set_from_mouse(hot);
+    }
+
+    if (S.pressInteract >= 0) {
+        int32_t pi = S.pressInteract;
+        if (S.mouseDown) {
+            S.nodes[pi].v.interact.pressed = (hot == pi);
+            Vector2 total = { S.mouse.x - S.pressPos.x, S.mouse.y - S.pressPos.y };
+            Vector2 delta = { S.mouse.x - S.panPrev.x, S.mouse.y - S.panPrev.y };
+            if (!S.nodes[pi].v.interact.panning && total.x * total.x + total.y * total.y > 16.0f) {
+                S.nodes[pi].v.interact.panning = true;
+                gesture_fire(S.nodes[pi].v.interact.onPanStart, pi, delta, total);
+            }
+            if (S.nodes[pi].v.interact.panning)
+                gesture_fire(S.nodes[pi].v.interact.onPanUpdate, pi, delta, total);
+            if (S.nodes[pi].v.interact.widget == 5)
+                slider_set_from_mouse(pi);
+            S.panPrev = S.mouse;
+        }
+        if (released) {
+            Vector2 total = { S.mouse.x - S.pressPos.x, S.mouse.y - S.pressPos.y };
+            if (S.nodes[pi].v.interact.panning)
+                gesture_fire(S.nodes[pi].v.interact.onPanEnd, pi, (Vector2){ 0, 0 }, total);
+            else if (hot == pi)
+                interact_tap(pi);
+            S.nodes[pi].v.interact.pressed = false;
+            S.nodes[pi].v.interact.panning = false;
+            S.pressInteract = -1;
+        }
+    }
+
+    // ---- scroll routing (Phase 2) ----
+    int32_t target = nearest_scroll(S.pointerNode);
+    S.pointerOverScroll = (target >= 0);
+
     if (target >= 0 && S.wheel != 0.0f)
         scroll_by(target, -S.wheel * MGE_UI_WHEEL_STEP);
 
-    if (pressed && target >= 0) {
+    if (pressed && target >= 0 && S.pressInteract < 0) {
         Rectangle thumb;
         S.draggingThumb = scrollbar_thumb_rect(target, &thumb) && rect_contains(thumb, S.mouse);
         S.activeScroll = target;
@@ -1614,6 +1949,138 @@ static void clip_pop(void)
     } else {
         MgeGL_DisableScissor();
     }
+}
+
+// ---- colour / stroke helpers (Phase 3) --------------------------
+
+static Color mix(Color a, Color b, float t)
+{
+    t = clampf(t, 0.0f, 1.0f);
+    return (Color){
+        (unsigned char)(a.r + (b.r - a.r) * t),
+        (unsigned char)(a.g + (b.g - a.g) * t),
+        (unsigned char)(a.b + (b.b - a.b) * t),
+        (unsigned char)(a.a + (b.a - a.a) * t),
+    };
+}
+
+static Color shade(Color c, float amt) // amt > 0 => toward white, < 0 => toward black
+{
+    return (amt >= 0.0f) ? mix(c, (Color){ 255, 255, 255, c.a }, amt)
+                         : mix(c, (Color){ 0, 0, 0, c.a }, -amt);
+}
+
+static Color with_alpha(Color c, int a)
+{
+    c.a = (unsigned char)clampi(a, 0, 255);
+    return c;
+}
+
+// a filled thick line between two points (no thick-line primitive in the engine)
+static void stroke(Vector2 a, Vector2 b, float w, Color col)
+{
+    float dx = b.x - a.x, dy = b.y - a.y;
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 0.01f) return;
+    float deg = atan2f(dy, dx) * (180.0f / 3.14159265f);
+    Draw_RectanglePro((Rectangle){ a.x, a.y, len, w }, (Vector2){ 0.0f, w * 0.5f }, deg, col);
+}
+
+static void disc(float cx, float cy, float r, Color col)
+{
+    Draw_RectangleRounded((Rectangle){ cx - r, cy - r, r * 2.0f, r * 2.0f }, 1.0f, 12, col);
+}
+
+// button / checkbox / switch / radio / slider / progress chrome
+static void paint_interact(int32_t i)
+{
+    Node* n = &S.nodes[i];
+    const Rectangle r = n->rect;
+    const uint8_t widget = n->v.interact.widget;
+    if (widget == 0) return; // gesture detector: invisible
+
+    const Color accent = (n->v.interact.btn.accent.a != 0) ? n->v.interact.btn.accent : Mge_Colors.blue;
+    const Color grey = (Color){ 120, 125, 140, 255 };
+    const bool hov = n->v.interact.hovered;
+    const bool prs = n->v.interact.pressed;
+    const bool en = n->v.interact.enabled;
+
+    if (widget == 1) { // button
+        const MgeUiButtonStyle st = n->v.interact.btn;
+        float rad = (st.radius > 0.0f) ? st.radius : 8.0f;
+        float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
+        float roundness = clampf(2.0f * rad / fmaxf(1.0f, fminf(r.width, r.height)), 0.0f, 1.0f);
+        Color bg = Mge_Colors.transparent, border = Mge_Colors.transparent, txt = accent;
+        switch (st.variant) {
+        case MGE_BTN_FILLED:   bg = accent; txt = Mge_Colors.white; break;
+        case MGE_BTN_TONAL:    bg = mix(accent, (Color){ 24, 26, 34, 255 }, 0.80f); txt = shade(accent, 0.35f); break;
+        case MGE_BTN_OUTLINED: border = accent; break;
+        case MGE_BTN_TEXT:     if (hov) bg = with_alpha(accent, 28); break;
+        }
+        if (bg.a != 0 && hov) bg = shade(bg, 0.10f);
+        if (bg.a != 0 && prs) bg = shade(bg, -0.10f);
+        int fade = en ? 255 : 100;
+        if (bg.a != 0)     Draw_RectangleRounded(r, roundness, 8, with_alpha(bg, bg.a * fade / 255));
+        if (border.a != 0) Draw_RectangleRoundedLines(r, roundness, 8, 1.5f, with_alpha(border, fade));
+        const char* lbl = n->v.interact.label ? n->v.interact.label : "";
+        Vector2 m = Mge_MeasureText(Mge_GetDefaultFont(), lbl, ts);
+        Draw_Text(Mge_GetDefaultFont(), lbl,
+            (Vector2){ r.x + (r.width - m.x) * 0.5f, r.y + (r.height - m.y) * 0.5f },
+            ts, with_alpha(txt, fade));
+        return;
+    }
+
+    if (widget == 2) { // checkbox
+        bool on = n->v.interact.boolPtr && *n->v.interact.boolPtr;
+        if (on) {
+            Draw_RectangleRounded(r, 0.35f, 6, hov ? shade(accent, 0.12f) : accent);
+            Vector2 a = { r.x + r.width * 0.24f, r.y + r.height * 0.52f };
+            Vector2 b = { r.x + r.width * 0.44f, r.y + r.height * 0.72f };
+            Vector2 c = { r.x + r.width * 0.76f, r.y + r.height * 0.30f };
+            stroke(a, b, 2.4f, Mge_Colors.white);
+            stroke(b, c, 2.4f, Mge_Colors.white);
+        } else {
+            if (hov) Draw_RectangleRounded(r, 0.35f, 6, with_alpha(grey, 40));
+            Draw_RectangleRoundedLines(r, 0.35f, 6, 1.5f, grey);
+        }
+        return;
+    }
+
+    if (widget == 3) { // switch
+        bool on = n->v.interact.boolPtr && *n->v.interact.boolPtr;
+        Draw_RectangleRounded(r, 1.0f, 8, on ? accent : grey);
+        float kr = r.height * 0.5f - 3.0f;
+        float kx = on ? (r.x + r.width - kr - 3.0f) : (r.x + kr + 3.0f);
+        disc(kx, r.y + r.height * 0.5f, kr, Mge_Colors.white);
+        return;
+    }
+
+    if (widget == 4) { // radio
+        bool on = n->v.interact.intPtr && *n->v.interact.intPtr == n->v.interact.radioValue;
+        Draw_RectangleRoundedLines(r, 1.0f, 12, 2.0f, on ? accent : grey);
+        if (on) disc(r.x + r.width * 0.5f, r.y + r.height * 0.5f, r.width * 0.24f, accent);
+        return;
+    }
+
+    if (widget == 5) { // slider
+        float cy = r.y + r.height * 0.5f;
+        float t = 0.0f;
+        if (n->v.interact.floatPtr) {
+            float span = n->v.interact.fmax - n->v.interact.fmin;
+            t = (span > 0.0f) ? clampf((*n->v.interact.floatPtr - n->v.interact.fmin) / span, 0.0f, 1.0f) : 0.0f;
+        }
+        Draw_RectangleRounded((Rectangle){ r.x, cy - 2.0f, r.width, 4.0f }, 1.0f, 4, grey);
+        if (t > 0.0f)
+            Draw_RectangleRounded((Rectangle){ r.x, cy - 2.0f, r.width * t, 4.0f }, 1.0f, 4, accent);
+        disc(r.x + r.width * t, cy, (hov || prs) ? 9.0f : 8.0f, accent);
+        return;
+    }
+
+    // widget == 6 progress bar
+    float cy = r.y + r.height * 0.5f;
+    Draw_RectangleRounded((Rectangle){ r.x, cy - 3.0f, r.width, 6.0f }, 1.0f, 4, grey);
+    if (n->v.interact.progress > 0.0f)
+        Draw_RectangleRounded((Rectangle){ r.x, cy - 3.0f, r.width * n->v.interact.progress, 6.0f }, 1.0f, 4, accent);
 }
 
 static void paint_scrollbar(int32_t i)
@@ -1680,6 +2147,8 @@ static void paint_node(int32_t i)
         float size = (st.size > 0.0f) ? st.size : 16.0f;
         Color col = (st.color.a != 0) ? st.color : (Color){ 255, 255, 255, 255 };
         Draw_Text(f, n->v.text.text, (Vector2){ n->rect.x, n->rect.y }, size, col);
+    } else if (n->type == NODE_INTERACT) {
+        paint_interact(i);
     }
 
     const bool clipping = (n->type == NODE_SCROLL || n->type == NODE_CLIPRECT);

@@ -207,61 +207,73 @@ scene, `examples/ui/list.c` (10k-row demo).
 - [ ] `Mge_UiSafeArea(parent)` (applies `MgeMediaQuery` view insets).
       **Deferred to Phase 7** (MediaQuery).
 
-## Phase 3 -- input & interactive widgets
+## Phase 3 -- pointer input & interactive widgets   [PARTLY LANDED]
 
-- [ ] Events: `MgePointerEvent` (kind down/up/move/hover/scroll/cancel,
-      position, delta, buttons, scrollDelta); `MgeKeyEvent` (key, mods,
-      down/up/repeat); `MgeTextInputEvent` (utf-8). Feed via `Mge_GuiFeedInput`
-      (pulls from the engine) or explicit `Mge_GuiPushPointer/Key/Text`.
-- [ ] `Mge_GuiGestureDetector(parent)` + setters: `Mge_GuiOnTap` / `OnTapDown` /
-      `OnTapUp` / `OnTapCancel` / `OnDoubleTap` / `OnLongPress` /
-      `OnSecondaryTap` / `OnPanStart` / `OnPanUpdate` / `OnPanEnd` /
-      `OnScaleStart/Update/End` / `OnHoverEnter` / `OnHoverExit` / `OnHoverMove`;
-      each: `(MgeUiWidget, void (*cb)(const MgeGestureInfo*, void*), void* user)`.
-- [ ] `Mge_GuiMouseRegion(parent, MgeMouseCursor)` /
-      `Mge_GuiSetCursor(MgeUiWidget, MgeMouseCursor)` (arrow/hand/text/resize*/
-      grab/forbidden).
-- [ ] `MgeButtonStyle` + presets `Mge_ButtonStyle_{Filled,Tonal,Outlined,Text,
-      Elevated}`; `Mge_GuiButton(parent, MgeButtonStyle) -> MgeUiWidget` +
-      `Mge_GuiOnPressed(btn, cb, user)` + `Mge_GuiWasPressed(btn)` (poll) +
-      `Mge_GuiSetEnabled(btn, bool)`; `Mge_GuiIconButton(parent, int iconId,
-      MgeButtonStyle)`; `Mge_GuiFloatingActionButton`.
-- [ ] `Mge_GuiInkWell(parent)` / `Mge_GuiInkResponse` (ripple, splash + hover +
-      focus overlays).
-- [ ] `Mge_GuiCheckbox(parent, bool* value)` / `Mge_GuiTristateCheckbox` /
-      `Mge_GuiSwitch(parent, bool* value)` /
-      `Mge_GuiRadio(parent, int* group, int value)`.
-- [ ] `Mge_GuiSlider(parent, float* value, float min, float max)` +
-      `Mge_GuiSliderDivisions` / `Mge_GuiRangeSlider(parent, float* lo, float*
-      hi, float min, float max)`.
-- [ ] `Mge_GuiProgressBar(parent, float value01)` /
-      `Mge_GuiProgressCircle(parent, float value01)` /
-      `Mge_GuiProgressIndeterminate`.
-- [ ] `Mge_GuiDropdown(parent, const char* const* items, int count, int* index)`;
-      `Mge_GuiSegmentedControl(parent, items, count, int* index)`;
-      `Mge_GuiChoiceChip` / `Mge_GuiFilterChip` / `Mge_GuiInputChip`.
-- [ ] `MgeTextController` + `Mge_TextController(const char* initial)` /
-      `Mge_TextControllerText` / `Mge_TextControllerSetText` /
-      `Mge_TextControllerSelection` / `Mge_TextControllerClear`.
-- [ ] `Mge_GuiTextField(parent, MgeTextController, MgeTextFieldStyle)`
-      (placeholder, `obscure`, `maxLength`, `keyboardType`, prefix/suffix,
-      `onChanged`, `onSubmitted`); `Mge_GuiTextArea` (multi-line);
-      `Mge_GuiSelectableText` (read-only, copyable).
-- [ ] Focus: `MgeFocusNode` + `Mge_FocusNode(void)` /
-      `Mge_GuiFocus(parent, MgeFocusNode)` / `Mge_GuiRequestFocus` /
-      `Mge_GuiFocusScope` / `Mge_GuiAutofocus` /
-      `Mge_GuiFocusTraversalGroup(parent, MgeTraversalPolicy)`.
-- [ ] `Mge_GuiShortcuts(parent, const MgeShortcut* binds, int n)` /
-      `Mge_GuiActions` / `Mge_GuiCallbackShortcut(parent, MgeKeyChord, cb, user)`.
-- [ ] `Mge_GuiTooltip(parent, const char* text, MgeTooltipStyle)`
-      (hover delay, follow-cursor, rich variant).
-- [ ] `Mge_GuiDraggable(parent, const char* payload, MgeUiWidget feedback)` /
-      `Mge_GuiLongPressDraggable` /
-      `Mge_GuiDragTarget(parent, bool (*onWillAccept)(const char*, void*),
-      void (*onAccept)(const char*, void*), void* user)`.
-- [ ] `Mge_GuiDismissible(parent, MgeAxis, void (*onDismissed)(void*), void*)` /
-      `Mge_GuiReorderableList(parent, void (*onReorder)(int from, int to,
-      void*), void*)`.
+Landed: the pointer event-routing layer (hover / press / tap / drag with pointer
+capture, built on the Phase 2 `hit_test`) and the pointer widgets. All on one
+`NODE_INTERACT` type painting its own chrome (`paint_interact`); callbacks fire
+from the input pass inside `Mge_UiRender`; poll flags read between render and the
+next `Mge_UiNewFrame`. `test/test_ui_layout.c` (+12, 170 checks), `render_smoke`
+`ui_widgets` scene, `examples/ui/widgets.c`. No engine / platform changes.
+
+- [x] Routing: deepest-hit → nearest enabled `NODE_INTERACT` ancestor; hover
+      enter/exit edges; press captures; tap = press+release on the same node;
+      pan = drag past a 4 px threshold. A press on an interactive widget inside a
+      scroll view does **not** drag-scroll (wheel still does). `Mge_UiWantsPointer`
+      now true over any interactive widget.
+- [x] `Mge_UiGestureDetector()` (invisible, one child) + `Mge_UiOn{Tap,TapDown,
+      TapUp,PanStart,PanUpdate,PanEnd,HoverEnter,HoverExit}(w, cb, user)` with
+      `cb(const MgeUiGestureInfo* {position, localPos, delta, totalDelta}, user)`;
+      poll `Mge_UiTapped` / `Mge_UiHovered` / `Mge_UiPressed`.
+- [x] `MgeUiButtonStyle` + `Mge_UiButton{Filled,Tonal,Outlined,Text}(accent)`
+      presets; `Mge_UiButton(label, style)` + `Mge_UiOnPressed(btn, cb, user)` +
+      `Mge_UiButtonClicked(btn)` (poll) + `Mge_UiSetEnabled(w, bool)` +
+      `Mge_UiSetButtonLabel`. Hover / press / disabled visual states.
+- [x] `Mge_UiCheckbox(bool*, accent)` / `Mge_UiSwitch(bool*, accent)` /
+      `Mge_UiRadio(int* group, value, accent)` -- click flips the bound var;
+      `Mge_UiToggleChanged(w)` poll.
+- [x] `Mge_UiSlider(float*, min, max, step)` (step 0 = continuous) +
+      `Mge_UiSliderChanged(w)` poll -- drag the thumb, value updates live.
+- [x] `Mge_UiProgressBar(t01)` + `Mge_UiSetProgress` / `Mge_UiGetProgress`.
+
+## Phase 3b -- keyboard & text
+
+- [ ] Engine: `GetKeyPressed()` / `GetCharPressed()` queue getters + a GLFW char
+      callback (`charPressedQueue` is declared but never filled) +
+      `IsKeyPressedRepeat()` (`keyRepeatInFrame` is tracked, no getter) +
+      clipboard get / set (`glfwGet/SetClipboardString`). **Not started:** this
+      phase touched no engine code; text input needs all of the above.
+- [ ] Focus: `MgeUiFocusNode` + `Mge_UiFocus(w, node)` / `Mge_UiRequestFocus` /
+      `Mge_UiFocusScope` / `Mge_UiAutofocus` / tab-traversal order; real
+      `Mge_UiWantsKeyboard` (still stubbed `false`).
+- [ ] `MgeUiTextBuffer` + single-line `Mge_UiTextField(buffer, style)`
+      (placeholder, `obscure`, `maxLength`, `onChanged`, `onSubmitted`): caret,
+      selection, arrows / home / end, backspace / delete, ctrl+A/C/V/X, key
+      repeat, caret blink (`Mge_UiNewFrame` already carries `dt`).
+- [ ] `Mge_UiShortcuts(w, binds, n)` / `Mge_UiCallbackShortcut(w, chord, cb, user)`.
+- [ ] `Mge_UiTextArea` (multi-line) / `Mge_UiSelectableText` (read-only, copyable).
+
+## Phase 3c -- overlays / drag-drop / ink
+
+- [ ] `Mge_UiDropdown(items, count, int* index)` / `Mge_UiSegmentedControl` /
+      `Mge_UiChoiceChip` / `FilterChip` / `InputChip`. **Deferred:** need an
+      overlay / portal layer (a popup that paints above everything and closes on
+      outside-click) that does not exist yet.
+- [ ] `Mge_UiTooltip(w, text, style)` (hover delay, follow-cursor). **Deferred:**
+      overlay layer + a per-widget hover-delay timer.
+- [ ] `Mge_UiDraggable(w, payload, feedback)` / `LongPressDraggable` /
+      `Mge_UiDragTarget(w, onWillAccept, onAccept, user)` /
+      `Mge_UiDismissible(w, axis, onDismissed, user)` /
+      `Mge_UiReorderableList(w, onReorder, user)`. **Deferred:** a drag-and-drop
+      subsystem (drag payload, feedback widget rendered at the cursor, drop-target
+      hit-testing) of its own.
+- [ ] `Mge_UiInkWell(w)` / `Mge_UiInkResponse` (ripple / splash). **Deferred to
+      Phase 6** (animation) -- the ripple is a timed expanding-circle effect.
+- [ ] Variants: `RangeSlider`, `TristateCheckbox`, `ProgressCircle` /
+      `ProgressIndeterminate`, `FloatingActionButton`, `Mge_UiIconButton` (needs
+      the Phase 4 icon-font support), `Mge_UiMouseRegion` / `Mge_UiSetCursor`
+      (arrow / hand / text / resize -- GLFW standard cursors), `OnTapCancel` /
+      `OnDoubleTap` / `OnLongPress` / `OnSecondaryTap` / scale gestures.
 
 ## Phase 4 -- visual styling depth (paint)
 

@@ -842,6 +842,270 @@ TEST(builder_survives_pool_growth_mid_layout)
     Mge_UiDestroy(root);
 }
 
+// ---- Phase 3: interaction ----
+
+static int     g_cb_count;
+static Vector2 g_cb_total;
+static void count_cb(const MgeUiGestureInfo* g, void* user) { (void)g; (void)user; g_cb_count++; }
+static void pan_cb(const MgeUiGestureInfo* g, void* user) { (void)user; g_cb_count++; g_cb_total = g->totalDelta; }
+
+static void click_at(MgeUiWidget root, float x, float y)
+{
+    g_mouse = (Vector2){ x, y };
+    g_mouseDown = true;
+    render(root, 800, 600); // press
+    g_mouseDown = false;
+    render(root, 800, 600); // release
+}
+
+static Vector2 center_of(MgeUiWidget w)
+{
+    Rectangle r = Mge_UiGetRect(w);
+    return (Vector2){ r.x + r.width * 0.5f, r.y + r.height * 0.5f };
+}
+
+TEST(button_click_fires_callback_and_poll)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget btn = Mge_UiButton("Play", Mge_UiButtonFilled(Mge_Colors.blue));
+    Mge_UiOnPressed(btn, count_cb, NULL);
+    MgeUiWidget root = wrap(btn, 800, 600);
+
+    Vector2 c = center_of(btn);
+    click_at(root, c.x, c.y);
+    CHECK(Mge_UiButtonClicked(btn));
+    CHECK(g_cb_count == 1);
+
+    render(root, 800, 600); // idle frame -> latch clears
+    CHECK(!Mge_UiButtonClicked(btn));
+    Mge_UiDestroy(root);
+}
+
+TEST(press_here_release_elsewhere_is_not_a_click)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget btn = Mge_UiButton("X", Mge_UiButtonFilled(Mge_Colors.blue));
+    Mge_UiOnPressed(btn, count_cb, NULL);
+    MgeUiWidget root = wrap(btn, 800, 600);
+    Vector2 c = center_of(btn);
+
+    g_mouse = c;
+    g_mouseDown = true;
+    render(root, 800, 600);
+    g_mouse = (Vector2){ 500, 500 }; // dragged off
+    render(root, 800, 600);
+    g_mouseDown = false;
+    render(root, 800, 600);
+    CHECK(!Mge_UiButtonClicked(btn));
+    CHECK(g_cb_count == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(disabled_button_ignores_clicks)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget btn = Mge_UiButton("No", Mge_UiButtonFilled(Mge_Colors.blue));
+    Mge_UiOnPressed(btn, count_cb, NULL);
+    Mge_UiSetEnabled(btn, false);
+    MgeUiWidget root = wrap(btn, 800, 600);
+    Vector2 c = center_of(btn);
+    click_at(root, c.x, c.y);
+    CHECK(!Mge_UiButtonClicked(btn));
+    CHECK(g_cb_count == 0);
+    CHECK(!Mge_UiWantsPointer()); // a disabled widget doesn't grab the pointer
+    Mge_UiDestroy(root);
+}
+
+TEST(checkbox_toggles_the_bound_bool)
+{
+    input_reset();
+    bool v = false;
+    MgeUiWidget cb = Mge_UiCheckbox(&v, Mge_Colors.green);
+    MgeUiWidget root = wrap(cb, 800, 600);
+    Vector2 c = center_of(cb);
+
+    click_at(root, c.x, c.y);
+    CHECK(v == true);
+    CHECK(Mge_UiToggleChanged(cb));
+    render(root, 800, 600);
+    CHECK(!Mge_UiToggleChanged(cb)); // only on the click frame
+    click_at(root, c.x, c.y);
+    CHECK(v == false);
+    Mge_UiDestroy(root);
+}
+
+TEST(radio_group_selects_its_value)
+{
+    input_reset();
+    int group = 0;
+    MgeUiWidget row = Mge_UiRow((MgeFlexStyle){ .mainSize = MGE_MAIN_SIZE_MIN, .spacing = 8 });
+    MgeUiWidget r1 = Mge_UiRadio(&group, 1, Mge_Colors.blue);
+    MgeUiWidget r2 = Mge_UiRadio(&group, 2, Mge_Colors.blue);
+    Mge_UiAddChild(row, Mge_UiRadio(&group, 0, Mge_Colors.blue));
+    Mge_UiAddChild(row, r1);
+    Mge_UiAddChild(row, r2);
+    MgeUiWidget root = wrap(row, 800, 600);
+
+    Vector2 c = center_of(r2);
+    click_at(root, c.x, c.y);
+    CHECK(group == 2);
+    c = center_of(r1);
+    click_at(root, c.x, c.y);
+    CHECK(group == 1);
+    Mge_UiDestroy(root);
+}
+
+TEST(switch_toggles)
+{
+    input_reset();
+    bool on = true;
+    MgeUiWidget sw = Mge_UiSwitch(&on, Mge_Colors.blue);
+    MgeUiWidget root = wrap(sw, 800, 600);
+    Vector2 c = center_of(sw);
+    click_at(root, c.x, c.y);
+    CHECK(on == false);
+    Mge_UiDestroy(root);
+}
+
+TEST(slider_maps_the_drag_to_value)
+{
+    input_reset();
+    float v = 0.0f;
+    MgeUiWidget sld = Mge_UiSlider(&v, 0.0f, 100.0f, 0.0f);
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 24 });
+    Mge_UiAddChild(box, sld);
+    MgeUiWidget root = wrap(box, 800, 600);
+    Rectangle r = Mge_UiGetRect(sld);
+    CHECK_F(r.width, 200.0f);
+
+    g_mouse = (Vector2){ r.x + r.width * 0.25f, r.y + 12 };
+    g_mouseDown = true;
+    render(root, 800, 600);
+    CHECK_F(v, 25.0f);
+    g_mouse = (Vector2){ r.x + r.width * 0.75f, r.y + 12 };
+    render(root, 800, 600);
+    CHECK_F(v, 75.0f);
+    CHECK(Mge_UiSliderChanged(sld));
+    g_mouseDown = false;
+    render(root, 800, 600);
+    Mge_UiDestroy(root);
+}
+
+TEST(slider_step_quantises)
+{
+    input_reset();
+    float v = 0.0f;
+    MgeUiWidget sld = Mge_UiSlider(&v, 0.0f, 100.0f, 25.0f);
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 24 });
+    Mge_UiAddChild(box, sld);
+    MgeUiWidget root = wrap(box, 800, 600);
+    Rectangle r = Mge_UiGetRect(sld);
+
+    g_mouse = (Vector2){ r.x + r.width * 0.6f, r.y + 12 }; // 60 -> nearest 25 -> 50
+    g_mouseDown = true;
+    render(root, 800, 600);
+    CHECK_F(v, 50.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(gesture_detector_tap_and_pan)
+{
+    input_reset();
+    g_cb_count = 0;
+    g_cb_total = (Vector2){ 0, 0 };
+    MgeUiWidget gd = Mge_UiGestureDetector();
+    Mge_UiAddChild(gd, fixed(120, 80));
+    Mge_UiOnTap(gd, count_cb, NULL);
+    Mge_UiOnPanUpdate(gd, pan_cb, NULL);
+    MgeUiWidget root = wrap(gd, 800, 600);
+
+    click_at(root, 60, 40); // inside the 120x80
+    CHECK(g_cb_count == 1);
+    CHECK(Mge_UiTapped(gd));
+
+    g_cb_count = 0;
+    g_mouse = (Vector2){ 20, 20 };
+    g_mouseDown = true;
+    render(root, 800, 600);
+    g_mouse = (Vector2){ 70, 40 }; // moved (50,20) -> past the 4px threshold
+    render(root, 800, 600);
+    g_mouse = (Vector2){ 90, 55 };
+    render(root, 800, 600);
+    g_mouseDown = false;
+    render(root, 800, 600);
+    CHECK(g_cb_count >= 2);          // onPanUpdate fired on the move frames
+    CHECK(g_cb_total.x > 60.0f);     // 90 - 20
+    CHECK(!Mge_UiTapped(gd));        // a pan is not a tap
+    Mge_UiDestroy(root);
+}
+
+TEST(hover_enter_exit_edges)
+{
+    input_reset();
+    g_cb_count = 0;
+    MgeUiWidget btn = Mge_UiButton("H", Mge_UiButtonFilled(Mge_Colors.blue));
+    Mge_UiOnHoverEnter(btn, count_cb, NULL);
+    Mge_UiOnHoverExit(btn, count_cb, NULL);
+    MgeUiWidget root = wrap(btn, 800, 600);
+    Vector2 c = center_of(btn);
+
+    g_mouse = c;
+    render(root, 800, 600);
+    CHECK(g_cb_count == 1); // enter
+    CHECK(Mge_UiHovered(btn));
+
+    g_mouse = (Vector2){ 600, 400 };
+    render(root, 800, 600);
+    CHECK(g_cb_count == 2); // exit
+    CHECK(!Mge_UiHovered(btn));
+    Mge_UiDestroy(root);
+}
+
+TEST(button_in_a_scroll_view_does_not_drag_scroll)
+{
+    input_reset();
+    MgeUiWidget lv = Mge_UiListView(MGE_AXIS_VERTICAL, (MgeScrollStyle){ 0 });
+    for (int k = 0; k < 20; k++)
+        Mge_UiAddChild(lv, Mge_UiButton("row", Mge_UiButtonFilled(Mge_Colors.blue)));
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 120 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    MgeUiWidget b0 = Mge_UiChildAt(Mge_UiChildAt(lv, 0), 0); // inner flex -> first button
+    Rectangle rb = Mge_UiGetRect(b0);
+    g_mouse = (Vector2){ rb.x + 10, rb.y + 8 };
+    g_mouseDown = true;
+    render(root, 800, 600);
+    g_mouse = (Vector2){ rb.x + 10, rb.y + 48 }; // drag down 40 px over the button
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(lv), 0.0f); // the button owned the press
+
+    g_mouseDown = false;
+    render(root, 800, 600);
+    g_mouse = (Vector2){ 100, 60 };
+    g_wheel = (Vector2){ 0.0f, -1.0f };
+    render(root, 800, 600);
+    CHECK(Mge_UiScrollOffset(lv) > 0.0f); // wheel still scrolls
+    Mge_UiDestroy(root);
+}
+
+TEST(progressbar_reports_its_value)
+{
+    input_reset();
+    MgeUiWidget pb = Mge_UiProgressBar(0.25f);
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 20 });
+    Mge_UiAddChild(box, pb);
+    MgeUiWidget root = wrap(box, 800, 600);
+    CHECK_F(Mge_UiGetProgress(pb), 0.25f);
+    Mge_UiSetProgress(pb, 0.6f);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiGetProgress(pb), 0.6f);
+    Mge_UiDestroy(root);
+}
+
 int main(void)
 {
     MgeGL_Init(800, 600); // the batcher the paint pass feeds
@@ -893,5 +1157,18 @@ int main(void)
     RUN(gridviewbuilder_lays_a_virtualized_grid);
     RUN(gridview_non_virtual_sizes_to_its_rows);
     RUN(builder_survives_pool_growth_mid_layout);
+
+    RUN(button_click_fires_callback_and_poll);
+    RUN(press_here_release_elsewhere_is_not_a_click);
+    RUN(disabled_button_ignores_clicks);
+    RUN(checkbox_toggles_the_bound_bool);
+    RUN(radio_group_selects_its_value);
+    RUN(switch_toggles);
+    RUN(slider_maps_the_drag_to_value);
+    RUN(slider_step_quantises);
+    RUN(gesture_detector_tap_and_pan);
+    RUN(hover_enter_exit_edges);
+    RUN(button_in_a_scroll_view_does_not_drag_scroll);
+    RUN(progressbar_reports_its_value);
     return test_summary();
 }

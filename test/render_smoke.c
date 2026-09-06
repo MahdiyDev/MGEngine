@@ -359,6 +359,57 @@ static void scene_ui_vlist(void)
     Mge_UiDestroy(outer);
 }
 
+// Phase 3: a card of interactive widgets in resting + one hovered state
+static void scene_ui_widgets(void)
+{
+    static bool check_on = true, switch_on = true;
+    static int  radio = 1;
+    static float slider = 0.62f;
+
+    MgeUiWidget outer = Mge_UiCenter();
+    MgeUiWidget card = Mge_UiContainer((MgeContainerStyle){
+        .width = 340, .padding = Mge_EdgeInsetsAll(20),
+        .decoration = { .color = (Color){ 24, 26, 34, 255 },
+            .border = Mge_BorderAll((Color){ 90, 100, 130, 255 }, 2),
+            .borderRadius = Mge_BorderRadiusAll(14) } });
+    Mge_UiAddChild(outer, card);
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH, .spacing = 12, .mainSize = MGE_MAIN_SIZE_MIN });
+    Mge_UiAddChild(card, col);
+
+    MgeUiWidget btnRow = Mge_UiRow((MgeFlexStyle){ .spacing = 10, .mainSize = MGE_MAIN_SIZE_MIN });
+    Mge_UiAddChild(btnRow, Mge_UiButton("Filled", Mge_UiButtonFilled(Mge_Colors.blue)));
+    Mge_UiAddChild(btnRow, Mge_UiButton("Outlined", Mge_UiButtonOutlined((Color){ 120, 170, 255, 255 })));
+    Mge_UiAddChild(col, btnRow);
+
+    MgeUiWidget togRow = Mge_UiRow((MgeFlexStyle){ .spacing = 16, .crossAxis = MGE_CROSS_CENTER, .mainSize = MGE_MAIN_SIZE_MIN });
+    Mge_UiAddChild(togRow, Mge_UiCheckbox(&check_on, Mge_Colors.green));
+    Mge_UiAddChild(togRow, Mge_UiSwitch(&switch_on, Mge_Colors.blue));
+    Mge_UiAddChild(togRow, Mge_UiRadio(&radio, 0, Mge_Colors.blue));
+    Mge_UiAddChild(togRow, Mge_UiRadio(&radio, 1, Mge_Colors.blue));
+    Mge_UiAddChild(col, togRow);
+
+    Mge_UiAddChild(col, Mge_UiSlider(&slider, 0.0f, 1.0f, 0.0f));
+    Mge_UiAddChild(col, Mge_UiProgressBar(0.4f));
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(outer);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    // hover the first button
+    Rectangle fb = Mge_UiGetRect(Mge_UiChildAt(btnRow, 0));
+    Mge_SetMouseOverride((Vector2){ fb.x + fb.width * 0.5f, fb.y + fb.height * 0.5f }, false);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    check("ui_widgets");
+    Mge_EndDrawing();
+
+    Mge_ClearMouseOverride();
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(outer);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -1178,6 +1229,7 @@ int main(void)
     scene_ui2();
     scene_ui_scroll();
     scene_ui_vlist();
+    scene_ui_widgets();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

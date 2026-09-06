@@ -362,6 +362,77 @@ void Mge_UiScrollToIndex(MgeUiWidget builderView, int index);
 MgeUiWidget Mge_UiGridView(MgeAxis axis, int crossAxisCount,
     float cellW, float cellH, float mainGap, float crossGap);
 
+// ---- interaction (Phase 3) -------------------------------------------
+//
+// Callbacks fire inside Mge_UiRender (from the input pass, after layout). The
+// poll helpers (Mge_UiTapped / Clicked / ToggleChanged / SliderChanged) report
+// the last Mge_UiRender -- read them after Mge_UiRender() and before the next
+// Mge_UiNewFrame. Gate your game's own mouse handling on Mge_UiWantsPointer().
+
+typedef struct MgeUiGestureInfo {
+    Vector2 position;   // cursor, screen space
+    Vector2 localPos;   // cursor relative to the widget's top-left
+    Vector2 delta;      // movement since the last frame (pan)
+    Vector2 totalDelta; // movement since the press began (pan)
+} MgeUiGestureInfo;
+
+typedef void (*MgeUiGestureFn)(const MgeUiGestureInfo* g, void* user);
+
+// invisible; wraps one child and reports pointer gestures over it
+MgeUiWidget Mge_UiGestureDetector(void);
+void Mge_UiOnTap(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnTapDown(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnTapUp(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnPanStart(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnPanUpdate(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnPanEnd(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnHoverEnter(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+void Mge_UiOnHoverExit(MgeUiWidget w, MgeUiGestureFn cb, void* user);
+
+bool Mge_UiTapped(MgeUiWidget w);  // poll: true the frame a tap completed
+bool Mge_UiHovered(MgeUiWidget w);
+bool Mge_UiPressed(MgeUiWidget w);
+
+typedef enum {
+    MGE_BTN_FILLED = 0,
+    MGE_BTN_TONAL,
+    MGE_BTN_OUTLINED,
+    MGE_BTN_TEXT,
+} MgeUiButtonVariant;
+
+typedef struct MgeUiButtonStyle {
+    MgeUiButtonVariant variant;
+    Color              accent;  // a == 0 => default blue
+    float              radius;  // 0 => 8
+    MgeEdgeInsets      padding; // all 0 => symmetric(16, 10)
+    float              textSize; // 0 => 16
+    bool               expand;  // fill the available width
+} MgeUiButtonStyle;
+
+static inline MgeUiButtonStyle Mge_UiButtonFilled(Color a) { return (MgeUiButtonStyle){ .variant = MGE_BTN_FILLED, .accent = a }; }
+static inline MgeUiButtonStyle Mge_UiButtonTonal(Color a) { return (MgeUiButtonStyle){ .variant = MGE_BTN_TONAL, .accent = a }; }
+static inline MgeUiButtonStyle Mge_UiButtonOutlined(Color a) { return (MgeUiButtonStyle){ .variant = MGE_BTN_OUTLINED, .accent = a }; }
+static inline MgeUiButtonStyle Mge_UiButtonText(Color a) { return (MgeUiButtonStyle){ .variant = MGE_BTN_TEXT, .accent = a }; }
+
+MgeUiWidget Mge_UiButton(const char* label, MgeUiButtonStyle style);
+void Mge_UiOnPressed(MgeUiWidget btn, MgeUiGestureFn cb, void* user);
+bool Mge_UiButtonClicked(MgeUiWidget btn);   // poll
+void Mge_UiSetEnabled(MgeUiWidget w, bool enabled);
+void Mge_UiSetButtonLabel(MgeUiWidget btn, const char* label);
+
+// toggles -- click flips the caller's variable; also poll Mge_UiToggleChanged
+MgeUiWidget Mge_UiCheckbox(bool* value, Color accent);   // accent a == 0 => default blue
+MgeUiWidget Mge_UiSwitch(bool* value, Color accent);
+MgeUiWidget Mge_UiRadio(int* group, int value, Color accent); // selected when *group == value
+bool Mge_UiToggleChanged(MgeUiWidget w);   // poll
+
+MgeUiWidget Mge_UiSlider(float* value, float min, float max, float step); // step 0 => continuous
+bool  Mge_UiSliderChanged(MgeUiWidget w);   // poll
+
+MgeUiWidget Mge_UiProgressBar(float t01);
+void  Mge_UiSetProgress(MgeUiWidget w, float t01);
+float Mge_UiGetProgress(MgeUiWidget w);
+
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);
 void Mge_UiSetVisible(MgeUiWidget w, bool visible);      // on an Mge_UiVisibility node
