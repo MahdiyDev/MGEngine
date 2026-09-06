@@ -236,22 +236,37 @@ next `Mge_UiNewFrame`. `test/test_ui_layout.c` (+12, 170 checks), `render_smoke`
       `Mge_UiSliderChanged(w)` poll -- drag the thumb, value updates live.
 - [x] `Mge_UiProgressBar(t01)` + `Mge_UiSetProgress` / `Mge_UiGetProgress`.
 
-## Phase 3b -- keyboard & text
+## Phase 3b -- keyboard & text   [PARTLY LANDED]
 
-- [ ] Engine: `GetKeyPressed()` / `GetCharPressed()` queue getters + a GLFW char
-      callback (`charPressedQueue` is declared but never filled) +
-      `IsKeyPressedRepeat()` (`keyRepeatInFrame` is tracked, no getter) +
-      clipboard get / set (`glfwGet/SetClipboardString`). **Not started:** this
-      phase touched no engine code; text input needs all of the above.
-- [ ] Focus: `MgeUiFocusNode` + `Mge_UiFocus(w, node)` / `Mge_UiRequestFocus` /
-      `Mge_UiFocusScope` / `Mge_UiAutofocus` / tab-traversal order; real
-      `Mge_UiWantsKeyboard` (still stubbed `false`).
-- [ ] `MgeUiTextBuffer` + single-line `Mge_UiTextField(buffer, style)`
-      (placeholder, `obscure`, `maxLength`, `onChanged`, `onSubmitted`): caret,
-      selection, arrows / home / end, backspace / delete, ctrl+A/C/V/X, key
-      repeat, caret blink (`Mge_UiNewFrame` already carries `dt`).
-- [ ] `Mge_UiShortcuts(w, binds, n)` / `Mge_UiCallbackShortcut(w, chord, cb, user)`.
-- [ ] `Mge_UiTextArea` (multi-line) / `Mge_UiSelectableText` (read-only, copyable).
+Landed: the engine char-input path, an implicit focus model, and a single-line
+text field. `test/test_ui_layout.c` (+11, 193 checks), `render_smoke`
+`ui_textfield` scene, `examples/ui/form.c`.
+
+- [x] Engine: `GetKeyPressed()` / `GetCharPressed()` queue getters (raylib-style
+      front-drain), a GLFW `CharCallback` filling `charPressedQueue`,
+      `IsKeyPressedRepeat()` exposed in `mge.h` (impl already existed),
+      `Mge_Get/SetClipboardText()` (GLFW), and `Mge_SetExitKey(key)` (so Esc can
+      unfocus a field instead of closing the window).
+- [x] Focus: implicit -- the field node *is* the focus target (`S.focusNode`);
+      `Mge_UiFocus(w)` / `Mge_UiUnfocus()` / `Mge_UiIsFocused(w)`; click to focus,
+      click-away / Esc to blur, Tab / Shift+Tab cycle through the fields in tree
+      order (select-all on tab-in); `Mge_UiWantsKeyboard()` is now real.
+- [x] `MgeUiTextBuffer` (caller-owned, `Mge_UiTextBufferSet`) + single-line
+      `Mge_UiTextField(buf, placeholder, MgeUiTextFieldStyle)` (`obscure`,
+      `maxLength`, `accent` / `bg` / `textColor`, `expand`): caret, selection
+      (shift+arrows / home / end), backspace / delete, Ctrl+A/C/X/V, key repeat,
+      caret blink, horizontal scroll-to-caret. Poll `Mge_UiTextChanged` /
+      `Mge_UiTextSubmitted` (Enter). `NODE_INTERACT` widget kind 7.
+- [ ] A separate `MgeUiFocusNode` handle + `Mge_UiFocusScope` / `Mge_UiAutofocus`
+      / `MgeTraversalPolicy`, and making buttons keyboard-focusable
+      (Enter/Space to activate). **Deferred:** the implicit model covers forms;
+      a handle only earns its keep with nested scopes.
+- [ ] `Mge_UiShortcuts(w, binds, n)` / `Mge_UiCallbackShortcut(w, chord, cb,
+      user)`. **Deferred:** a keybinding-table system of its own.
+- [ ] `Mge_UiTextArea` (multi-line: soft-wrap, vertical scroll, up/down caret) /
+      `Mge_UiSelectableText` (read-only, copyable). **Deferred:** multi-line
+      editing is a bigger caret/selection model; UTF-8 beyond ASCII, word-jump
+      (ctrl+arrow), double-click word select, and undo/redo go here too.
 
 ## Phase 3c -- overlays / drag-drop / ink
 

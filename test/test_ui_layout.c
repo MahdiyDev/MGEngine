@@ -34,11 +34,47 @@ static Vector2 g_wheel = { 0.0f, 0.0f };
 Vector2 GetMousePosition(void) { return g_mouse; }
 bool IsMouseButtonDown(int b) { (void)b; return g_mouseDown; }
 Vector2 GetMouseWheelMoveV(void) { return g_wheel; }
+// keyboard input the GUI reads in Mge_UiNewFrame / input_update (Phase 3b)
+static int  g_charq[16];
+static int  g_ncharq;
+static bool g_keyEdge[400];
+static bool g_keyDown[400];
+static char g_clip[256];
+
+int GetCharPressed(void)
+{
+    if (g_ncharq == 0) return 0;
+    int c = g_charq[0];
+    for (int i = 0; i < g_ncharq - 1; i++) g_charq[i] = g_charq[i + 1];
+    g_ncharq--;
+    return c;
+}
+int GetKeyPressed(void) { return 0; }
+bool IsKeyPressed(int k) { return k >= 0 && k < 400 && g_keyEdge[k]; }
+bool IsKeyPressedRepeat(int k) { (void)k; return false; }
+bool IsKeyDown(int k) { return k >= 0 && k < 400 && g_keyDown[k]; }
+const char* Mge_GetClipboardText(void) { return g_clip; }
+void Mge_SetClipboardText(const char* s)
+{
+    strncpy(g_clip, s ? s : "", sizeof g_clip - 1);
+    g_clip[sizeof g_clip - 1] = '\0';
+}
+
 static void input_reset(void)
 {
     g_mouse = (Vector2){ -1.0f, -1.0f };
     g_mouseDown = false;
     g_wheel = (Vector2){ 0.0f, 0.0f };
+    g_ncharq = 0;
+    memset(g_keyEdge, 0, sizeof g_keyEdge);
+    memset(g_keyDown, 0, sizeof g_keyDown);
+    g_clip[0] = '\0';
+}
+
+static void push_text(const char* s)
+{
+    for (int i = 0; s[i] && g_ncharq < 16; i++)
+        g_charq[g_ncharq++] = (unsigned char)s[i];
 }
 
 static void render(MgeUiWidget root, float w, float h)
@@ -1106,6 +1142,209 @@ TEST(progressbar_reports_its_value)
     Mge_UiDestroy(root);
 }
 
+// ---- Phase 3b: text fields & focus ----
+
+static MgeUiWidget tf_tree(MgeUiTextBuffer* buf, const char* initial, MgeUiWidget* field)
+{
+    input_reset();
+    Mge_UiTextBufferSet(buf, initial);
+    MgeUiWidget f = Mge_UiTextField(buf, "type here", (MgeUiTextFieldStyle){ .expand = true });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 220, .height = 36 });
+    Mge_UiAddChild(box, f);
+    MgeUiWidget root = wrap(box, 800, 600);
+    if (field) *field = f;
+    return root;
+}
+
+static void key_mod(MgeUiWidget root, int k, bool shift, bool ctrl)
+{
+    g_keyDown[KEY_LEFT_SHIFT] = shift;
+    g_keyDown[KEY_LEFT_CONTROL] = ctrl;
+    g_keyEdge[k] = true;
+    render(root, 800, 600);
+    g_keyEdge[k] = false;
+    g_keyDown[KEY_LEFT_SHIFT] = false;
+    g_keyDown[KEY_LEFT_CONTROL] = false;
+}
+static void key(MgeUiWidget root, int k) { key_mod(root, k, false, false); }
+
+TEST(textfield_types_and_reports_changed)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "", &f);
+    Mge_UiFocus(f);
+    push_text("hi");
+    render(root, 800, 600);
+    CHECK(strcmp(buf.text, "hi") == 0 && buf.len == 2);
+    CHECK(Mge_UiTextChanged(f));
+    CHECK(Mge_UiWantsKeyboard());
+    render(root, 800, 600);
+    CHECK(!Mge_UiTextChanged(f));
+    Mge_UiDestroy(root);
+}
+
+TEST(backspace_and_delete_at_the_caret)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "abc", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    key(root, KEY_BACKSPACE);
+    CHECK(strcmp(buf.text, "ab") == 0);
+    key(root, KEY_HOME);
+    key(root, KEY_DELETE);
+    CHECK(strcmp(buf.text, "b") == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(caret_move_then_insert_in_the_middle)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "abc", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    key(root, KEY_LEFT);
+    key(root, KEY_LEFT); // caret at index 1
+    push_text("X");
+    render(root, 800, 600);
+    CHECK(strcmp(buf.text, "aXbc") == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(shift_arrow_selects_then_typing_replaces)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "abc", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    key(root, KEY_END);
+    key_mod(root, KEY_LEFT, true, false);
+    key_mod(root, KEY_LEFT, true, false); // "bc" selected
+    push_text("Z");
+    render(root, 800, 600);
+    CHECK(strcmp(buf.text, "aZ") == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(ctrl_a_then_type_replaces_all)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "hello world", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    key_mod(root, KEY_A, false, true);
+    push_text("!");
+    render(root, 800, 600);
+    CHECK(strcmp(buf.text, "!") == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(clipboard_copy_then_paste)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "abc", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    key_mod(root, KEY_A, false, true);
+    key_mod(root, KEY_C, false, true);
+    CHECK(strcmp(g_clip, "abc") == 0);
+    key(root, KEY_END);
+    key_mod(root, KEY_V, false, true);
+    CHECK(strcmp(buf.text, "abcabc") == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(enter_latches_submitted_without_a_newline)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "go", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    key(root, KEY_ENTER);
+    CHECK(Mge_UiTextSubmitted(f));
+    CHECK(strcmp(buf.text, "go") == 0);
+    render(root, 800, 600);
+    CHECK(!Mge_UiTextSubmitted(f));
+    Mge_UiDestroy(root);
+}
+
+TEST(esc_unfocuses_and_wants_keyboard_tracks_focus)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "x", &f);
+    Mge_UiFocus(f);
+    render(root, 800, 600);
+    CHECK(Mge_UiWantsKeyboard() && Mge_UiIsFocused(f));
+    key(root, KEY_ESCAPE);
+    CHECK(!Mge_UiWantsKeyboard() && !Mge_UiIsFocused(f));
+    Mge_UiDestroy(root);
+}
+
+TEST(tab_cycles_focus_between_two_fields)
+{
+    input_reset();
+    MgeUiTextBuffer b1, b2;
+    Mge_UiTextBufferSet(&b1, "one");
+    Mge_UiTextBufferSet(&b2, "two");
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH, .spacing = 6, .mainSize = MGE_MAIN_SIZE_MIN });
+    MgeUiWidget f1 = Mge_UiTextField(&b1, "", (MgeUiTextFieldStyle){ .expand = true });
+    MgeUiWidget f2 = Mge_UiTextField(&b2, "", (MgeUiTextFieldStyle){ .expand = true });
+    Mge_UiAddChild(col, f1);
+    Mge_UiAddChild(col, f2);
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 100 });
+    Mge_UiAddChild(box, col);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    Mge_UiFocus(f1);
+    render(root, 800, 600);
+    CHECK(Mge_UiIsFocused(f1));
+    key(root, KEY_TAB);
+    CHECK(Mge_UiIsFocused(f2));
+    key(root, KEY_TAB);
+    CHECK(Mge_UiIsFocused(f1)); // wraps
+    key_mod(root, KEY_TAB, true, false);
+    CHECK(Mge_UiIsFocused(f2)); // shift+tab
+    Mge_UiDestroy(root);
+}
+
+TEST(click_positions_the_caret)
+{
+    MgeUiTextBuffer buf;
+    MgeUiWidget f, root = tf_tree(&buf, "hello", &f);
+    render(root, 800, 600);
+    Rectangle r = Mge_UiGetRect(f);
+    click_at(root, r.x + r.width - 4.0f, r.y + r.height * 0.5f); // right edge -> caret at end
+    push_text("!");
+    render(root, 800, 600);
+    CHECK(strcmp(buf.text, "hello!") == 0);
+    Mge_UiDestroy(root);
+
+    MgeUiWidget root2 = tf_tree(&buf, "hello", &f);
+    render(root2, 800, 600);
+    r = Mge_UiGetRect(f);
+    click_at(root2, r.x + 1.0f, r.y + r.height * 0.5f); // far left -> caret at 0
+    push_text("^");
+    render(root2, 800, 600);
+    CHECK(strcmp(buf.text, "^hello") == 0);
+    Mge_UiDestroy(root2);
+}
+
+TEST(max_length_caps_input)
+{
+    input_reset();
+    MgeUiTextBuffer buf;
+    Mge_UiTextBufferSet(&buf, "");
+    MgeUiWidget f = Mge_UiTextField(&buf, "", (MgeUiTextFieldStyle){ .expand = true, .maxLength = 3 });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 200, .height = 36 });
+    Mge_UiAddChild(box, f);
+    MgeUiWidget root = wrap(box, 800, 600);
+    Mge_UiFocus(f);
+    push_text("abcdef");
+    render(root, 800, 600);
+    CHECK(strcmp(buf.text, "abc") == 0);
+    Mge_UiDestroy(root);
+}
+
 int main(void)
 {
     MgeGL_Init(800, 600); // the batcher the paint pass feeds
@@ -1170,5 +1409,17 @@ int main(void)
     RUN(hover_enter_exit_edges);
     RUN(button_in_a_scroll_view_does_not_drag_scroll);
     RUN(progressbar_reports_its_value);
+
+    RUN(textfield_types_and_reports_changed);
+    RUN(backspace_and_delete_at_the_caret);
+    RUN(caret_move_then_insert_in_the_middle);
+    RUN(shift_arrow_selects_then_typing_replaces);
+    RUN(ctrl_a_then_type_replaces_all);
+    RUN(clipboard_copy_then_paste);
+    RUN(enter_latches_submitted_without_a_newline);
+    RUN(esc_unfocuses_and_wants_keyboard_tracks_focus);
+    RUN(tab_cycles_focus_between_two_fields);
+    RUN(click_positions_the_caret);
+    RUN(max_length_caps_input);
     return test_summary();
 }

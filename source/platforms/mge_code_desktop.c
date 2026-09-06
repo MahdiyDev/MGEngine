@@ -26,9 +26,11 @@ extern CoreData CORE;
 static void InitTimer(void);
 
 static PlatformData platform = { 0 };
+static int s_exitKey = KEY_ESCAPE; // 0 disables the close-on-key behaviour
 
 static void Error_Callback(int error, const char* description);
 static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void CharCallback(GLFWwindow* window, unsigned int codepoint);
 static void MouseCursorPosCallback(GLFWwindow* window, double x, double y);
 static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 static void MouseScrollCallback(GLFWwindow* window, double x, double y);
@@ -101,6 +103,7 @@ void InitPlatform(void)
     }
 
     glfwSetKeyCallback(platform.window, KeyCallback);
+    glfwSetCharCallback(platform.window, CharCallback);
     glfwSetCursorPosCallback(platform.window, MouseCursorPosCallback);
     glfwSetMouseButtonCallback(platform.window, MouseButtonCallback);
     glfwSetScrollCallback(platform.window, MouseScrollCallback);
@@ -151,6 +154,20 @@ bool Mge_WindowShouldClose(void)
         return CORE.Window.shouldClose;
     }
     return true;
+}
+
+void Mge_SetExitKey(int key) { s_exitKey = key; }
+
+const char* Mge_GetClipboardText(void)
+{
+    const char* s = platform.window ? glfwGetClipboardString(platform.window) : NULL;
+    return s ? s : "";
+}
+
+void Mge_SetClipboardText(const char* text)
+{
+    if (platform.window && text)
+        glfwSetClipboardString(platform.window, text);
 }
 
 void Mge_SetWindowShouldClose(bool value)
@@ -261,8 +278,15 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
         CORE.Input.Keyboard.keyPressedQueueCount++;
     }
 
-    if (glfwGetKey(platform.window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    if (s_exitKey != 0 && key == s_exitKey && action == GLFW_PRESS)
         glfwSetWindowShouldClose(platform.window, GLFW_TRUE);
+}
+
+static void CharCallback(GLFWwindow* window, unsigned int codepoint)
+{
+    (void)window;
+    if (CORE.Input.Keyboard.charPressedQueueCount < MAX_CHAR_PRESSED_QUEUE)
+        CORE.Input.Keyboard.charPressedQueue[CORE.Input.Keyboard.charPressedQueueCount++] = (int)codepoint;
 }
 
 static void MouseCursorPosCallback(GLFWwindow* window, double x, double y)

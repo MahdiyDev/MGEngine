@@ -847,9 +847,13 @@ const char* Mge_GetFileExtension(const char *fileName);
 
 // Keyboard
 bool IsKeyPressed(int key);
+bool IsKeyPressedRepeat(int key); // true on an auto-repeat tick while the key is held
 bool IsKeyDown(int key);
 bool IsKeyUp(int key);
 bool IsKeyReleased(int key);
+int GetKeyPressed(void);  // drain one keycode from the press queue (0 when empty)
+int GetCharPressed(void); // drain one unicode codepoint from the char queue (0 when empty)
+void Mge_SetExitKey(int key); // key that closes the window (default KEY_ESCAPE; 0 = none)
 
 // Mouse
 float GetMouseX(void);
@@ -880,6 +884,11 @@ bool IsMouseButtonReleased(int button);
 int Mge_GetScreenWidth(void);
 int Mge_GetScreenHeight(void);
 void* Mge_GetWindowHandle(void); // native handle (GLFWwindow*) -- for GUI / interop
+
+// System clipboard (UTF-8). The returned pointer is owned by the platform and
+// only valid until the next clipboard call.
+const char* Mge_GetClipboardText(void);
+void Mge_SetClipboardText(const char* text);
 
 // Save the current window framebuffer to a PNG (top-down). Call after drawing,
 // before the buffers swap (i.e. before Mge_EndDrawing, or right after it while

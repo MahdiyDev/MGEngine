@@ -48,15 +48,24 @@ while (!Mge_WindowShouldClose()) {
 
 ## Mouse & keyboard
 
-`IsKeyPressed/Down/Released/Up(KEY_*)` and `GetKeyPressed()` (queue drain, for
-text fields) cover the keyboard. For the mouse: `GetMousePosition()` /
-`GetMouseDelta()`, `IsMouseButtonPressed/Down(MOUSE_BUTTON_*)`, and the wheel —
+`IsKeyPressed/Down/Released/Up(KEY_*)` cover held-key state and press edges;
+`IsKeyPressedRepeat(KEY_*)` adds the OS auto-repeat ticks (for held navigation /
+backspace). `GetKeyPressed()` drains one keycode from the press queue and
+`GetCharPressed()` one Unicode codepoint from the character queue (both reset
+each poll — read them in a loop until they return 0); the char queue is what text
+fields consume. `Mge_SetExitKey(key)` changes the key that closes the window
+(default `KEY_ESCAPE`; pass `0` to disable). `Mge_GetClipboardText()` /
+`Mge_SetClipboardText(s)` reach the system clipboard (UTF-8; the returned pointer
+is valid only until the next clipboard call).
+
+For the mouse: `GetMousePosition()` / `GetMouseDelta()`,
+`IsMouseButtonPressed/Down(MOUSE_BUTTON_*)`, and the wheel —
 `GetMouseWheelMove()` returns this frame's scroll on the dominant axis (`+` = up
 / away from you, like raylib), `GetMouseWheelMoveV()` returns both axes as a
-`Vector2`. The wheel value is the accumulated notches since the last frame and
-resets to zero each poll, so read it every frame you care about it. The retained
-widget GUI ([2d-ui.md](2d-ui.md#widget-gui-mge_uih)) consumes the wheel for its
-scroll views — gate your own handling on `Mge_UiWantsPointer()`.
+`Vector2`; the wheel value accumulates notches since the last frame and resets
+each poll. The retained widget GUI ([2d-ui.md](2d-ui.md#widget-gui-mge_uih))
+consumes the wheel and typed characters for its scroll views and text fields —
+gate your own handling on `Mge_UiWantsPointer()` / `Mge_UiWantsKeyboard()`.
 
 ## A resizable window
 

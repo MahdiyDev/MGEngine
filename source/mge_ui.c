@@ -105,9 +105,9 @@ typedef struct Node {
             float   cellW, cellH, mainGap, crossGap;
         } grid;
         struct {
-            uint8_t widget; // 0 gesture 1 button 2 checkbox 3 switch 4 radio 5 slider 6 progress
+            uint8_t widget; // 0 gesture 1 button 2 checkbox 3 switch 4 radio 5 slider 6 progress 7 textfield
             bool    enabled, hovered, pressed, panning;
-            bool    tapped, changed; // per-frame latches
+            bool    tapped, changed, submitted; // per-frame latches
             MgeUiGestureFn onTap, onTapDown, onTapUp;
             MgeUiGestureFn onPanStart, onPanUpdate, onPanEnd;
             MgeUiGestureFn onHoverEnter, onHoverExit;
@@ -118,7 +118,12 @@ typedef struct Node {
             float   fmin, fmax, fstep, progress;
             int     radioValue;
             MgeUiButtonStyle btn;
-            char*   label;
+            char*   label; // button text, or a text field's placeholder
+            // text field (widget == 7)
+            MgeUiTextBuffer*    buf;
+            int                 caret, selA, selB;
+            float               scrollX;
+            MgeUiTextFieldStyle tf;
         } interact;
     } v;
 } Node;
@@ -153,6 +158,11 @@ static struct {
     Vector2  pressPos, panPrev;
     float    dt;
 
+    // text & focus (Phase 3b)
+    int32_t  focusNode;      // focused NODE_INTERACT text field, or -1
+    int      chars[8], nChars; // codepoints typed this frame
+    float    caretBlink;
+
     // paint-time scissor stack
     Rectangle clipStack[MGE_UI_CLIP_MAX];
     int       clipTop;
@@ -173,6 +183,9 @@ static int clampi(int v, int lo, int hi)
     if (v > hi) return hi;
     return v;
 }
+
+static int imin(int a, int b) { return a < b ? a : b; }
+static int imax(int a, int b) { return a > b ? a : b; }
 
 static char* dup_str(const char* s)
 {
@@ -200,6 +213,7 @@ static void ensure_boot(void)
     S.pointerNode = -1;
     S.activeScroll = -1;
     S.hotInteract = S.pressInteract = S.hoverInteract = -1;
+    S.focusNode = -1;
 }
 
 static int32_t alloc_node(uint8_t type)
@@ -277,6 +291,10 @@ static void free_rec(int32_t i)
         free(n->v.text.text);
     if (n->type == NODE_INTERACT)
         free(n->v.interact.label);
+    if (S.focusNode == i) S.focusNode = -1;
+    if (S.hotInteract == i) S.hotInteract = -1;
+    if (S.pressInteract == i) S.pressInteract = -1;
+    if (S.hoverInteract == i) S.hoverInteract = -1;
 
     S.gen[i]++;            // stale every outstanding handle
     if (S.gen[i] == 0) S.gen[i] = 1;
@@ -841,6 +859,50 @@ float Mge_UiGetProgress(MgeUiWidget w)
     return i >= 0 ? S.nodes[i].v.interact.progress : 0.0f;
 }
 
+// ---- text & focus (Phase 3b) -------------------------------------
+
+void Mge_UiTextBufferSet(MgeUiTextBuffer* b, const char* s)
+{
+    if (!b) return;
+    if (!s) s = "";
+    size_t n = strlen(s);
+    if (n > MGE_UI_TEXT_CAP - 1) n = MGE_UI_TEXT_CAP - 1;
+    memcpy(b->text, s, n);
+    b->text[n] = '\0';
+    b->len = (int)n;
+}
+
+MgeUiWidget Mge_UiTextField(MgeUiTextBuffer* buf, const char* placeholder, MgeUiTextFieldStyle style)
+{
+    MgeUiWidget h = make_interact(7);
+    int32_t i = h_index(h);
+    S.nodes[i].v.interact.buf = buf;
+    S.nodes[i].v.interact.tf = style;
+    S.nodes[i].v.interact.label = dup_str(placeholder);
+    int len = buf ? buf->len : 0;
+    S.nodes[i].v.interact.caret = S.nodes[i].v.interact.selA = S.nodes[i].v.interact.selB = len;
+    return h;
+}
+
+bool Mge_UiTextChanged(MgeUiWidget w)   { int32_t i = interact_index(w, 7); return i >= 0 && S.nodes[i].v.interact.changed; }
+bool Mge_UiTextSubmitted(MgeUiWidget w) { int32_t i = interact_index(w, 7); return i >= 0 && S.nodes[i].v.interact.submitted; }
+
+void Mge_UiFocus(MgeUiWidget w)
+{
+    int32_t i = interact_index(w, 7);
+    if (i < 0) return;
+    S.focusNode = i;
+    S.caretBlink = 0.0f;
+}
+
+void Mge_UiUnfocus(void) { S.focusNode = -1; }
+
+bool Mge_UiIsFocused(MgeUiWidget w)
+{
+    int32_t i = interact_index(w, 7);
+    return i >= 0 && i == S.focusNode;
+}
+
 static int32_t scroll_index(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -931,6 +993,12 @@ void Mge_UiNewFrame(float dt)
     S.mouse = GetMousePosition();
     S.wheel = GetMouseWheelMoveV().y;
     S.mouseDown = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+
+    S.nChars = 0;
+    for (int c; S.nChars < 8 && (c = GetCharPressed()) != 0;)
+        if (c >= 32 && c != 127)
+            S.chars[S.nChars++] = c;
+    S.caretBlink += dt;
 }
 
 void Mge_UiSetRoot(MgeUiWidget root)
@@ -951,7 +1019,7 @@ bool Mge_UiWantsPointer(void)
 {
     return S.pointerOverScroll || S.activeScroll >= 0 || S.hotInteract >= 0 || S.pressInteract >= 0;
 }
-bool Mge_UiWantsKeyboard(void) { return false; } // Phase 3b
+bool Mge_UiWantsKeyboard(void) { return S.focusNode >= 0; }
 
 void Mge_UiShutdown(void)
 {
@@ -1611,9 +1679,14 @@ static MgeUiSize layout_interact(int32_t i, MgeUiConstraints c)
     } else if (widget == 5) { // slider
         w = (c.maxW < MGE_UI_INF) ? c.maxW : 200.0f;
         h = 24.0f;
-    } else { // widget == 6 progress bar
+    } else if (widget == 6) { // progress bar
         w = (c.maxW < MGE_UI_INF) ? c.maxW : 200.0f;
         h = 8.0f;
+    } else { // widget == 7 text field
+        const MgeUiTextFieldStyle st = S.nodes[i].v.interact.tf;
+        float ts = (st.textSize > 0.0f) ? st.textSize : 16.0f;
+        w = (st.expand && c.maxW < MGE_UI_INF) ? c.maxW : fminf(c.maxW, 200.0f);
+        h = ts + 16.0f;
     }
 
     w = clampf(w, c.minW, c.maxW);
@@ -1811,6 +1884,226 @@ static void interact_tap(int32_t pi)
     }
 }
 
+// ---- text field editing (Phase 3b) ------------------------------
+
+#define MGE_UI_TF_PAD 8.0f
+
+static float tf_text_size(int32_t i)
+{
+    float ts = S.nodes[i].v.interact.tf.textSize;
+    return (ts > 0.0f) ? ts : 16.0f;
+}
+
+// width of buf->text[0..n) at the field's text size
+static float tf_prefix_w(int32_t i, int n)
+{
+    Node* nd = &S.nodes[i];
+    if (!nd->v.interact.buf) return 0.0f;
+    n = clampi(n, 0, nd->v.interact.buf->len);
+    if (n == 0) return 0.0f;
+    char tmp[MGE_UI_TEXT_CAP];
+    if (nd->v.interact.tf.obscure)
+        memset(tmp, '*', (size_t)n);
+    else
+        memcpy(tmp, nd->v.interact.buf->text, (size_t)n);
+    tmp[n] = '\0';
+    return Mge_MeasureText(Mge_GetDefaultFont(), tmp, tf_text_size(i)).x;
+}
+
+static int tf_caret_from_x(int32_t i, float localX)
+{
+    int len = S.nodes[i].v.interact.buf ? S.nodes[i].v.interact.buf->len : 0;
+    int best = 0;
+    float bestd = 1.0e30f;
+    for (int k = 0; k <= len; k++) {
+        float d = fabsf(tf_prefix_w(i, k) - localX);
+        if (d < bestd) { bestd = d; best = k; }
+    }
+    return best;
+}
+
+static bool tf_has_sel(Node* n) { return n->v.interact.selA != n->v.interact.selB; }
+
+static void tf_clamp(Node* n)
+{
+    int len = n->v.interact.buf ? n->v.interact.buf->len : 0;
+    n->v.interact.caret = clampi(n->v.interact.caret, 0, len);
+    n->v.interact.selA = clampi(n->v.interact.selA, 0, len);
+    n->v.interact.selB = clampi(n->v.interact.selB, 0, len);
+}
+
+static bool tf_delete_selection(Node* n)
+{
+    if (!n->v.interact.buf || !tf_has_sel(n)) return false;
+    int a = imin(n->v.interact.selA, n->v.interact.selB);
+    int b = imax(n->v.interact.selA, n->v.interact.selB);
+    MgeUiTextBuffer* buf = n->v.interact.buf;
+    memmove(buf->text + a, buf->text + b, (size_t)(buf->len - b));
+    buf->len -= (b - a);
+    buf->text[buf->len] = '\0';
+    n->v.interact.caret = n->v.interact.selA = n->v.interact.selB = a;
+    return true;
+}
+
+static void tf_insert(Node* n, const char* s, int slen)
+{
+    MgeUiTextBuffer* buf = n->v.interact.buf;
+    if (!buf) return;
+    tf_delete_selection(n);
+    int maxLen = n->v.interact.tf.maxLength > 0 ? n->v.interact.tf.maxLength : MGE_UI_TEXT_CAP - 1;
+    if (maxLen > MGE_UI_TEXT_CAP - 1) maxLen = MGE_UI_TEXT_CAP - 1;
+    slen = imin(slen, maxLen - buf->len);
+    if (slen <= 0) return;
+    int c = n->v.interact.caret;
+    memmove(buf->text + c + slen, buf->text + c, (size_t)(buf->len - c));
+    memcpy(buf->text + c, s, (size_t)slen);
+    buf->len += slen;
+    buf->text[buf->len] = '\0';
+    n->v.interact.caret = n->v.interact.selA = n->v.interact.selB = c + slen;
+}
+
+static void tf_move_caret(Node* n, int to, bool extend)
+{
+    int len = n->v.interact.buf ? n->v.interact.buf->len : 0;
+    to = clampi(to, 0, len);
+    n->v.interact.caret = to;
+    if (extend) {
+        n->v.interact.selB = to; // selA stays the anchor
+    } else {
+        n->v.interact.selA = n->v.interact.selB = to;
+    }
+    S.caretBlink = 0.0f;
+}
+
+static void collect_fields(int32_t i, int32_t* out, int* n, int cap)
+{
+    if (i < 0 || *n >= cap) return;
+    if (S.nodes[i].type == NODE_INTERACT && S.nodes[i].v.interact.widget == 7 && S.nodes[i].v.interact.enabled)
+        out[(*n)++] = i;
+    for (int32_t c = S.nodes[i].firstChild; c >= 0; c = S.nodes[c].nextSibling)
+        collect_fields(c, out, n, cap);
+}
+
+static void focus_step(int dir)
+{
+    int32_t fields[64];
+    int nf = 0;
+    if (S.root >= 0) collect_fields(S.root, fields, &nf, 64);
+    if (nf == 0) { S.focusNode = -1; return; }
+    int cur = -1;
+    for (int k = 0; k < nf; k++)
+        if (fields[k] == S.focusNode) cur = k;
+    int next = (cur < 0) ? 0 : (cur + dir + nf) % nf;
+    S.focusNode = fields[next];
+    S.caretBlink = 0.0f;
+    Node* n = &S.nodes[S.focusNode];
+    int len = n->v.interact.buf ? n->v.interact.buf->len : 0;
+    n->v.interact.selA = 0;
+    n->v.interact.selB = n->v.interact.caret = len; // select-all on tab-in
+}
+
+static void tf_scroll_to_caret(int32_t i)
+{
+    Node* n = &S.nodes[i];
+    float inner = fmaxf(1.0f, n->rect.width - 2.0f * MGE_UI_TF_PAD);
+    float cx = tf_prefix_w(i, n->v.interact.caret);
+    float sx = n->v.interact.scrollX;
+    if (cx - sx > inner) sx = cx - inner;
+    if (cx - sx < 0.0f) sx = cx;
+    float totalW = tf_prefix_w(i, n->v.interact.buf ? n->v.interact.buf->len : 0);
+    n->v.interact.scrollX = clampf(sx, 0.0f, fmaxf(0.0f, totalW - inner));
+}
+
+static void tf_edit(int32_t i)
+{
+    Node* n = &S.nodes[i];
+    MgeUiTextBuffer* buf = n->v.interact.buf;
+    if (!buf) return;
+    tf_clamp(n);
+
+    const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    const bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+#define KEDGE(k) (IsKeyPressed(k) || IsKeyPressedRepeat(k))
+    bool edited = false;
+
+    if (!ctrl && S.nChars > 0) {
+        char tmp[8];
+        int m = 0;
+        for (int k = 0; k < S.nChars && m < 7; k++)
+            if (S.chars[k] < 128) tmp[m++] = (char)S.chars[k]; // ASCII for now
+        if (m > 0) { tf_insert(n, tmp, m); edited = true; }
+    }
+
+    if (ctrl && KEDGE(KEY_A)) {
+        n->v.interact.selA = 0;
+        n->v.interact.selB = n->v.interact.caret = buf->len;
+    }
+    if (ctrl && (KEDGE(KEY_C) || KEDGE(KEY_X)) && tf_has_sel(n)) {
+        int a = imin(n->v.interact.selA, n->v.interact.selB);
+        int b = imax(n->v.interact.selA, n->v.interact.selB);
+        char tmp[MGE_UI_TEXT_CAP];
+        memcpy(tmp, buf->text + a, (size_t)(b - a));
+        tmp[b - a] = '\0';
+        Mge_SetClipboardText(tmp);
+        if (KEDGE(KEY_X)) { tf_delete_selection(n); edited = true; }
+    }
+    if (ctrl && KEDGE(KEY_V)) {
+        const char* clip = Mge_GetClipboardText();
+        if (clip) {
+            char tmp[MGE_UI_TEXT_CAP];
+            int m = 0;
+            for (int k = 0; clip[k] && m < MGE_UI_TEXT_CAP - 1; k++) {
+                unsigned char ch = (unsigned char)clip[k];
+                if (ch >= 32 && ch < 128) tmp[m++] = (char)ch;
+            }
+            if (m > 0) { tf_insert(n, tmp, m); edited = true; }
+        }
+    }
+
+    if (!ctrl) {
+        if (KEDGE(KEY_BACKSPACE)) {
+            if (!tf_delete_selection(n) && n->v.interact.caret > 0) {
+                int c = n->v.interact.caret;
+                memmove(buf->text + c - 1, buf->text + c, (size_t)(buf->len - c));
+                buf->len--;
+                buf->text[buf->len] = '\0';
+                n->v.interact.caret = n->v.interact.selA = n->v.interact.selB = c - 1;
+            }
+            edited = true;
+        }
+        if (KEDGE(KEY_DELETE)) {
+            if (!tf_delete_selection(n) && n->v.interact.caret < buf->len) {
+                int c = n->v.interact.caret;
+                memmove(buf->text + c, buf->text + c + 1, (size_t)(buf->len - c - 1));
+                buf->len--;
+                buf->text[buf->len] = '\0';
+            }
+            edited = true;
+        }
+        if (KEDGE(KEY_LEFT)) {
+            if (!shift && tf_has_sel(n)) tf_move_caret(n, imin(n->v.interact.selA, n->v.interact.selB), false);
+            else tf_move_caret(n, n->v.interact.caret - 1, shift);
+        }
+        if (KEDGE(KEY_RIGHT)) {
+            if (!shift && tf_has_sel(n)) tf_move_caret(n, imax(n->v.interact.selA, n->v.interact.selB), false);
+            else tf_move_caret(n, n->v.interact.caret + 1, shift);
+        }
+        if (KEDGE(KEY_HOME)) tf_move_caret(n, 0, shift);
+        if (KEDGE(KEY_END)) tf_move_caret(n, buf->len, shift);
+        if (KEDGE(KEY_ENTER)) n->v.interact.submitted = true;
+        if (KEDGE(KEY_ESCAPE)) S.focusNode = -1;
+        if (KEDGE(KEY_TAB)) { focus_step(shift ? -1 : 1); return; }
+    }
+
+    if (edited) {
+        n->v.interact.changed = true;
+        S.dirty = true;
+        S.caretBlink = 0.0f;
+    }
+    tf_scroll_to_caret(i);
+#undef KEDGE
+}
+
 // hit-test + interaction + wheel / drag routing; called after place_node
 static void input_update(void)
 {
@@ -1818,6 +2111,7 @@ static void input_update(void)
         if (S.nodes[k].type == NODE_INTERACT) {
             S.nodes[k].v.interact.tapped = false;
             S.nodes[k].v.interact.changed = false;
+            S.nodes[k].v.interact.submitted = false;
         }
 
     S.pointerNode = (S.root >= 0) ? hit_test(S.root, S.mouse) : -1;
@@ -1879,6 +2173,21 @@ static void input_update(void)
             S.pressInteract = -1;
         }
     }
+
+    // ---- text field focus + editing (Phase 3b) ----
+    if (pressed) {
+        int32_t fld = (hot >= 0 && S.nodes[hot].v.interact.widget == 7) ? hot : -1;
+        S.focusNode = fld;
+        if (fld >= 0) {
+            S.caretBlink = 0.0f;
+            float localX = S.mouse.x - (S.nodes[fld].rect.x + MGE_UI_TF_PAD) + S.nodes[fld].v.interact.scrollX;
+            int c = tf_caret_from_x(fld, localX);
+            S.nodes[fld].v.interact.caret = S.nodes[fld].v.interact.selA = S.nodes[fld].v.interact.selB = c;
+        }
+    }
+    if (S.focusNode >= 0 && S.nodes[S.focusNode].type == NODE_INTERACT
+        && S.nodes[S.focusNode].v.interact.widget == 7 && S.nodes[S.focusNode].v.interact.enabled)
+        tf_edit(S.focusNode);
 
     // ---- scroll routing (Phase 2) ----
     int32_t target = nearest_scroll(S.pointerNode);
@@ -2073,6 +2382,47 @@ static void paint_interact(int32_t i)
         if (t > 0.0f)
             Draw_RectangleRounded((Rectangle){ r.x, cy - 2.0f, r.width * t, 4.0f }, 1.0f, 4, accent);
         disc(r.x + r.width * t, cy, (hov || prs) ? 9.0f : 8.0f, accent);
+        return;
+    }
+
+    if (widget == 7) { // text field
+        const MgeUiTextFieldStyle st = n->v.interact.tf;
+        const bool focused = (S.focusNode == i);
+        Color bg = (st.bg.a != 0) ? st.bg : (Color){ 18, 20, 28, 255 };
+        Color txtC = (st.textColor.a != 0) ? st.textColor : Mge_Colors.white;
+        float rad = (st.radius > 0.0f) ? st.radius : 6.0f;
+        float roundness = clampf(2.0f * rad / fmaxf(1.0f, fminf(r.width, r.height)), 0.0f, 1.0f);
+        float ts = tf_text_size(i);
+
+        Draw_RectangleRounded(r, roundness, 8, bg);
+        Draw_RectangleRoundedLines(r, roundness, 8, 1.5f, focused ? accent : grey);
+
+        Rectangle inner = { r.x + MGE_UI_TF_PAD, r.y, r.width - 2.0f * MGE_UI_TF_PAD, r.height };
+        clip_push(inner);
+        float ox = inner.x - n->v.interact.scrollX;
+        float oy = r.y + (r.height - ts) * 0.5f;
+        const int len = n->v.interact.buf ? n->v.interact.buf->len : 0;
+
+        if (len == 0 && n->v.interact.label && n->v.interact.label[0]) {
+            Draw_Text(Mge_GetDefaultFont(), n->v.interact.label, (Vector2){ inner.x, oy }, ts, grey);
+        } else {
+            if (tf_has_sel(n)) {
+                int a = imin(n->v.interact.selA, n->v.interact.selB);
+                int b = imax(n->v.interact.selA, n->v.interact.selB);
+                float xa = ox + tf_prefix_w(i, a), xb = ox + tf_prefix_w(i, b);
+                Draw_RectangleRec((Rectangle){ xa, r.y + 3.0f, xb - xa, r.height - 6.0f }, with_alpha(accent, 70));
+            }
+            char shown[MGE_UI_TEXT_CAP];
+            if (st.obscure) { memset(shown, '*', (size_t)len); shown[len] = '\0'; }
+            else { memcpy(shown, n->v.interact.buf->text, (size_t)len); shown[len] = '\0'; }
+            Draw_Text(Mge_GetDefaultFont(), shown, (Vector2){ ox, oy }, ts, txtC);
+        }
+
+        if (focused && fmodf(S.caretBlink, 1.0f) < 0.5f) {
+            float cx = ox + tf_prefix_w(i, n->v.interact.caret);
+            Draw_RectangleRec((Rectangle){ cx, r.y + 4.0f, 1.5f, r.height - 8.0f }, accent);
+        }
+        clip_pop();
         return;
     }
 

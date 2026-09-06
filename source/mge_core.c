@@ -378,6 +378,30 @@ bool IsKeyUp(int key)
     return false;
 }
 
+int GetKeyPressed(void)
+{
+    int key = 0;
+    if (CORE.Input.Keyboard.keyPressedQueueCount > 0) {
+        key = CORE.Input.Keyboard.keyPressedQueue[0];
+        for (int i = 0; i < CORE.Input.Keyboard.keyPressedQueueCount - 1; i++)
+            CORE.Input.Keyboard.keyPressedQueue[i] = CORE.Input.Keyboard.keyPressedQueue[i + 1];
+        CORE.Input.Keyboard.keyPressedQueue[--CORE.Input.Keyboard.keyPressedQueueCount] = 0;
+    }
+    return key;
+}
+
+int GetCharPressed(void)
+{
+    int c = 0;
+    if (CORE.Input.Keyboard.charPressedQueueCount > 0) {
+        c = CORE.Input.Keyboard.charPressedQueue[0];
+        for (int i = 0; i < CORE.Input.Keyboard.charPressedQueueCount - 1; i++)
+            CORE.Input.Keyboard.charPressedQueue[i] = CORE.Input.Keyboard.charPressedQueue[i + 1];
+        CORE.Input.Keyboard.charPressedQueue[--CORE.Input.Keyboard.charPressedQueueCount] = 0;
+    }
+    return c;
+}
+
 float GetMouseX(void)
 {
     return (CORE.Input.Mouse.currentPosition.x + CORE.Input.Mouse.offset.x) * CORE.Input.Mouse.scale.x;

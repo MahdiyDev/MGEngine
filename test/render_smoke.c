@@ -410,6 +410,46 @@ static void scene_ui_widgets(void)
     Mge_UiDestroy(outer);
 }
 
+// Phase 3b: a focused text field with a selection + an empty field showing its
+// placeholder
+static void scene_ui_textfield(void)
+{
+    static MgeUiTextBuffer name, search;
+    Mge_UiTextBufferSet(&name, "player one");
+    Mge_UiTextBufferSet(&search, "");
+
+    MgeUiWidget outer = Mge_UiCenter();
+    MgeUiWidget card = Mge_UiContainer((MgeContainerStyle){
+        .width = 320, .padding = Mge_EdgeInsetsAll(22),
+        .decoration = { .color = (Color){ 24, 26, 34, 255 },
+            .border = Mge_BorderAll((Color){ 90, 100, 130, 255 }, 2),
+            .borderRadius = Mge_BorderRadiusAll(14) } });
+    Mge_UiAddChild(outer, card);
+    MgeUiWidget col = Mge_UiColumn((MgeFlexStyle){ .crossAxis = MGE_CROSS_STRETCH, .spacing = 12, .mainSize = MGE_MAIN_SIZE_MIN });
+    Mge_UiAddChild(card, col);
+    Mge_UiText(col, "Name", (MgeTextStyle){ .size = 14, .color = (Color){ 160, 170, 200, 255 } });
+    MgeUiWidget nf = Mge_UiTextField(&name, "your name", (MgeUiTextFieldStyle){ .expand = true, .accent = Mge_Colors.blue });
+    Mge_UiAddChild(col, nf);
+    Mge_UiText(col, "Search", (MgeTextStyle){ .size = 14, .color = (Color){ 160, 170, 200, 255 } });
+    Mge_UiAddChild(col, Mge_UiTextField(&search, "filter items...", (MgeUiTextFieldStyle){ .expand = true }));
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(outer);
+    Mge_UiNewFrame(0.10f); // caret solid at this blink phase
+    Mge_UiRender();
+    Mge_UiFocus(nf);
+    Mge_UiNewFrame(0.10f);
+    Mge_UiRender();
+    check("ui_textfield");
+    Mge_EndDrawing();
+
+    Mge_UiUnfocus();
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(outer);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -1230,6 +1270,7 @@ int main(void)
     scene_ui_scroll();
     scene_ui_vlist();
     scene_ui_widgets();
+    scene_ui_textfield();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

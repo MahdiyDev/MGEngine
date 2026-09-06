@@ -433,6 +433,37 @@ MgeUiWidget Mge_UiProgressBar(float t01);
 void  Mge_UiSetProgress(MgeUiWidget w, float t01);
 float Mge_UiGetProgress(MgeUiWidget w);
 
+// ---- text & focus (Phase 3b) ----------------------------------------
+//
+// A field edits a caller-owned MgeUiTextBuffer. Mge_UiWantsKeyboard() is true
+// while any field is focused -- gate your game's key handling on it. Poll
+// Mge_UiTextChanged / Submitted between Mge_UiRender() and the next NewFrame.
+
+#define MGE_UI_TEXT_CAP 256
+typedef struct MgeUiTextBuffer {
+    char text[MGE_UI_TEXT_CAP];
+    int  len;
+} MgeUiTextBuffer;
+void Mge_UiTextBufferSet(MgeUiTextBuffer* b, const char* s); // fill + clamp + NUL-terminate
+
+typedef struct MgeUiTextFieldStyle {
+    Color accent;    // caret + focus border; a == 0 => default blue
+    Color bg;        // a == 0 => a dark default
+    Color textColor; // a == 0 => white
+    float textSize;  // 0 => 16
+    float radius;    // 0 => 6
+    int   maxLength; // 0 => MGE_UI_TEXT_CAP - 1
+    bool  obscure;   // render as dots
+    bool  expand;    // fill the available width (else 200)
+} MgeUiTextFieldStyle;
+
+MgeUiWidget Mge_UiTextField(MgeUiTextBuffer* buf, const char* placeholder, MgeUiTextFieldStyle style);
+bool Mge_UiTextChanged(MgeUiWidget w);   // poll: text edited this frame
+bool Mge_UiTextSubmitted(MgeUiWidget w); // poll: Enter pressed while focused
+void Mge_UiFocus(MgeUiWidget w);
+void Mge_UiUnfocus(void);
+bool Mge_UiIsFocused(MgeUiWidget w);
+
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);
 void Mge_UiSetVisible(MgeUiWidget w, bool visible);      // on an Mge_UiVisibility node
