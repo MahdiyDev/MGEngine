@@ -141,6 +141,7 @@ void glPixelStorei(GLenum p, GLint v) { (void)p; (void)v; }
 
 // ---- fixed-function state ----
 void glViewport(GLint x, GLint y, GLsizei w, GLsizei h) { glstub.viewport.x = x; glstub.viewport.y = y; glstub.viewport.w = w; glstub.viewport.h = h; }
+void glScissor(GLint x, GLint y, GLsizei w, GLsizei h) { glstub.scissor.x = x; glstub.scissor.y = y; glstub.scissor.w = w; glstub.scissor.h = h; }
 void glClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) { glstub.clearColor[0] = r; glstub.clearColor[1] = g; glstub.clearColor[2] = b; glstub.clearColor[3] = a; }
 void glClear(GLbitfield mask) { glstub.lastClearMask = mask; }
 void glDepthFunc(GLenum f) { glstub.depthFunc = f; }

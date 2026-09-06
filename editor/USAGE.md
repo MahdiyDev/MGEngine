@@ -134,6 +134,7 @@ void MgeScene_Init(MgeSceneCtx* ctx);
 void MgeScene_Update(MgeSceneCtx* ctx, float dt);
 void MgeScene_Shutdown(MgeSceneCtx* ctx);
 void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera);  // optional
+void MgeScene_DrawGui(MgeSceneCtx* ctx);                // optional
 ```
 
 `New Scene` scaffolds a starter `<name>.c` (a demo that spins every object).
@@ -149,6 +150,12 @@ state. The module links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`
   bloom for real. Issue `Draw_*` calls (optionally wrapped in your own
   `Mge_BeginLighting3DEx` / `Mge_EndLighting3D`) for geometry the module owns and
   that isn't an Object (game boards, actors — no `SCENE_MAX_OBJECTS` limit).
+- **`MgeScene_DrawGui`** (optional) runs after `MgeScene_Draw` and the scene
+  composite, in **2D screen space** (pixel coords, top-left). Build the game's
+  HUD / menus here with the `Mge_Ui*` widget API (`<mge_ui.h>` — see the engine
+  USAGE); the host wraps it in `Mge_UiNewFrame` / `Mge_UiRender`. Both the built
+  player and Play mode call it. Not the place for `Mge_Gui*` (that's the editor's
+  ImGui shim).
 - **`ctx->requestedScene`** — write a scene name and the game switches scenes.
   Works in the **built game** (Build Bundle → `mgeplayer`, where every scene's
   module is pre-built); in the editor's Play mode a request only logs to the

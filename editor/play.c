@@ -249,6 +249,14 @@ void Play_Draw(Play* p, Scene* s, Camera3D view)
     SceneRuntime_Draw(&p->rt, &ctx, view);
 }
 
+void Play_DrawGui(Play* p, Scene* s)
+{
+    if (!p->playing)
+        return;
+    MgeSceneCtx ctx = make_ctx(s, p->viewCam);
+    SceneRuntime_DrawGui(&p->rt, &ctx);
+}
+
 bool Play_DrawOverlay(Play* p, float screenW, int fps)
 {
     bool stop = false;

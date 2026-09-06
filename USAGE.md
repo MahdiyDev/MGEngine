@@ -19,8 +19,9 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_gl.h  mge_gl.c     immediate-mode-ish batched GL renderer (MgeGL_*)
   mge_math.h mge_math.c  Vector2/3/4, Matrix, Quaternion, projections (replaces glm)
   mge_core.c            window, timing, input, shaders, camera
-  mge_shapes.c          Draw_Line / Draw_Rectangle / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
+  mge_shapes.c          Draw_Line / Draw_Rectangle[Rounded] / Draw_Triangle / Draw_Arrow / Draw_Cube / Draw_Sphere / Draw_Plane ...
   mge_text.c            Font + Draw_Text / Draw_Text3D / Mge_MeasureText -- stb_truetype atlas + a built-in bitmap font
+  mge_ui.c              Mge_Ui* retained widget GUI (Flutter-shaped box model; games)
   mge_object.c          Object struct (Transform + components, active flag) + 3D picking
   mge_component.c       Object components (Shape / Material / Collider / RigidBody) + accessors
   mge_body.c            linear rigid-body step + box/sphere collider overlap + resolution
@@ -46,7 +47,8 @@ source/                THE ENGINE -- every *.c here is compiled into the library
   mge_msaa.c           MSAA request (Mge_SetMSAA / Mge_GetMSAA)
   mge_gamma.c          gamma correction toggle (Mge_SetGammaCorrection)
   mge_debug.c          GL debug-output callback (Mge_SetDebugOutput)
-  mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit)
+  mge_gui.h  mge_gui.cpp   Mge_Gui* immediate-mode UI (Dear ImGui backend; the one C++ unit; editor)
+  mge_ui.h   mge_ui.c      Mge_Ui* retained widget GUI (pure C; game menus / HUD)
   mge_texture.c         Mge_LoadImage / Mge_LoadTexture / ...Ex (sRGB) / ...HDR (float) / Mge_UnloadTexture / Mge_SetTextureWrap (stb_image)
   mge_screenshot.c     Mge_TakeScreenshot / MgeGL_SaveScreenshot -- framebuffer -> PNG (stb_image_write)
   mge_dylib.c          Mge_LoadLibrary / GetSymbol / FreeLibrary -- host side of the hot-reload scene-module contract
@@ -1650,6 +1652,59 @@ right inspector + bottom resources) built from `Mge_GuiBeginPanel`, all in one
 `Mge_GuiBeginFrame` / `Mge_GuiEndFrame` pair. See
 [editor/USAGE.md](editor/USAGE.md).
 
+### Widget GUI (`mge_ui.h`)
+
+A second UI system, aimed at **game** menus / HUD chrome (the `Mge_Gui*` shim
+above is editor-facing). Flutter's box model — Container / BoxDecoration /
+EdgeInsets / alignment, constraints down and sizes up — but **retained and
+handle-based**: a constructor takes a style struct *by value* and returns an
+opaque `MgeUiWidget`; children attach by passing the parent handle first. The
+toolkit owns the tree; you mutate it and it re-lays-out.
+
+```c
+#include <mge_ui.h>
+
+// build once
+MgeUiWidget root = Mge_UiContainer((MgeContainerStyle){
+    .decoration = Mge_UiBoxDecoration((Color){ 18, 20, 28, 255 }),
+    .alignment  = MGE_ALIGN_CENTER });              // fills the viewport, centres its child
+MgeUiWidget card = Mge_UiContainer((MgeContainerStyle){
+    .padding    = Mge_EdgeInsetsAll(24),
+    .decoration = { .color = Mge_Colors.white,
+        .border       = Mge_BorderAll((Color){ 120, 140, 200, 255 }, 3),
+        .borderRadius = Mge_BorderRadiusAll(12) } });
+Mge_UiAddChild(root, card);
+MgeUiWidget label = Mge_UiLabel(card, "Label...");
+Mge_UiSetRoot(root);
+
+// each frame, in 2D screen space AFTER the scene
+Mge_UiNewFrame((float)Mge_GetDeltaTime());
+// ... Mge_UiSetText(label, ...) etc. when state changes ...
+Mge_UiRender();
+```
+
+C, not Dart: styles are plain structs — use compound literals with designated
+initialisers (`Mge_UiBoxDecoration(color)` is a convenience for the solid-fill
+case). Any all-zero field means "no opinion" (`width 0` = size to child,
+`constraints` all-0 = unconstrained). Defaults: text uses `Mge_GetDefaultFont()`
+at 16 px / opaque white.
+
+| kind | calls |
+| --- | --- |
+| lifecycle | `Mge_UiNewFrame(dt)` (lazy-boots) / `Mge_UiRender` / `Mge_UiShutdown`; `Mge_UiSetRoot`, `Mge_UiViewport(w,h)` (0,0 → screen size); `Mge_UiWantsPointer` / `Mge_UiWantsKeyboard` (input gate; always `false` until interactive widgets land) |
+| tree | `Mge_UiContainer(style)`, `Mge_UiLabel(parent, text)`, `Mge_UiText(parent, text, style)`; `Mge_UiAddChild` / `Mge_UiRemoveChild` / `Mge_UiClearChildren` / `Mge_UiChildCount` / `Mge_UiChildAt` / `Mge_UiParentOf` / `Mge_UiDestroy` (frees the subtree; the handle goes stale) / `Mge_UiIsValid` |
+| mutate | `Mge_UiSetText`, `Mge_UiSetContainerStyle`, `Mge_UiMarkNeedsBuild/Layout/Paint`; `Mge_UiGetRect(w)` reads the laid-out screen rect |
+| values | `Mge_Colors.<name>`, `Mge_EdgeInsets{All,Symmetric,LTRB}`, `Mge_Alignment(x,y)` + `MGE_ALIGN_*`, `Mge_ConstraintsTight/Loose`, `Mge_BorderAll`, `Mge_BorderRadiusAll` |
+
+The **root is always laid out to fill the viewport** (like Flutter's
+`RenderView`) — to size or place something, wrap it (a full-screen root
+Container with `alignment` set, or a child with a fixed `width`/`height`).
+Container is **single-child** for now; Row / Column and the rest are on the
+roadmap in [todo/todo_gui.md](todo/todo_gui.md).
+
+From a scene module, build the HUD in the optional `MgeScene_DrawGui(MgeSceneCtx*)`
+export (see below) — the host calls `Mge_UiNewFrame` / `Mge_UiRender` around it.
+
 ### Math
 
 `glm` is gone. `mge_math.h` provides plain-C functions — no operator overloads:
@@ -1708,6 +1763,22 @@ void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera) {
     Mge_BeginLighting3DEx(ctx->lights, *ctx->lightCount, camera);
     Draw_Cube(pos, size, color);   // ... the module's own board / actors ...
     Mge_EndLighting3D();
+}
+```
+
+**`MgeScene_DrawGui`**, also optional, runs *after* `MgeScene_Draw` and the
+scene composite, in **2D screen space** (pixel coords, top-left origin). The
+host has already called `Mge_UiNewFrame` and calls `Mge_UiRender` right after,
+so build the game's HUD / menus here with the `Mge_Ui*` widget API
+([above](#widget-gui-mge_uih)) — not the `Mge_Gui*` ImGui shim. Both the built
+player and the editor's Play mode call it.
+
+```c
+void MgeScene_DrawGui(MgeSceneCtx* ctx) {
+    static MgeUiWidget hud = 0;
+    if (hud == 0) { hud = Mge_UiContainer(...); /* ... build once ... */ }
+    Mge_UiSetText(scoreLabel, buf);   // update from ctx / game state
+    Mge_UiSetRoot(hud);
 }
 ```
 

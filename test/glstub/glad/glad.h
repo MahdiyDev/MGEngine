@@ -71,6 +71,7 @@ void glDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei 
 #define GL_SRC_ALPHA           0x0302
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303
 #define GL_DEPTH_TEST          0x0B71
+#define GL_SCISSOR_TEST        0x0C11
 #define GL_STENCIL_TEST        0x0B90
 #define GL_MULTISAMPLE         0x809D
 #define GL_POLYGON_OFFSET_FILL 0x8037
@@ -206,3 +207,4 @@ void glVertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
 void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized,
     GLsizei stride, const void* pointer);
 void glViewport(GLint x, GLint y, GLsizei width, GLsizei height);
+void glScissor(GLint x, GLint y, GLsizei width, GLsizei height);

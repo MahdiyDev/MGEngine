@@ -23,6 +23,7 @@
 // owned here.
 #include <mge.h>
 #include <mge_gui.h>
+#include <mge_ui.h>
 
 #include <stdio.h>
 
@@ -165,6 +166,14 @@ int main(void)
         if (interact && !gizmoBusy)
             Scene_Pick(&scene, view);
 
+        // the playing module's own 2D HUD / menus (Mge_Ui*), under the editor's
+        // Play overlay strip below
+        if (playing) {
+            Mge_UiNewFrame((float)Mge_GetDeltaTime());
+            Play_DrawGui(&play, &scene);
+            Mge_UiRender();
+        }
+
         // docked-panel layout, recomputed each frame (window can be resized,
         // panel splits are draggable). Clamp so a panel can't eat the viewport.
         float W = (float)Mge_GetScreenWidth(), H = (float)Mge_GetScreenHeight();
@@ -303,6 +312,7 @@ int main(void)
     Resources_Shutdown(&res);
     Scene_Shutdown(&scene);
     Mge_GuiShutdown();
+    Mge_UiShutdown();
     Mge_CloseWindow();
     return 0;
 }

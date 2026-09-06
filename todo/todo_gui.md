@@ -42,39 +42,44 @@ Every phase ships: an `examples/ui/<phase>.c` demo, `test/test_ui_*.c` (the
 layout solver is hermetic -- pure math, no GL), and a `render_smoke`
 `scene_ui_*`.
 
-## Phase 0 -- core: tree, constraint layout, paint, the minimal snippet
+## Phase 0 -- core: tree, constraint layout, paint, the minimal snippet   [LANDED]
 
-- [ ] Value types: reuse `Color`; `Mge_Colors` (const struct: `white` `black`
-      `transparent` `red` `green` `blue` `gray` ...); `MgeEdgeInsets` +
-      `Mge_EdgeInsets{All,Symmetric,LTRB,Only}`; `MgeAlignment` +
+Landed as `Mge_Ui*` / `MgeUi*` (`source/mge_ui.{h,c}`) -- the ImGui shim keeps
+`Mge_Gui*`. The root is always laid out tight to the viewport (Flutter's
+RenderView model); Container is single-child (Row/Column are Phase 1).
+`examples/ui/hello_ui.c`, `test/test_ui_layout.c`, the `ui` render-smoke scene.
+
+- [x] Value types: reuse `Color`; `Mge_Colors` (const struct: `white` `black`
+      `transparent` `red` `green` `blue` `yellow` `cyan` `magenta` `gray`
+      `lightGray` `darkGray`); `MgeEdgeInsets` +
+      `Mge_EdgeInsets{All,Symmetric,LTRB}`; `MgeAlignment` +
       `MGE_ALIGN_{CENTER,TOP_LEFT,...}` + `Mge_Alignment(x,y)` (-1..1);
-      `MgeUiSize` `MgeUiRect` `MgeUiOffset`; `MgeUiConstraints` (BoxConstraints)
-      + `Mge_Constraints{Tight,Loose,Expand,Unbounded}`.
-- [ ] `MgeBorder` + `Mge_Border{All,Side}`; `MgeBorderRadius` +
-      `Mge_BorderRadius{All,Only}`; `MgeBoxDecoration` +
-      `Mge_GuiBoxDecoration(.color,.border,.borderRadius,.shape)` (solid fill +
-      border + radius for now); `MgeTextStyle` +
-      `Mge_TextStyle(.font,.size,.color,.align)`.
-- [ ] `MgeContainerStyle` (padding, margin, alignment, width, height,
-      constraints, decoration, `foregroundDecoration`).
-- [ ] Lifecycle: `Mge_GuiInit` / `Mge_GuiShutdown`; `Mge_GuiNewFrame(float dt)` /
-      `Mge_GuiRender(void)`; `Mge_GuiSetRoot(MgeUiWidget)`;
-      `Mge_GuiViewport(float w, float h)` (defaults to screen size);
-      `Mge_GuiWantsPointer` / `Mge_GuiWantsKeyboard` (input passthrough gate).
-- [ ] Handle management: `MgeUiWidget` opaque id (0 = null); `Mge_GuiDestroy(w)`;
-      `Mge_GuiAddChild(parent, child)` / `Mge_GuiRemoveChild` /
-      `Mge_GuiClearChildren`; `Mge_GuiChildCount` / `Mge_GuiChildAt`;
-      `Mge_GuiParentOf`; `Mge_GuiMarkNeedsBuild` / `...NeedsLayout` / `...NeedsPaint`.
-- [ ] Widgets: `Mge_GuiContainer(MgeContainerStyle) -> MgeUiWidget`;
-      `Mge_GuiLabel(parent, const char* text)`;
-      `Mge_GuiText(parent, const char* text, MgeTextStyle)`;
-      `Mge_GuiSetText(MgeUiWidget, const char*)` /
-      `Mge_GuiSetContainerStyle(MgeUiWidget, MgeContainerStyle)`.
-- [ ] Paint primitives the toolkit needs from the engine: filled rounded rect +
-      rounded-rect stroke (AA) in `mge_shapes.c` / `mge_gl.c`; a screen-space
-      scissor/clip stack (`MgeGL_PushScissor` / `PopScissor`).
-- [ ] `MgeScene_DrawGui(MgeSceneCtx*)` export + `runtime/player.c` +
-      `editor/scene_runtime.c` + `editor/play.c` wiring.
+      `MgeUiSize`, reuse `Rectangle` / `Vector2`; `MgeUiConstraints` +
+      `Mge_Constraints{Tight,Loose,Unbounded}`.
+- [x] `MgeBorder` + `Mge_BorderAll`; `MgeBorderRadius` + `Mge_BorderRadiusAll`;
+      `MgeBoxDecoration` { color, border, borderRadius } + `Mge_UiBoxDecoration(color)`
+      convenience (else compound literals -- C, not Dart named args);
+      `MgeTextStyle` { font, size, color } (defaults: default font / 16 / white).
+- [x] `MgeContainerStyle` { padding, margin, alignment, width, height,
+      constraints, decoration }.
+- [x] Lifecycle: `Mge_UiNewFrame(float dt)` (lazy-boots) / `Mge_UiRender(void)` /
+      `Mge_UiShutdown`; `Mge_UiSetRoot` / `Mge_UiViewport` (0,0 = screen size);
+      `Mge_UiWantsPointer` / `Mge_UiWantsKeyboard` (stubbed false until Phase 3).
+- [x] Handle management: `MgeUiWidget` = uint32 (index<<8 | generation), 0 = null;
+      `Mge_UiDestroy` / `Mge_UiAddChild` / `Mge_UiRemoveChild` /
+      `Mge_UiClearChildren` / `Mge_UiChildCount` / `Mge_UiChildAt` /
+      `Mge_UiParentOf` / `Mge_UiIsValid` / `Mge_UiMarkNeedsBuild|Layout|Paint`
+      (one global dirty flag for now) / `Mge_UiGetRect`.
+- [x] Widgets: `Mge_UiContainer(MgeContainerStyle) -> MgeUiWidget` (detached);
+      `Mge_UiLabel(parent, text)`; `Mge_UiText(parent, text, MgeTextStyle)`;
+      `Mge_UiSetText` / `Mge_UiSetContainerStyle`.
+- [x] Paint primitives: `Draw_RectangleRounded[Lines]` (`mge_shapes.c`, raylib
+      signatures; MSAA covers edge AA); `MgeGL_EnableScissor` /
+      `MgeGL_DisableScissor` (`mge_gl.c`, top-left coords, flipped internally).
+- [x] `MgeSceneDrawGuiFn` + `MgeScene_DrawGui(MgeSceneCtx*)` export;
+      `SceneRuntime_DrawGui` (`editor/scene_runtime.{h,c}`); `runtime/player.c` +
+      `editor/play.{h,c}` + `editor/main.c` call it between `Mge_UiNewFrame` and
+      `Mge_UiRender`, after the scene.
 
 ## Phase 1 -- layout widgets
 

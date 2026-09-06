@@ -217,6 +217,20 @@ TEST(depth_state_forwarding)
     CHECK(!glstub_is_enabled(GL_DEPTH_TEST));
 }
 
+TEST(scissor_forwarding_flips_y)
+{
+    glstub_reset();
+    // MgeGL_Init(800, 600) in main -> framebufferHeight 600
+    MgeGL_EnableScissor(10, 20, 100, 50);
+    CHECK(glstub_is_enabled(GL_SCISSOR_TEST));
+    CHECK(glstub.scissor.x == 10);
+    CHECK(glstub.scissor.y == 600 - 20 - 50); // top-left -> GL bottom-left
+    CHECK(glstub.scissor.w == 100 && glstub.scissor.h == 50);
+
+    MgeGL_DisableScissor();
+    CHECK(!glstub_is_enabled(GL_SCISSOR_TEST));
+}
+
 TEST(stencil_state_forwarding)
 {
     MgeGL_EnableStencilTest();
@@ -381,6 +395,7 @@ int main(void)
     RUN(draw_call_counter_totals_the_frame);
     RUN(set_shader_flushes_then_binds);
     RUN(depth_state_forwarding);
+    RUN(scissor_forwarding_flips_y);
     RUN(stencil_state_forwarding);
     RUN(cull_state_forwarding);
     RUN(srgb_and_sample_count);

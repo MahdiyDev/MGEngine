@@ -18,6 +18,7 @@ void SceneRuntime_Unload(SceneRuntime* rt)
     rt->updateFn = NULL;
     rt->shutdownFn = NULL;
     rt->drawFn = NULL;
+    rt->guiFn = NULL;
     rt->liveDll[0] = '\0';
     rt->loaded = false;
     rt->inited = false;
@@ -57,6 +58,7 @@ bool SceneRuntime_Load(SceneRuntime* rt, const char* dllPath, char* err, int err
     rt->updateFn = (MgeSceneUpdateFn)Mge_GetSymbol(rt->handle, "MgeScene_Update");
     rt->shutdownFn = (MgeSceneShutdownFn)Mge_GetSymbol(rt->handle, "MgeScene_Shutdown");
     rt->drawFn = (MgeSceneDrawFn)Mge_GetSymbol(rt->handle, "MgeScene_Draw"); // optional
+    rt->guiFn = (MgeSceneDrawGuiFn)Mge_GetSymbol(rt->handle, "MgeScene_DrawGui"); // optional
     if (rt->updateFn == NULL) {
         snprintf(err, (size_t)errSize, "module has no MgeScene_Update");
         SceneRuntime_Unload(rt);
@@ -87,6 +89,12 @@ void SceneRuntime_Draw(SceneRuntime* rt, MgeSceneCtx* ctx, Camera3D camera)
 {
     if (rt->loaded && rt->inited && rt->drawFn != NULL)
         rt->drawFn(ctx, camera);
+}
+
+void SceneRuntime_DrawGui(SceneRuntime* rt, MgeSceneCtx* ctx)
+{
+    if (rt->loaded && rt->inited && rt->guiFn != NULL)
+        rt->guiFn(ctx);
 }
 
 void SceneRuntime_Shutdown(SceneRuntime* rt, MgeSceneCtx* ctx)

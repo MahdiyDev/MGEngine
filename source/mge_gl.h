@@ -71,6 +71,10 @@ void MgeGL_Begin(int mode);
 void MgeGL_End(void);
 void MgeGL_ClearScreenBuffers(void);
 void MgeGL_Viewport(int x, int y, int width, int height);
+// Scissor rect in TOP-LEFT pixel coords (like the 2D ortho); flipped to GL
+// internally. Both flush the batch first.
+void MgeGL_EnableScissor(int x, int y, int w, int h);
+void MgeGL_DisableScissor(void);
 void MgeGL_Load_Extensions(void* loader);
 void MgeGL_ClearColor(Color color);
 void MgeGL_MatrixMode(int mode);

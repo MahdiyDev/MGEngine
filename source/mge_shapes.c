@@ -108,6 +108,117 @@ void Draw_RectangleLines(int posX, int posY, int width, int height, Color color)
     MgeGL_End();
 }
 
+// corner radius in pixels for `roundness` (0..1 fraction of the shorter side)
+static float rounded_radius(Rectangle rec, float roundness)
+{
+    float shorter = (rec.width < rec.height) ? rec.width : rec.height;
+    if (roundness > 1.0f)
+        roundness = 1.0f;
+    return roundness * 0.5f * shorter;
+}
+
+void Draw_RectangleRounded(Rectangle rec, float roundness, int segments, Color color)
+{
+    if (roundness <= 0.0f || rec.width <= 0.0f || rec.height <= 0.0f) {
+        Draw_RectangleRec(rec, color);
+        return;
+    }
+    float r = rounded_radius(rec, roundness);
+    if (segments < 2)
+        segments = 8;
+
+    const float x0 = rec.x, y0 = rec.y, x1 = rec.x + rec.width, y1 = rec.y + rec.height;
+    // the four arc centres (inset by r)
+    const Vector2 c[4] = {
+        { x0 + r, y0 + r }, { x1 - r, y0 + r }, { x1 - r, y1 - r }, { x0 + r, y1 - r }
+    };
+    // start angle per corner: TL 180, TR 270, BR 0, BL 90 (degrees, +Y down)
+    const float a0[4] = { 180.0f, 270.0f, 0.0f, 90.0f };
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+
+    // centre + edge strips as two big rects: a vertical band and a horizontal band
+    // vertical band (full height, inset left/right by r)
+    MgeGL_Vertex2f(x0 + r, y0); MgeGL_Vertex2f(x0 + r, y1); MgeGL_Vertex2f(x1 - r, y0);
+    MgeGL_Vertex2f(x1 - r, y0); MgeGL_Vertex2f(x0 + r, y1); MgeGL_Vertex2f(x1 - r, y1);
+    // left band
+    MgeGL_Vertex2f(x0, y0 + r); MgeGL_Vertex2f(x0, y1 - r); MgeGL_Vertex2f(x0 + r, y0 + r);
+    MgeGL_Vertex2f(x0 + r, y0 + r); MgeGL_Vertex2f(x0, y1 - r); MgeGL_Vertex2f(x0 + r, y1 - r);
+    // right band
+    MgeGL_Vertex2f(x1 - r, y0 + r); MgeGL_Vertex2f(x1 - r, y1 - r); MgeGL_Vertex2f(x1, y0 + r);
+    MgeGL_Vertex2f(x1, y0 + r); MgeGL_Vertex2f(x1 - r, y1 - r); MgeGL_Vertex2f(x1, y1 - r);
+
+    // four corner fans
+    for (int k = 0; k < 4; k++) {
+        float start = a0[k] * DEG2RAD;
+        float step = (90.0f * DEG2RAD) / (float)segments;
+        for (int s = 0; s < segments; s++) {
+            float aa = start + step * (float)s;
+            float bb = aa + step;
+            MgeGL_Vertex2f(c[k].x, c[k].y);
+            MgeGL_Vertex2f(c[k].x + cosf(aa) * r, c[k].y + sinf(aa) * r);
+            MgeGL_Vertex2f(c[k].x + cosf(bb) * r, c[k].y + sinf(bb) * r);
+        }
+    }
+    MgeGL_End();
+}
+
+void Draw_RectangleRoundedLines(Rectangle rec, float roundness, int segments, float thick, Color color)
+{
+    if (roundness <= 0.0f || rec.width <= 0.0f || rec.height <= 0.0f) {
+        Draw_RectangleLines((int)rec.x, (int)rec.y, (int)rec.width, (int)rec.height, color);
+        return;
+    }
+    float r = rounded_radius(rec, roundness);
+    if (segments < 2)
+        segments = 8;
+    if (thick < 1.0f)
+        thick = 1.0f;
+
+    const float x0 = rec.x, y0 = rec.y, x1 = rec.x + rec.width, y1 = rec.y + rec.height;
+    const Vector2 c[4] = {
+        { x0 + r, y0 + r }, { x1 - r, y0 + r }, { x1 - r, y1 - r }, { x0 + r, y1 - r }
+    };
+    const float a0[4] = { 180.0f, 270.0f, 0.0f, 90.0f };
+    float ro = r, ri = r - thick;
+    if (ri < 0.0f)
+        ri = 0.0f;
+
+    MgeGL_Begin(MGEGL_TRIANGLES);
+    MgeGL_Color4ub(color.r, color.g, color.b, color.a);
+
+    // four straight edges as thin quads
+    Rectangle edges[4] = {
+        { x0 + r, y0, rec.width - 2.0f * r, thick },        // top
+        { x0 + r, y1 - thick, rec.width - 2.0f * r, thick }, // bottom
+        { x0, y0 + r, thick, rec.height - 2.0f * r },        // left
+        { x1 - thick, y0 + r, thick, rec.height - 2.0f * r } // right
+    };
+    for (int k = 0; k < 4; k++) {
+        Rectangle e = edges[k];
+        MgeGL_Vertex2f(e.x, e.y); MgeGL_Vertex2f(e.x, e.y + e.height); MgeGL_Vertex2f(e.x + e.width, e.y);
+        MgeGL_Vertex2f(e.x + e.width, e.y); MgeGL_Vertex2f(e.x, e.y + e.height); MgeGL_Vertex2f(e.x + e.width, e.y + e.height);
+    }
+
+    // four corner arcs as segment quads (outer radius ro, inner ri)
+    for (int k = 0; k < 4; k++) {
+        float start = a0[k] * DEG2RAD;
+        float step = (90.0f * DEG2RAD) / (float)segments;
+        for (int s = 0; s < segments; s++) {
+            float aa = start + step * (float)s, bb = aa + step;
+            float ca = cosf(aa), sa = sinf(aa), cb = cosf(bb), sb = sinf(bb);
+            Vector2 o0 = { c[k].x + ca * ro, c[k].y + sa * ro };
+            Vector2 o1 = { c[k].x + cb * ro, c[k].y + sb * ro };
+            Vector2 i0 = { c[k].x + ca * ri, c[k].y + sa * ri };
+            Vector2 i1 = { c[k].x + cb * ri, c[k].y + sb * ri };
+            MgeGL_Vertex2f(i0.x, i0.y); MgeGL_Vertex2f(o0.x, o0.y); MgeGL_Vertex2f(i1.x, i1.y);
+            MgeGL_Vertex2f(i1.x, i1.y); MgeGL_Vertex2f(o0.x, o0.y); MgeGL_Vertex2f(o1.x, o1.y);
+        }
+    }
+    MgeGL_End();
+}
+
 void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color)
 {
     MgeGL_Begin(MGEGL_TRIANGLES);

@@ -9,6 +9,7 @@
 // Reuses the editor's data layer (scene.c / scene_io.c / project*.c /
 // editor_camera.c / scene_runtime.c); no GUI.
 #include <mge.h>
+#include <mge_ui.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -214,6 +215,10 @@ int main(int argc, char** argv)
         // no editor gizmos in the shipped game; the hook composites the module's
         // own geometry into the same lit/HDR pass, so it can bloom
         Scene_Draw(&scene, view, false, false, player_draw_hook, &(PlayerDrawHook){ &rt, &ctx });
+        // the module's 2D HUD / menus, in screen space on top of the scene
+        Mge_UiNewFrame((float)Mge_GetDeltaTime());
+        SceneRuntime_DrawGui(&rt, &ctx);
+        Mge_UiRender();
         Mge_EndDrawing();
 
         // a scene module asked to switch scenes
@@ -240,6 +245,7 @@ int main(int argc, char** argv)
     SceneRuntime_Unload(&rt);
     SceneIndex_free(&byName);
     Scene_Shutdown(&scene);
+    Mge_UiShutdown();
     Mge_CloseWindow();
     Mge_UnmountPaks();
     return 0;

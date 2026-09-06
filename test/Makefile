@@ -17,7 +17,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O1 -g
 # strict -std=c11 hides POSIX APIs (S_IFDIR, readlink, strdup, ...) on glibc
 CPPFLAGS += -DPLATFORM_DESKTOP -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -I../source -I$(MLIB) -I$(MLIB)/vec
 
-TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib test_pak test_physics test_component test_text
+TESTS := test_math test_utils test_object test_material test_light test_mesh test_depth test_stencil test_cull test_framebuffer test_cubemap test_geometry test_instancing test_msaa test_gamma test_shadow test_gl test_debug test_gizmo test_scene_io test_project_io test_dylib test_pak test_physics test_component test_text test_ui_layout
 
 ifeq ($(OS),Windows_NT)
     SHELL := cmd.exe
@@ -153,6 +153,10 @@ test_debug$(EXE): test_debug.c ../source/mge_debug.c glstub/glstub.c glstub/glad
 # text rendering: mge_text.c (stb_truetype) + the batcher, against the fake glad
 test_text$(EXE): test_text.c ../source/mge_text.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c glstub/glad/glad.h glstub/glstub.h ../vendor/stb/stb_truetype.h $(MLIB)/test.h
 	$(CC) $(CPPFLAGS) -Iglstub -I../vendor/stb $(CFLAGS) -o $@ $(LDFLAGS) test_text.c ../source/mge_text.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c -lm
+
+# widget GUI layout: mge_ui.c + its paint deps (mge_text / mge_shapes / batcher), against the fake glad
+test_ui_layout$(EXE): test_ui_layout.c ../source/mge_ui.c ../source/mge_text.c ../source/mge_shapes.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c glstub/glad/glad.h glstub/glstub.h ../vendor/stb/stb_truetype.h $(MLIB)/test.h
+	$(CC) $(CPPFLAGS) -Iglstub -I../vendor/stb $(CFLAGS) -o $@ $(LDFLAGS) test_ui_layout.c ../source/mge_ui.c ../source/mge_text.c ../source/mge_shapes.c ../source/mge_gl.c ../source/mge_math.c glstub/glstub.c -lm
 
 # compiled as C11 with gcc, linked with g++ (Assimp is C++)
 test_model$(EXE): test_model.c ../source/mge_model.c ../source/mge_mesh.c $(MLIB)/test.h

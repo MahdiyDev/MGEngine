@@ -10,6 +10,7 @@ typedef struct SceneRuntime {
     MgeSceneUpdateFn updateFn;
     MgeSceneShutdownFn shutdownFn;
     MgeSceneDrawFn drawFn;  // optional MgeScene_Draw export; NULL when absent
+    MgeSceneDrawGuiFn guiFn; // optional MgeScene_DrawGui export; NULL when absent
     int liveN;              // counter for the _live_<n> copies
     char liveDll[600];      // the loaded copy (deleted on unload)
     bool loaded;
@@ -32,6 +33,9 @@ void SceneRuntime_Update(SceneRuntime* rt, MgeSceneCtx* ctx, float dt);
 // as Scene_Draw's sceneHook (see its doc comment) so it composites into the
 // scene's own lit/HDR pass and can bloom.
 void SceneRuntime_Draw(SceneRuntime* rt, MgeSceneCtx* ctx, Camera3D camera);
+// Run the module's optional MgeScene_DrawGui (no-op when it has none). The host
+// calls this in 2D screen space between Mge_UiNewFrame and Mge_UiRender.
+void SceneRuntime_DrawGui(SceneRuntime* rt, MgeSceneCtx* ctx);
 void SceneRuntime_Shutdown(SceneRuntime* rt, MgeSceneCtx* ctx);
 bool SceneRuntime_Loaded(const SceneRuntime* rt);
 

@@ -19,6 +19,7 @@ typedef struct {
 
     // last-value records
     struct { GLint x, y, w, h; } viewport;
+    struct { GLint x, y, w, h; } scissor; // last glScissor
     GLfloat clearColor[4];
     GLbitfield lastClearMask;
     GLuint usedProgram;

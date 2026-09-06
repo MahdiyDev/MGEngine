@@ -16,6 +16,7 @@
 #include "mge.h"
 #include "mge_gl.h"
 #include "mge_math.h"
+#include "mge_ui.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -156,6 +157,35 @@ static void scene_text3d(void)
     Mge_EndMode3D();
     check("text3d");
     Mge_EndDrawing();
+}
+
+// retained widget GUI: a centred rounded card (Container decoration + border +
+// padding + MGE_ALIGN_CENTER) holding a Label, over a dim full-screen root
+static void scene_ui(void)
+{
+    MgeUiWidget root = Mge_UiContainer((MgeContainerStyle){
+        .decoration = Mge_UiBoxDecoration((Color){ 18, 20, 28, 255 }),
+        .alignment = MGE_ALIGN_CENTER });
+    MgeUiWidget card = Mge_UiContainer((MgeContainerStyle){
+        .padding = Mge_EdgeInsetsAll(24),
+        .decoration = { .color = Mge_Colors.white,
+            .border = Mge_BorderAll((Color){ 120, 140, 200, 255 }, 3.0f),
+            .borderRadius = Mge_BorderRadiusAll(12.0f) } });
+    Mge_UiAddChild(root, card);
+    Mge_UiText(card, "MGEngine UI - Phase 0",
+        (MgeTextStyle){ .size = 24, .color = (Color){ 30, 34, 48, 255 } });
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(root);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    check("ui");
+    Mge_EndDrawing();
+
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(root);
 }
 
 static void scene_cube_lit(void)
@@ -973,6 +1003,7 @@ int main(void)
     scene_shapes();
     scene_text();
     scene_text3d();
+    scene_ui();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

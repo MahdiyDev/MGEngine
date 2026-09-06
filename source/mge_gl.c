@@ -883,6 +883,24 @@ void MgeGL_Viewport(int x, int y, int width, int height)
     glViewport(x, y, width, height);
 }
 
+// `x`/`y` are top-left pixel coords (matching the 2D ortho); flipped to GL's
+// bottom-left origin against the framebuffer height. Flushes the batch first so
+// queued geometry isn't clipped by the new rect.
+void MgeGL_EnableScissor(int x, int y, int w, int h)
+{
+    MgeGL_Draw();
+    if (w < 0) w = 0;
+    if (h < 0) h = 0;
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(x, MGEGL.State.framebufferHeight - y - h, w, h);
+}
+
+void MgeGL_DisableScissor(void)
+{
+    MgeGL_Draw();
+    glDisable(GL_SCISSOR_TEST);
+}
+
 void MgeGL_Load_Extensions(void* loader)
 {
     if (gladLoadGLLoader((GLADloadproc)loader) == 0) {

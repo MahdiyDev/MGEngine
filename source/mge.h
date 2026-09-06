@@ -729,6 +729,7 @@ typedef struct Object {
 //   void MgeScene_Update(MgeSceneCtx*, float dt);
 //   void MgeScene_Shutdown(MgeSceneCtx*);
 //   void MgeScene_Draw(MgeSceneCtx*, Camera3D camera);   // optional
+//   void MgeScene_DrawGui(MgeSceneCtx*);                 // optional
 //
 // The host (the editor, or your own runtime) compiles it, loads it with
 // Mge_LoadLibrary, and calls it each frame with an MgeSceneCtx pointing at the
@@ -744,6 +745,12 @@ typedef struct Object {
 // your own Mge_BeginLighting3DEx / Mge_EndLighting3D if you want it lit (unlit
 // draws use flat vertex colour). The standalone player calls it every frame;
 // the editor calls it only in Play mode.
+//
+// MgeScene_DrawGui, when present, runs after MgeScene_Draw and the scene
+// composite, in 2D screen space (pixel coords, top-left origin) -- the host has
+// already called Mge_UiNewFrame and calls Mge_UiRender right after. Build the
+// game's HUD / menus here with the Mge_Ui* widget API (see mge_ui.h); this is
+// NOT the place for the Mge_Gui* ImGui shim.
 typedef struct MgeSceneCtx {
 	Object*  objects;     // the host's object array
 	int*     objectCount; // live count; the module may grow/shrink within maxObjects
@@ -762,6 +769,7 @@ typedef void (*MgeSceneInitFn)(MgeSceneCtx*);
 typedef void (*MgeSceneUpdateFn)(MgeSceneCtx*, float dt);
 typedef void (*MgeSceneShutdownFn)(MgeSceneCtx*);
 typedef void (*MgeSceneDrawFn)(MgeSceneCtx*, Camera3D camera);
+typedef void (*MgeSceneDrawGuiFn)(MgeSceneCtx*);
 
 // Dynamic library loading (Windows: LoadLibrary; POSIX: dlopen with RTLD_NOW |
 // RTLD_LOCAL). Returns NULL on failure -- Mge_GetDylibError() has the reason.
@@ -1222,6 +1230,11 @@ void Draw_RectangleV(Vector2 position, Vector2 size, Color color);
 void Draw_RectangleRec(Rectangle rec, Color color);
 void Draw_RectanglePro(Rectangle rec, Vector2 origin, float rotation, Color color);
 void Draw_RectangleLines(int posX, int posY, int width, int height, Color color);
+// `roundness` is 0..1 (fraction of the shorter side -> corner radius); `segments`
+// is the triangle count per corner arc (< 2 -> 8). `roundness <= 0` falls back to
+// the square Draw_Rectangle* form. `thick` is the outline width in pixels.
+void Draw_RectangleRounded(Rectangle rec, float roundness, int segments, Color color);
+void Draw_RectangleRoundedLines(Rectangle rec, float roundness, int segments, float thick, Color color);
 void Draw_Triangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_TriangleLines(Vector2 v1, Vector2 v2, Vector2 v3, Color color);
 void Draw_TriangleFan(Vector2 *points, int pointCount, Color color);

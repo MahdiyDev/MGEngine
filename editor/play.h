@@ -46,6 +46,10 @@ void Play_Frame(Play* p, Project* proj, Scene* s);
 // the scene's own lit/HDR pass. No-op unless playing and the module exports it.
 void Play_Draw(Play* p, Scene* s, Camera3D view);
 
+// Run the playing module's optional MgeScene_DrawGui in 2D screen space. Call
+// between Mge_UiNewFrame and Mge_UiRender, after Scene_Draw. No-op unless playing.
+void Play_DrawGui(Play* p, Scene* s);
+
 // The play-mode overlay strip: Stop + Console toggle + FPS. Returns true the
 // frame Stop is pressed.
 bool Play_DrawOverlay(Play* p, float screenW, int fps);
