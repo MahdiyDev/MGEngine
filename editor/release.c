@@ -24,11 +24,22 @@ static void staged_module(const ReleaseJob* j, int idx, char* out, size_t n)
     Path_Join(j->scenesDir, name, out, n);
 }
 
+// the shipped executable's file name
+static void exe_leaf(const Project* proj, char* out, size_t n)
+{
+#if defined(_WIN32)
+    snprintf(out, n, "%s.exe", proj->name);
+#else
+    snprintf(out, n, "%s", proj->name);
+#endif
+}
+
 bool Release_Start(ReleaseJob* j, const Project* proj, bool release, BuildLog* log)
 {
     memset(j, 0, sizeof(*j));
     j->proj = *proj; // flat POD -- safe to snapshot
     j->release = release;
+    j->staticGame = Project_IsStaticGame(proj);
     j->log = log;
     j->stage = RJ_FAILED;
 
@@ -60,10 +71,25 @@ bool Release_Start(ReleaseJob* j, const Project* proj, bool release, BuildLog* l
     char packsDir[760];
     Path_Remove(j->dist);
     Path_MakeDirs(j->dist);
-    Path_Join(j->dist, "scenes", j->scenesDir, sizeof(j->scenesDir));
     Path_Join(j->dist, "packs", packsDir, sizeof(packsDir));
-    Path_MakeDirs(j->scenesDir);
     Path_MakeDirs(packsDir);
+
+    if (j->staticGame) {
+        // link <root>/source/*.c straight into dist/<name>.exe -- no scene .dlls
+        char leaf[128];
+        exe_leaf(&j->proj, leaf, sizeof(leaf));
+        Path_Join(j->dist, leaf, j->exePath, sizeof(j->exePath));
+        BuildLog_Line(log, "-- static game: linking source/ -> %s --", leaf);
+        if (!SceneBuild_StartExe(&j->compile, &j->proj, release, log, j->exePath)) {
+            SceneBuild_Clear(&j->compile);
+            return false;
+        }
+        j->stage = RJ_COMPILE;
+        return true;
+    }
+
+    Path_Join(j->dist, "scenes", j->scenesDir, sizeof(j->scenesDir));
+    Path_MakeDirs(j->scenesDir);
 
     // scene 0's compile
     BuildLog_Line(log, "-- scene '%s' -> scene.0.dll --", j->proj.scenes[0]);
@@ -107,17 +133,26 @@ static void stage_runtime(ReleaseJob* j)
     }
 
     char exeName[128];
-    snprintf(exeName, sizeof(exeName), "%s.exe", j->proj.name);
-    sdk_artifact(sdk, j->release, "mgeplayer.exe", src, sizeof(src));
-    Path_Join(j->dist, exeName, dst, sizeof(dst));
-    if (!Path_CopyFile(src, dst)) {
-        sdk_artifact(sdk, j->release, "mgeplayer", src, sizeof(src)); // POSIX
-        snprintf(exeName, sizeof(exeName), "%s", j->proj.name);
-        Path_Join(j->dist, exeName, dst, sizeof(dst));
-        if (!Path_CopyFile(src, dst)) {
-            BuildLog_Line(j->log, "  missing the player (%s) -- %s", src, hint);
+    exe_leaf(&j->proj, exeName, sizeof(exeName));
+    if (j->staticGame) {
+        // the exe was linked in place at dist/<name>.exe by the compile step
+        if (Path_MTime(j->exePath) == 0) {
+            BuildLog_Line(j->log, "  the game exe is missing: %s", j->exePath);
             j->stage = RJ_FAILED;
             return;
+        }
+    } else {
+        sdk_artifact(sdk, j->release, "mgeplayer.exe", src, sizeof(src));
+        Path_Join(j->dist, exeName, dst, sizeof(dst));
+        if (!Path_CopyFile(src, dst)) {
+            sdk_artifact(sdk, j->release, "mgeplayer", src, sizeof(src)); // POSIX
+            snprintf(exeName, sizeof(exeName), "%s", j->proj.name);
+            Path_Join(j->dist, exeName, dst, sizeof(dst));
+            if (!Path_CopyFile(src, dst)) {
+                BuildLog_Line(j->log, "  missing the player (%s) -- %s", src, hint);
+                j->stage = RJ_FAILED;
+                return;
+            }
         }
     }
 
@@ -143,6 +178,16 @@ bool Release_Poll(ReleaseJob* j)
     char dll[768];
     snprintf(dll, sizeof(dll), "%s", j->compile.outDll);
     SceneBuild_Clear(&j->compile);
+
+    if (j->staticGame) {
+        if (!ok) {
+            BuildLog_Line(j->log, "-- Build Bundle FAILED: the game exe did not link --");
+            j->stage = RJ_FAILED;
+            return true;
+        }
+        j->stage = RJ_STAGE; // next poll paks + copies the engine DLL
+        return false;
+    }
 
     if (!ok) {
         BuildLog_Line(j->log, "-- Build Bundle FAILED at scene '%s' --", j->proj.scenes[j->sceneIdx]);

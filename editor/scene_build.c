@@ -136,28 +136,29 @@ bool SceneBuild_FindSDK(char* out, int outSize)
 // best-effort -- a build never fails over it). The resource gives freshly-built
 // scene DLLs real PE metadata, which quiets Windows Defender / SmartScreen
 // heuristics (real trust still needs code signing).
-static bool build_scene_res(const char* buildDir, const char* projName,
-    const char* dllPath, BuildLog* log, char* resOut, int resOutSize)
+static bool build_scene_res(const char* buildDir, const char* projName, const char* sdk,
+    const char* outPath, bool isApp, BuildLog* log, char* resOut, int resOutSize)
 {
-    char dllLeaf[128];
-    Path_Base(dllPath, dllLeaf, sizeof(dllLeaf));
+    char leaf[128];
+    Path_Base(outPath, leaf, sizeof(leaf));
 
     char rcPath[820];
     snprintf(rcPath, sizeof(rcPath), "%s/_scene.rc", buildDir);
     FILE* f = fopen(rcPath, "w");
     if (f == NULL) {
-        BuildLog_Line(log, "note: could not write %s -- scene DLL gets no version info", rcPath);
+        BuildLog_Line(log, "note: could not write %s -- %s gets no version info", rcPath,
+            isApp ? "the exe" : "the scene DLL");
         return false;
     }
     fprintf(f,
         "1 VERSIONINFO\n"
         "FILEVERSION 1,0,0,0\nPRODUCTVERSION 1,0,0,0\n"
-        "FILEFLAGSMASK 0x3fL\nFILEFLAGS 0x0L\nFILEOS 0x40004L\nFILETYPE 0x2L\nFILESUBTYPE 0x0L\n"
+        "FILEFLAGSMASK 0x3fL\nFILEFLAGS 0x0L\nFILEOS 0x40004L\nFILETYPE 0x%sL\nFILESUBTYPE 0x0L\n"
         "BEGIN\n"
         " BLOCK \"StringFileInfo\"\n BEGIN\n  BLOCK \"040904b0\"\n  BEGIN\n"
         "   VALUE \"CompanyName\", \"MGEngine\"\n"
         "   VALUE \"ProductName\", \"%s\"\n"
-        "   VALUE \"FileDescription\", \"%s scene module\"\n"
+        "   VALUE \"FileDescription\", \"%s%s\"\n"
         "   VALUE \"FileVersion\", \"1.0.0.0\"\n"
         "   VALUE \"ProductVersion\", \"1.0.0.0\"\n"
         "   VALUE \"InternalName\", \"%s\"\n"
@@ -166,7 +167,15 @@ static bool build_scene_res(const char* buildDir, const char* projName,
         "  END\n END\n"
         " BLOCK \"VarFileInfo\"\n BEGIN\n  VALUE \"Translation\", 0x409, 1200\n END\n"
         "END\n",
-        projName, projName, dllLeaf, dllLeaf);
+        isApp ? "1" : "2", projName, projName, isApp ? "" : " scene module", leaf, leaf);
+    // an application also carries the shared manifest (DPI / longPathAware / supportedOS)
+    if (isApp) {
+        char man[1024];
+        snprintf(man, sizeof(man), "%s/resources/app.manifest", sdk);
+        struct stat st;
+        if (stat(man, &st) == 0)
+            fprintf(f, "1 24 \"%s\"\n", man);
+    }
     fclose(f);
 
     const char* wr = getenv("WINDRES");
@@ -174,10 +183,10 @@ static bool build_scene_res(const char* buildDir, const char* projName,
         wr = "windres";
     snprintf(resOut, (size_t)resOutSize, "%s/_scene.res", buildDir);
 
-    char wcmd[1900];
+    char wcmd[2600];
     snprintf(wcmd, sizeof(wcmd), "%s -O coff \"%s\" \"%s\" 2>nul", wr, rcPath, resOut);
     if (system(wcmd) != 0) {
-        BuildLog_Line(log, "note: windres unavailable -- scene DLL built without version info");
+        BuildLog_Line(log, "note: windres unavailable -- built without version info");
         remove(rcPath);
         resOut[0] = '\0';
         return false;
@@ -186,8 +195,20 @@ static bool build_scene_res(const char* buildDir, const char* projName,
 }
 #endif
 
-// Assemble the compiler command line for a scene (no shell redirection appended).
-// Also creates <sceneDir>/build and reports the produced .dll path. Returns false
+// The scene's source directory: <root>/scenes/<name>, or -- for the project-level
+// shared game module (sceneName == NULL) -- <root>/source.
+static void module_src_dir(const Project* proj, const char* sceneName, char* out, int outSize)
+{
+    if (sceneName != NULL)
+        Project_SceneDir(proj, sceneName, out, (size_t)outSize);
+    else
+        Project_SourceDir(proj, out, (size_t)outSize);
+}
+
+// Assemble the compiler command line for a scene module (no shell redirection
+// appended). `sceneName == NULL` builds the project-level shared module from
+// <root>/source/*.c (its .dll is what Play mode loads for a static-game project).
+// Creates <srcDir>/build and reports the produced .dll path. Returns false
 // (writing the reason into `log`) when the build can't be set up.
 static bool build_command(const Project* proj, const char* sceneName, bool release,
     BuildLog* log, char* outDll, int outDllSize, char* cmd, int cmdSize)
@@ -199,46 +220,113 @@ static bool build_command(const Project* proj, const char* sceneName, bool relea
         return false;
     }
 
-    char sceneDir[700];
-    Project_SceneDir(proj, sceneName, sceneDir, sizeof(sceneDir));
-    if (sceneDir[0] == '\0') {
+    char srcDir[700];
+    module_src_dir(proj, sceneName, srcDir, sizeof(srcDir));
+    if (srcDir[0] == '\0') {
         BuildLog_Line(log, "error: save the project first");
         return false;
     }
+    const char* stem = (sceneName != NULL) ? sceneName : proj->name;
 
     char names[64][128];
-    int nc = Path_List(sceneDir, ".c", false, names, 64);
+    int nc = Path_List(srcDir, ".c", false, names, 64);
     if (nc <= 0) {
-        BuildLog_Line(log, "error: no .c files in %s", sceneDir);
+        BuildLog_Line(log, "error: no .c files in %s", srcDir);
         return false;
     }
 
     char buildDir[760];
-    Path_Join(sceneDir, "build", buildDir, sizeof(buildDir));
+    Path_Join(srcDir, "build", buildDir, sizeof(buildDir));
     Path_MakeDirs(buildDir);
 
     snprintf(outDll, (size_t)outDllSize, "%s/%s_%s" DLL_EXT,
-        buildDir, sceneName, release ? "release" : "debug");
+        buildDir, stem, release ? "release" : "debug");
 
     const char* cc = getenv("CC");
     if (cc == NULL || cc[0] == '\0')
         cc = "gcc";
     const char* cflags = release ? proj->cflagsRelease : proj->cflagsDebug;
 
-    // gcc <cflags> -shared -std=c11 -I<sdk>/source <scene>/*.c -o <dll> -L<sdk>/build[/release] -lmgengine
+    // gcc <cflags> -shared -std=c11 -I<sdk>/source <src>/*.c -o <dll> -L<sdk>/build[/release] -lmgengine
     // (the compiler name is left unquoted so cmd.exe doesn't strip the first "path" quote)
     const char* libDir = release ? "build/release" : "build";
     int n = snprintf(cmd, (size_t)cmdSize,
         "%s %s -shared -std=c11 -DPLATFORM_DESKTOP -I\"%s/source\"",
         cc, cflags, sdk);
     for (int i = 0; i < nc && n < cmdSize - 300; i++)
-        n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s/%s\"", sceneDir, names[i]);
+        n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s/%s\"", srcDir, names[i]);
     n += snprintf(cmd + n, (size_t)cmdSize - n,
         " -o \"%s\" -L\"%s/%s\" -lmgengine", outDll, sdk, libDir);
 
 #if defined(_WIN32)
     char res[820];
-    if (build_scene_res(buildDir, proj->name, outDll, log, res, sizeof(res)))
+    if (build_scene_res(buildDir, proj->name, sdk, outDll, false, log, res, sizeof(res)))
+        n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s\"", res);
+#endif
+    return true;
+}
+
+// The player's data layer -- the editor .c files runtime/player.c links (kept in
+// sync with PLAYER_SRC in the Makefile). Compiled straight into a static-game exe.
+static const char* const PLAYER_DATA_LAYER[] = {
+    "editor/scene.c", "editor/scene_io.c", "editor/project.c", "editor/project_io.c",
+    "editor/pathutil.c", "editor/editor_camera.c", "editor/scene_runtime.c",
+};
+
+// Assemble the link command for a static-game project's executable: the SDK
+// player + its data layer + <root>/source/*.c, all linked into <outExe> with the
+// game code baked in (-DMGE_STATIC_GAME). No scene .dll is produced. Creates
+// <root>/source/build for scratch. Returns false (reason in `log`) on setup error.
+static bool build_exe_command(const Project* proj, bool release, BuildLog* log,
+    const char* outExe, char* cmd, int cmdSize)
+{
+    char sdk[1024];
+    if (!SceneBuild_FindSDK(sdk, sizeof(sdk))) {
+        BuildLog_Line(log, "error: engine SDK not found (set MGE_ENGINE)");
+        return false;
+    }
+
+    char srcDir[700];
+    Project_SourceDir(proj, srcDir, sizeof(srcDir));
+    char names[64][128];
+    int nc = Path_List(srcDir, ".c", false, names, 64);
+    if (nc <= 0) {
+        BuildLog_Line(log, "error: no .c files in %s", srcDir);
+        return false;
+    }
+
+    char buildDir[760];
+    Path_Join(srcDir, "build", buildDir, sizeof(buildDir));
+    Path_MakeDirs(buildDir);
+
+    const char* cc = getenv("CC");
+    if (cc == NULL || cc[0] == '\0')
+        cc = "gcc";
+    const char* cflags = release ? proj->cflagsRelease : proj->cflagsDebug;
+    const char* libDir = release ? "build/release" : "build";
+
+    int n = snprintf(cmd, (size_t)cmdSize,
+        "%s %s -std=c11 -DPLATFORM_DESKTOP -DMGE_STATIC_GAME"
+        " -I\"%s/source\" -I\"%s/editor\" -I\"%s/vendor/mlib\""
+        " \"%s/runtime/player.c\"",
+        cc, cflags, sdk, sdk, sdk, sdk);
+    for (size_t i = 0; i < sizeof(PLAYER_DATA_LAYER) / sizeof(PLAYER_DATA_LAYER[0]); i++)
+        n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s/%s\"", sdk, PLAYER_DATA_LAYER[i]);
+    for (int i = 0; i < nc && n < cmdSize - 400; i++)
+        n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s/%s\"", srcDir, names[i]);
+    n += snprintf(cmd + n, (size_t)cmdSize - n,
+        " -o \"%s\" -L\"%s/%s\" -lmgengine", outExe, sdk, libDir);
+#if defined(_WIN32)
+    n += snprintf(cmd + n, (size_t)cmdSize - n, " -mwindows");
+#else
+    n += snprintf(cmd + n, (size_t)cmdSize - n, " -lm -Wl,-rpath,'$ORIGIN'");
+#endif
+    if (release)
+        n += snprintf(cmd + n, (size_t)cmdSize - n, " -s");
+
+#if defined(_WIN32)
+    char res[820];
+    if (build_scene_res(buildDir, proj->name, sdk, outExe, true, log, res, sizeof(res)))
         n += snprintf(cmd + n, (size_t)cmdSize - n, " \"%s\"", res);
 #endif
     return true;
@@ -390,12 +478,38 @@ bool SceneBuild_Start(SceneBuildJob* job, const Project* proj, const char* scene
             cmd, sizeof(cmd)))
         return false;
 
-    char sceneDir[700];
-    Project_SceneDir(proj, sceneName, sceneDir, sizeof(sceneDir));
-    snprintf(job->logFile, sizeof(job->logFile), "%s/build/_compile.log", sceneDir);
+    char srcDir[700];
+    module_src_dir(proj, sceneName, srcDir, sizeof(srcDir));
+    snprintf(job->logFile, sizeof(job->logFile), "%s/build/_compile.log", srcDir);
 
     BuildLog_Line(log, "$ %s", cmd);
     BuildLog_Line(log, "-- compiling (separate process) --");
+
+    job->proc = spawn_child(cmd, job->logFile);
+    if (job->proc == NULL) {
+        BuildLog_Line(log, "error: could not start the compiler process");
+        return false;
+    }
+    return true;
+}
+
+bool SceneBuild_StartExe(SceneBuildJob* job, const Project* proj, bool release,
+    BuildLog* log, const char* outExe)
+{
+    memset(job, 0, sizeof(*job));
+    job->log = log;
+    snprintf(job->outDll, sizeof(job->outDll), "%s", outExe); // Clear() derives the scratch dir from this
+
+    char cmd[8192];
+    if (!build_exe_command(proj, release, log, outExe, cmd, sizeof(cmd)))
+        return false;
+
+    char srcDir[700];
+    Project_SourceDir(proj, srcDir, sizeof(srcDir));
+    snprintf(job->logFile, sizeof(job->logFile), "%s/build/_link.log", srcDir);
+
+    BuildLog_Line(log, "$ %s", cmd);
+    BuildLog_Line(log, "-- linking the game exe (separate process) --");
 
     job->proc = spawn_child(cmd, job->logFile);
     if (job->proc == NULL) {
@@ -432,11 +546,12 @@ void SceneBuild_Clear(SceneBuildJob* job)
 {
     if (job->proc != NULL)
         child_reap(job->proc, job->finished);
-    if (job->logFile[0] != '\0')
+    if (job->logFile[0] != '\0') {
         remove(job->logFile);
-    if (job->outDll[0] != '\0') { // the generated version-info scratch (Windows)
+        // the generated version-info scratch (Windows) lands in the build dir
+        // beside the log file -- for both a scene .dll and a static-game .exe
         char dir[820], p[900];
-        Path_Dir(job->outDll, dir, sizeof(dir));
+        Path_Dir(job->logFile, dir, sizeof(dir));
         Path_Join(dir, "_scene.rc", p, sizeof(p));
         remove(p);
         Path_Join(dir, "_scene.res", p, sizeof(p));

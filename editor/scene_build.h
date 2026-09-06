@@ -44,8 +44,18 @@ typedef struct SceneBuildJob {
 
 // Start the compile as a detached child writing to a temp file. Returns false if
 // setup failed (no SDK / no sources / spawn error), writing why into `log`.
+// `sceneName == NULL` builds the project-level shared module from
+// `<root>/source/*.c` -- one .dll every scene shares (Play mode's path for a
+// static-game project); `job->outDll` still holds the produced library.
 bool SceneBuild_Start(SceneBuildJob* job, const Project* proj, const char* sceneName,
     bool release, BuildLog* log);
+
+// Link a static-game project's executable: the SDK player + its data layer +
+// `<root>/source/*.c`, with the game code baked in (`-DMGE_STATIC_GAME`) -- no
+// scene .dll. Polled + cleared exactly like SceneBuild_Start; on success
+// `outExe` (and `job->outDll`) is the produced exe.
+bool SceneBuild_StartExe(SceneBuildJob* job, const Project* proj, bool release,
+    BuildLog* log, const char* outExe);
 
 // Forward any new compiler output into the job's log. Returns true once the child
 // has exited; then `job->ok` and `job->outDll` hold the result.

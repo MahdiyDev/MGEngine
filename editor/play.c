@@ -19,6 +19,23 @@ static const char* active_name(const Project* proj)
     return proj->scenes[proj->activeScene];
 }
 
+// the scene name to pass SceneBuild_Start: NULL for a static-game project (one
+// shared module compiled from <root>/source/), else the active scene folder.
+static const char* build_target(const Project* proj)
+{
+    return Project_IsStaticGame(proj) ? NULL : active_name(proj);
+}
+
+// the directory whose *.c the running module was built from -- for the
+// hot-reload digest. <root>/source for a static-game project, else the scene dir.
+static void module_dir(const Project* proj, const char* name, char* out, size_t n)
+{
+    if (Project_IsStaticGame(proj))
+        Project_SourceDir(proj, out, n);
+    else
+        Project_SceneDir(proj, name, out, n);
+}
+
 static MgeSceneCtx make_ctx(Scene* s, Camera3D cam)
 {
     MgeSceneCtx c = { 0 };
@@ -66,7 +83,7 @@ static void start_job(Play* p, const Project* proj, int purpose)
         return;
     }
     BuildLog_Reset(&p->log);
-    if (!SceneBuild_Start(&p->job, proj, name, false, &p->log)) {
+    if (!SceneBuild_Start(&p->job, proj, build_target(proj), false, &p->log)) {
         SceneBuild_Clear(&p->job);
         p->showConsole = true;
         return;
@@ -99,7 +116,7 @@ static void reload(Play* p, const Project* proj, Scene* s, const char* dll)
 
     const char* name = active_name(proj);
     char dir[700];
-    Project_SceneDir(proj, name, dir, sizeof(dir));
+    module_dir(proj, name, dir, sizeof(dir));
     p->rt.sourceDigest = SceneRuntime_SourceDigest(dir);
 }
 
@@ -128,7 +145,7 @@ static void finish_job(Play* p, Project* proj, Scene* s)
         MgeSceneCtx ctx = make_ctx(s, p->viewCam);
         SceneRuntime_Init(&p->rt, &ctx);
         char dir[700];
-        Project_SceneDir(proj, active_name(proj), dir, sizeof(dir));
+        module_dir(proj, active_name(proj), dir, sizeof(dir));
         p->rt.sourceDigest = SceneRuntime_SourceDigest(dir);
         p->playing = true;
         return;
@@ -220,7 +237,7 @@ void Play_Frame(Play* p, Project* proj, Scene* s)
         return;
 
     char dir[700];
-    Project_SceneDir(proj, name, dir, sizeof(dir));
+    module_dir(proj, name, dir, sizeof(dir));
 
     // hot-reload: on a source change, kick one background rebuild
     if (p->jobPurpose == JOB_NONE) {
@@ -228,7 +245,7 @@ void Play_Frame(Play* p, Project* proj, Scene* s)
         if (d != p->rt.sourceDigest) {
             BuildLog_Reset(&p->log);
             BuildLog_Line(&p->log, "-- source changed, rebuilding --");
-            if (SceneBuild_Start(&p->job, proj, name, false, &p->log)) {
+            if (SceneBuild_Start(&p->job, proj, build_target(proj), false, &p->log)) {
                 p->jobPurpose = JOB_RELOAD;
                 p->jobDigest = d;
                 p->showConsole = true;

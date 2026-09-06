@@ -248,11 +248,13 @@ and two scene-control fields:
 
 - `const char* sceneName` — the running scene's name (read-only). A module keyed
   on this can behave differently per scene (e.g. one game module, many levels).
-- `char requestedScene[64]` — write a scene name here and the host loads that
-  scene after the frame. Supported by `runtime/player.c` (the built game — every
-  scene's module is pre-built into the bundle); the editor's Play mode only
-  *logs* the request (it runs one scene at a time). Resolution is by name via an
-  `mlib` hashmap (`vendor/mlib/hashmap`) of the project's scene list.
+- `char requestedScene[64]` — the scene the host should load after the frame.
+  Set it with **`Mge_RequestScene(ctx, "name")`** rather than writing the field
+  directly. Supported by `runtime/player.c` (the built game — every scene's
+  module is pre-built into the bundle, or linked into the exe for a static-game
+  build); the editor's Play mode only *logs* the request (it runs one scene at a
+  time). Resolution is by name via an `mlib` hashmap (`vendor/mlib/hashmap`) of
+  the project's scene list.
 
 **`MgeScene_Draw`**, when exported, is composited straight into the scene's own
 lit pass — `Scene_Draw` runs it right after the lit object loop, with

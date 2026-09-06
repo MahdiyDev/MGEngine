@@ -8,6 +8,10 @@ bool SceneRuntime_Loaded(const SceneRuntime* rt) { return rt->loaded; }
 
 void SceneRuntime_Unload(SceneRuntime* rt)
 {
+    if (rt->self) { // static-game: funcs are in the exe -- keep them, nothing to free
+        rt->inited = false;
+        return;
+    }
     if (rt->handle != NULL)
         Mge_FreeLibrary(rt->handle);
     if (rt->liveDll[0] != '\0')

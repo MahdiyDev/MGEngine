@@ -18,11 +18,11 @@ shipped library), split into one unit per concern:
 | `scene_io.c` / `.h` | `.mgscene` read / write (`Scene_Save` / `Scene_Load`) — a flat, diffable text format, **data only** (no GL) |
 | `pathutil.c` / `.h` | `Path_Dir` / `Base` / `Join` / `IsAbsolute` / `Equal` / `MakeDirs` / `CopyFile` / `List` / `MTime` — small path + fs helpers |
 | `fileops.c` / `.h` | executes the Project + Scene menu actions (New / Open / Save project; New / Add / Save / switch scene; New Script; Quit) with the unsaved-changes confirm modal + the name-entry modal; also seeds `res/skybox/` + a `compile_flags.txt` (scene-script header paths) on New / Open / Save Project |
-| `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c`, runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog`. `SceneBuild_Compile` blocks; `SceneBuild_Start` / `_Poll` / `_Clear` (`SceneBuildJob`) run the compiler as a detached process the editor polls each frame. On Windows it also generates + `windres`-compiles a small `VERSIONINFO` resource into each scene DLL (best-effort — a build never fails over it) so freshly-compiled modules carry real PE metadata for AV / SmartScreen heuristics |
+| `scene_build.c` / `.h` | finds the engine SDK, globs a scene's `*.c` (or `<root>/source/*.c` for the project-level shared module when `sceneName == NULL`), runs the compiler into a hot-reloadable `.dll`, captures the output in a `BuildLog`. `SceneBuild_Compile` blocks; `SceneBuild_Start` / `_Poll` / `_Clear` (`SceneBuildJob`) run the compiler as a detached process the editor polls each frame. `SceneBuild_StartExe` links a **static-game** project's whole exe (`runtime/player.c` + its data layer + `source/*.c`, `-DMGE_STATIC_GAME`). On Windows it also generates + `windres`-compiles a small `VERSIONINFO` resource (best-effort — a build never fails over it) so freshly-built modules / exes carry real PE metadata for AV / SmartScreen heuristics |
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
 | `history.c` / `.h` | `History`: undo / redo as whole-`Scene` snapshots. `History_Record` at each mutation site (coalesced per edit burst), `History_Rest` refreshes the baseline when idle, `Scene_RestoreSnapshot` puts a snapshot back — reusing already-loaded material textures / the skybox by source path so an undo re-reads no files |
-| `play.c` / `.h` | Play mode: snapshot the scene, compile (async) + load the module, run `MgeScene_Update` each frame with `p->viewCam`, hot-reload on change, restore on Stop; the play-mode overlay strip + the build console |
-| `release.c` / `.h` | **Build Bundle**: compile every scene (Debug or Release cflags), `Mge_PakWrite` all project data (incl. `project.mgproject`) into `dist/packs/data.pak.NNN`, stage `dist/` — player + engine DLL at the root, scene modules as `dist/scenes/scene.<index>.dll` (no names). Runs as a polled `ReleaseJob` (`Release_Start` / `_Poll` / `_Clear`) — one detached compile per scene, then the pak + runtime copy inline — so the editor keeps drawing and streams each scene's output live, same as Build / Play. `Release_Build` drives it synchronously for headless use |
+| `play.c` / `.h` | Play mode: snapshot the scene, compile (async) + load the module, run `MgeScene_Update` each frame with `p->viewCam`, hot-reload on change, restore on Stop; the play-mode overlay strip + the build console. For a static-game project it compiles `<root>/source/` as the module (still a hot-reloadable `.dll`) |
+| `release.c` / `.h` | **Build Bundle**: compile the project's code (Debug or Release cflags), `Mge_PakWrite` all project data (incl. `project.mgproject`) into `dist/packs/data.pak.NNN`, stage `dist/` + the engine DLL. A **per-scene** project stages a player copy as `dist/<name>.exe` + one `dist/scenes/scene.<index>.dll` per scene (no names); a **static-game** project links `source/*.c` straight into `dist/<name>.exe` — no `dist/scenes/`. Runs as a polled `ReleaseJob` (`Release_Start` / `_Poll` / `_Clear`) — detached compiles then the pak + copy inline — so the editor keeps drawing and streams the output live, same as Build / Play. `Release_Build` drives it synchronously for headless use |
 | `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Debug\|Release** toggle / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights. `+ add` menu, per-row select (ctrl-click = multi), **double-click to rename**, active toggle, `x` to delete, **drag to reorder** / Shift-drop to parent (children shown indented) |
 | `inspector.c` / `.h` | the **right** panel: type-aware inspector — Environment (sun + skybox + main camera), Object (active, primitive, transform, **parent** combo, material slots — drop an image on a thumbnail to assign it), Camera, Light. A multi-selection edits the primary + notes "group move only" |
@@ -91,14 +91,28 @@ whole project, and a `scenes/<name>/` subdirectory per scene (its `scene.mgscene
 myproject/
   project.mgproject
   res/                  textures / models / hdr -- shared by every scene
+    skybox/             6 cubemap faces, seeded from the engine on New Project
   scenes/
     level1/
       scene.mgscene     editor-authored objects / lights / camera
       level1.c          scene logic (every .c here compiles into the module)
       build/            generated .dll + _live_ copies (gitignored)
-  res/
-    skybox/             6 cubemap faces, seeded from the engine on New Project
+  source/               OPTIONAL -- see "Static-game projects" below
+    *.c                 the whole game, one module shared by every scene
+    build/              generated scratch (gitignored)
 ```
+
+### Static-game projects
+
+Drop a `source/` directory with one or more `.c` files at the project root and
+the project builds differently: **every scene shares one code module** built from
+`source/*.c` (the scenes hold only `scene.mgscene` data, no `.c`), and the module
+branches on `ctx->sceneName`. Build Bundle links that code **straight into
+`dist/<name>.exe`** (`runtime/player.c` + its data layer, `-DMGE_STATIC_GAME`) —
+no `dist/scenes/`, nothing to `dlopen`, `dist/` is just the exe + `libmgengine.dll`
++ `packs/`. Play mode still builds `source/` as a hot-reloadable `.dll`, so
+in-editor iteration is unchanged. It's the right shape when the game is one body
+of code keyed on the scene name rather than a distinct script per level.
 
 **Project** menu:
 
@@ -160,10 +174,10 @@ state. The module links `libmgengine`, so it can also call `Draw_*`, `IsKeyDown`
   `Mge_UiRender`. Both the built
   player and Play mode call it. Not the place for `Mge_Gui*` (that's the editor's
   ImGui shim).
-- **`ctx->requestedScene`** — write a scene name and the game switches scenes.
-  Works in the **built game** (Build Bundle → `mgeplayer`, where every scene's
-  module is pre-built); in the editor's Play mode a request only logs to the
-  Console (Play runs one scene).
+- **`Mge_RequestScene(ctx, "name")`** — ask the host to switch scenes (sets
+  `ctx->requestedScene`). Works in the **built game** (Build Bundle → the player,
+  where every scene's module is pre-built, or linked into the exe); in the
+  editor's Play mode a request only logs to the Console (Play runs one scene).
 
 **Editing the scripts** — the engine headers aren't in the project, so on New /
 Open / Save Project the editor writes a `compile_flags.txt` at the project root
@@ -214,9 +228,10 @@ for a folder with `source/mge.h` + a built `build/libmgengine` **or**
 
 ```
 dist/
-  <project>.exe          a copy of the standalone player (runtime/player.c)
+  <project>.exe          per-scene: a copy of the standalone player (runtime/player.c)
+                         static-game: the player with source/*.c linked in
   libmgengine.dll        from build/ or build/release/ per the Debug|Release toggle
-  scenes/
+  scenes/                per-scene projects only
     scene.0.dll …        one per scene, named by index into project.scenes[]
   packs/
     data.pak.001…        project.mgproject + scenes/*.mgscene + res/, one archive
@@ -239,8 +254,9 @@ rejected until the first finishes.
 
 Run `dist/<project>.exe`: it `chdir`s to its own folder, mounts
 `packs/data.pak.NNN`, reads `project.mgproject` + the `startupScene` (data +
-textures) from it, loads `scenes/scene.<startupIndex>.dll`, and runs
-`MgeScene_Init` + `MgeScene_Update` each frame. (A flat loose layout —
+textures) from it, loads `scenes/scene.<startupIndex>.dll` (a static-game exe
+skips this — its `MgeScene_*` are linked in), and runs `MgeScene_Init` +
+`MgeScene_Update` each frame. (A flat loose layout —
 `data.pak.NNN` + `<scene>.dll` + `project.mgproject` next to the exe — is still
 accepted as a fallback, which is also how a plain loose-file dev run works.) The
 view comes from the scene's **main camera** object (`Scene.mainCamera`) — a scene

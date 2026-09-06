@@ -96,13 +96,18 @@ void MgeScene_Shutdown(MgeSceneCtx* ctx);
 void MgeScene_Draw(MgeSceneCtx* ctx, Camera3D camera);  // optional
 ```
 
+- A project with a `<root>/source/` dir of `.c` files is a **static-game
+  project**: one code module built from `source/*.c` is shared by every scene
+  (they hold only `.mgscene` data and branch on `ctx->sceneName`), and Build
+  Bundle links it straight into `dist/<name>.exe` (`-DMGE_STATIC_GAME`, no scene
+  `.dll`s). Play mode still builds `source/` as a hot-reloadable module.
 - `scene_build.c` runs the compiler (`$CC`) as a **detached process** the editor
   polls each frame, so the UI never freezes.
 - `scene_runtime.c` loads the built `.dll` via a `_live_<n>` copy (Windows locks
   the original) and watches the scene dir's `.c` mtimes for hot reload.
 - `MgeSceneCtx` points at the editor's **live** object/light/camera storage, so a
-  rebuild mid-edit keeps state. `ctx->requestedScene` triggers a scene switch (in
-  the built player; in editor Play mode it only logs).
+  rebuild mid-edit keeps state. `Mge_RequestScene(ctx, name)` triggers a scene
+  switch (in the built player; in editor Play mode it only logs).
 - The engine SDK is located via `$MGE_ENGINE`, else by searching upward for a
   dir with `source/mge.h` + a `build/` or `build/release/` engine.
 

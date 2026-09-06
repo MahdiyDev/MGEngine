@@ -51,10 +51,10 @@ editor/                THE APP -- project / scene editor (docked panel shell aro
   scene.c/.h           entities, selection, picking, add/delete/new, the render passes
   scene_io.c/.h        .mgscene read/write (Scene_Save / Scene_Load) -- flat text, data only
   pathutil.c/.h        path + fs helpers (dir/base/join/equal/mkdirs/copyfile/list/remove/nextline)
-  scene_build.c/.h     compile a scene's *.c -> hot-reloadable .dll; BuildLog
-  scene_runtime.c/.h   load / hot-reload a compiled scene module (SceneRuntime)
+  scene_build.c/.h     compile a scene's *.c (or <root>/source/*.c) -> hot-reloadable .dll; link a static-game exe; BuildLog
+  scene_runtime.c/.h   load / hot-reload a compiled scene module (SceneRuntime; or bind funcs linked into the exe)
   play.c/.h            Play / Stop / Build + the build console
-  release.c/.h         "Build Bundle" (async: one polled compile per scene, then pak + stage): compile every scene + pak all data (project.mgproject too) -> dist/packs/data.pak.NNN; scene modules -> dist/scenes/scene.N.dll
+  release.c/.h         "Build Bundle" (async, polled): pak all data (project.mgproject too) -> dist/packs/data.pak.NNN; per-scene -> dist/scenes/scene.N.dll + a player copy; static-game (a <root>/source/ dir) -> source/*.c linked straight into dist/<name>.exe, no dist/scenes/
   fileops.c/.h         Project + Scene menu actions + the unsaved-changes / name modals
   topbar.c/.h          top strip: Project menu, Scene dropdown, Play/Build/Console, mode, gizmo, Render
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete

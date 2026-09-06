@@ -20,6 +20,14 @@ static Trace_Log_Callback traceLog = NULL; // TraceLog callback function pointer
 
 void Mge_SetTraceLogLevel(int logLevel) { logTypeLevel = logLevel; }
 
+// Scene module -> host: queue a scene switch (see MgeSceneCtx.requestedScene).
+void Mge_RequestScene(MgeSceneCtx* ctx, const char* name)
+{
+    if (ctx == NULL || name == NULL)
+        return;
+    snprintf(ctx->requestedScene, sizeof(ctx->requestedScene), "%s", name);
+}
+
 // Show trace log messages (LOG_INFO, LOG_WARNING, LOG_ERROR, LOG_DEBUG)
 void Trace_Log(int logType, const char* text, ...)
 {

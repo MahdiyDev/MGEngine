@@ -102,6 +102,13 @@ void Project_ResDir(const Project* p, char* out, size_t outSize)
     Path_Join(root, "res", out, outSize);
 }
 
+void Project_SourceDir(const Project* p, char* out, size_t outSize)
+{
+    char root[512];
+    Project_Root(p, root, sizeof(root));
+    Path_Join(root, "source", out, outSize);
+}
+
 void Project_SceneDir(const Project* p, const char* sceneName, char* out, size_t outSize)
 {
     char root[512];
@@ -109,6 +116,16 @@ void Project_SceneDir(const Project* p, const char* sceneName, char* out, size_t
     char scenes[600];
     Path_Join(root, "scenes", scenes, sizeof(scenes));
     Path_Join(scenes, sceneName, out, outSize);
+}
+
+bool Project_IsStaticGame(const Project* p)
+{
+    char dir[600];
+    Project_SourceDir(p, dir, sizeof(dir));
+    if (dir[0] == '\0' || !Path_IsDir(dir))
+        return false;
+    char names[4][128];
+    return Path_List(dir, ".c", false, names, 4) > 0;
 }
 
 void Project_SceneFile(const Project* p, const char* sceneName, char* out, size_t outSize)

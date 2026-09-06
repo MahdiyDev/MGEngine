@@ -49,6 +49,29 @@ static void fatal(const char* msg)
 
 DEFINE_HASHMAP_STR(int, SceneIndex); // scene folder name -> index into project.scenes[]
 
+#ifdef MGE_STATIC_GAME
+// A static-game bundle links the project's source/*.c straight into this exe --
+// there is no scene module to dlopen. The game exports these directly and
+// branches on ctx->sceneName; _Draw / _DrawGui are optional (weak = NULL if the
+// game doesn't define them).
+void MgeScene_Init(MgeSceneCtx*);
+void MgeScene_Update(MgeSceneCtx*, float);
+void MgeScene_Shutdown(MgeSceneCtx*);
+__attribute__((weak)) void MgeScene_Draw(MgeSceneCtx*, Camera3D);
+__attribute__((weak)) void MgeScene_DrawGui(MgeSceneCtx*);
+
+static void bind_static_game(SceneRuntime* rt)
+{
+    rt->self = true;
+    rt->loaded = true;
+    rt->initFn = MgeScene_Init;
+    rt->updateFn = MgeScene_Update;
+    rt->shutdownFn = MgeScene_Shutdown;
+    rt->drawFn = MgeScene_Draw;     // may be NULL (weak)
+    rt->guiFn = MgeScene_DrawGui;   // may be NULL (weak)
+}
+#endif
+
 // run from the executable's own directory so relative paths (the pak, the scene
 // .dlls) resolve when launched from elsewhere. argv[0] is a path when the exe is
 // double-clicked or run with a path; a bare-name PATH launch just stays put.
@@ -113,6 +136,12 @@ static bool load_scene(int idx, const Project* proj, const char* base,
         return false;
     }
 
+    MgeSceneCtx ctx = make_ctx(scene, name);
+
+#ifdef MGE_STATIC_GAME
+    (void)base;
+    SceneRuntime_Init(rt, &ctx); // funcs already bound; Init re-runs after the Shutdown above
+#else
     // the module: a staged bundle keeps it as scenes/scene.<index>.dll (index
     // into project.scenes[] -- names aren't shipped); a loose dev run keeps it
     // flat as <scene>.dll next to the exe
@@ -126,12 +155,12 @@ static bool load_scene(int idx, const Project* proj, const char* base,
         strncat(dll, ".dll", sizeof(dll) - strlen(dll) - 1);
     }
 
-    MgeSceneCtx ctx = make_ctx(scene, name);
     char err[256];
     if (SceneRuntime_Load(rt, dll, err, sizeof(err)))
         SceneRuntime_Init(rt, &ctx);
     else
         fprintf(stderr, "player: no scene module (%s): %s\n", dll, err);
+#endif
     return true;
 }
 
@@ -190,6 +219,9 @@ int main(int argc, char** argv)
         idx = 0;
 
     SceneRuntime rt = { 0 };
+#ifdef MGE_STATIC_GAME
+    bind_static_game(&rt); // the game is linked in -- one module, every scene
+#endif
     load_scene(idx, &project, base, &scene, &rt, &camera);
 
     // the built game views the scene through its main camera object (a scene

@@ -15,6 +15,7 @@ typedef struct SceneRuntime {
     char liveDll[600];      // the loaded copy (deleted on unload)
     bool loaded;
     bool inited;            // Init called, Shutdown pending
+    bool self;             // module funcs are linked into this exe (static-game); no dylib to free
     long sourceDigest;      // last-seen digest of the scene dir's *.c (hot-reload trigger)
 } SceneRuntime;
 

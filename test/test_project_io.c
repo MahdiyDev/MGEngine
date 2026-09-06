@@ -122,6 +122,31 @@ TEST(project_mgproject_round_trip)
     remove(path);
 }
 
+TEST(static_game_detection)
+{
+    Project p;
+    Project_Default(&p);
+    snprintf(p.path, sizeof(p.path), "project_io_tmp/project.mgproject");
+
+    char src[600];
+    Project_SourceDir(&p, src, sizeof(src));
+    CHECK(strcmp(src, "project_io_tmp/source") == 0);
+
+    CHECK(!Project_IsStaticGame(&p)); // no source/ dir yet
+
+    Path_MakeDirs("project_io_tmp/source");
+    CHECK(!Project_IsStaticGame(&p)); // dir exists but holds no .c
+
+    FILE* f = fopen("project_io_tmp/source/game.c", "wb");
+    CHECK(f != NULL);
+    fprintf(f, "int x;\n");
+    fclose(f);
+    CHECK(Project_IsStaticGame(&p)); // now it's a static-game project
+
+    remove("project_io_tmp/source/game.c");
+    RMDIR("project_io_tmp/source");
+}
+
 TEST(load_rejects_a_non_project_file)
 {
     FILE* f = fopen("project_io_tmp/bogus.mgproject", "wb");
@@ -140,6 +165,7 @@ int main(void)
     RUN(scene_list_ops);
     RUN(path_helpers);
     RUN(project_mgproject_round_trip);
+    RUN(static_game_detection);
     RUN(load_rejects_a_non_project_file);
 
     RMDIR("project_io_tmp");

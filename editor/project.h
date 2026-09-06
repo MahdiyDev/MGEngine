@@ -37,12 +37,20 @@ void Project_RemoveScene(Project* p, int index);
 // Path helpers (empty `out` when the project is in-memory / has no path):
 //   root      = the directory holding project.mgproject
 //   resDir    = <root>/res     (one shared resource root for the whole project)
+//   sourceDir = <root>/source  (project-level game code -- see Project_IsStaticGame)
 //   sceneDir  = <root>/scenes/<name>
 //   sceneFile = <root>/scenes/<name>/scene.mgscene
 void Project_Root(const Project* p, char* out, size_t outSize);
 void Project_ResDir(const Project* p, char* out, size_t outSize);
+void Project_SourceDir(const Project* p, char* out, size_t outSize);
 void Project_SceneDir(const Project* p, const char* sceneName, char* out, size_t outSize);
 void Project_SceneFile(const Project* p, const char* sceneName, char* out, size_t outSize);
+
+// A "static-game" project keeps its whole game in <root>/source/*.c -- one code
+// module shared by every scene (which branch on ctx->sceneName), linked straight
+// into <name>.exe by Build Bundle instead of shipping per-scene .dlls. True when
+// <root>/source/ exists and holds at least one .c file.
+bool Project_IsStaticGame(const Project* p);
 
 // true when `name` is a usable scene folder name (letters/digits/_/-, non-empty).
 bool Project_ValidSceneName(const char* name);

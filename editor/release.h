@@ -1,11 +1,17 @@
-// "Build Bundle" -- compile every scene module (with the project's debug or
-// release cflags per `release`), pak the project data, and stage a runnable
-// `<projectRoot>/dist/`: the player + engine DLL + project.mgproject at the
-// root, scene modules in `dist/scenes/`, pak files in `dist/packs/`.
+// "Build Bundle" -- compile the project's code (with its debug or release cflags
+// per `release`), pak the project data, and stage a runnable `<projectRoot>/dist/`.
 //
-// Runs as a polled job so the editor keeps drawing: each scene compiles as a
-// detached process (reusing SceneBuildJob), then the pak + runtime staging run
-// inline in one poll (sub-second). Same shape as the Build / Play buttons.
+//   per-scene project : one scene module per scene in `dist/scenes/scene.<idx>.dll`,
+//                       plus a copy of the SDK player as `dist/<name>.exe`.
+//   static-game       : `<root>/source/*.c` linked straight into `dist/<name>.exe`
+//   (Project_IsStaticGame)   -- no `dist/scenes/`.
+//
+// Either way the engine DLL + `packs/data.pak.NNN` (project.mgproject + *.mgscene
+// + res/) land in `dist/`.
+//
+// Runs as a polled job so the editor keeps drawing: each compile is a detached
+// process (reusing SceneBuildJob), then the pak + runtime staging run inline in
+// one poll (sub-second). Same shape as the Build / Play buttons.
 #pragma once
 
 #include <stdbool.h>
@@ -24,10 +30,12 @@ typedef struct ReleaseJob {
     ReleaseStage  stage;
     Project       proj;            // snapshot taken at Start
     bool          release;         // engine config: build/ vs build/release/
-    int           sceneIdx;        // scene currently compiling
+    bool          staticGame;      // Project_IsStaticGame(&proj): link source/ into the exe
+    int           sceneIdx;        // scene currently compiling (per-scene projects)
     char          dist[600];
     char          scenesDir[700];
-    SceneBuildJob compile;         // the in-flight per-scene compile
+    char          exePath[700];    // dist/<name>.exe -- the static-game link target
+    SceneBuildJob compile;         // the in-flight compile
     BuildLog*     log;
 } ReleaseJob;
 

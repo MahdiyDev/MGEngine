@@ -763,7 +763,7 @@ typedef struct MgeSceneCtx {
 	Camera3D camera;      // the host's current view camera
 	int      selected;    // host's selected object index, or -1
 	const char* sceneName;      // the running scene's name (read-only)
-	char     requestedScene[64]; // write a scene name here to ask the host to switch scenes
+	char     requestedScene[64]; // a scene name the host should switch to -- set via Mge_RequestScene
 	void*    user;        // host-defined; the module must not touch it
 } MgeSceneCtx;
 
@@ -772,6 +772,11 @@ typedef void (*MgeSceneUpdateFn)(MgeSceneCtx*, float dt);
 typedef void (*MgeSceneShutdownFn)(MgeSceneCtx*);
 typedef void (*MgeSceneDrawFn)(MgeSceneCtx*, Camera3D camera);
 typedef void (*MgeSceneDrawGuiFn)(MgeSceneCtx*);
+
+// From a scene module: ask the host to load scene `name` (a scene folder name)
+// after this frame. The last request of the frame wins; passing NULL / "" or a
+// name the host doesn't know is ignored by the host.
+void Mge_RequestScene(MgeSceneCtx* ctx, const char* name);
 
 // Dynamic library loading (Windows: LoadLibrary; POSIX: dlopen with RTLD_NOW |
 // RTLD_LOCAL). Returns NULL on failure -- Mge_GetDylibError() has the reason.
