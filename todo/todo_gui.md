@@ -125,10 +125,8 @@ Each is a self-contained sub-algorithm. `test/test_ui_layout.c` (+8 cases),
 - [x] `Mge_UiIndexedStack(int index)` + `Mge_UiSetStackIndex` (lays out all
       children, paints one); `Mge_UiOffstage(bool)`;
       `Mge_UiVisibilityMaintain(bool)` (hidden but keeps its size).
-- [ ] `Mge_UiLayoutBuilder(void (*build)(MgeUiWidget slot, MgeUiConstraints,
-      void*), void*)` -- deferred: builds a subtree *during* layout, needs a
-      re-entrancy audit (a `build` that reallocs the pool mid-`layout_*`). The
-      Phase-7 MediaQuery/breakpoint model covers most of the use case.
+- [x] `Mge_UiLayoutBuilder(MgeUiLayoutCallback, void*)` -- landed in **Phase 2b**
+      (with the re-entrancy audit that also unblocked the virtualized builders).
 - [ ] `Mge_UiBaseline` + `MGE_CROSS_BASELINE` + `MgeTextBaseline` -- deferred:
       needs first-line-baseline propagation through every `layout_*` return.
 - [ ] `OverflowBox` / `SizedOverflowBox` -- not planned (deliberately breaking
@@ -165,25 +163,39 @@ scrolling options list. Deferred work moved to Phase 2b below.
       `Mge_UiScrollToChild(target)` -- all instant, clamped, on the scroll handle
       directly (no separate controller). `…ToChild` uses last frame's rects.
 
-## Phase 2b -- deferred scrolling work
+## Phase 2b -- deferred scrolling work   [PARTLY LANDED]
 
+Landed: the re-entrancy-gated layout work. Audited every `layout_*` for the
+index-only invariant (no cached `Node*` across a `layout_node` call) and wrote
+it up as a banner comment; builders route through the existing index-safe
+helpers. `test/test_ui_layout.c` (+7, 137 checks), `render_smoke` `ui_vlist`
+scene, `examples/ui/list.c` (10k-row demo).
+
+- [x] `Mge_UiLayoutBuilder(MgeUiLayoutCallback build, void* user)` -- the
+      callback runs *during* layout with this box's incoming constraints and
+      adds one child; rebuilt every pass.
+- [x] `Mge_UiListViewBuilder(MgeAxis axis, int itemCount, float itemExtent,
+      MgeUiItemBuilder build, void* user, MgeScrollStyle)` /
+      `Mge_UiGridViewBuilder(axis, crossAxisCount, itemCount, cellW, cellH,
+      mainGap, crossGap, …)` -- virtualized: only lines intersecting the
+      viewport (+1 overscan) are built. Fixed line extent => no off-screen
+      measurement, so the re-entrancy surface stays small. `NODE_SCROLL`
+      `kind` field; the built window is plain children (clip / thumb / wheel /
+      drag reuse the Phase 2 code untouched).
+- [x] `Mge_UiScrollToIndex(view, int index)` -- jump the line to the top;
+      replaces `…ToChild` for builders (item handles are transient).
+- [x] Non-virtual `Mge_UiGridView(MgeAxis axis, int crossAxisCount, float cellW,
+      float cellH, float mainGap, float crossGap)` -- fixed-column grid,
+      multi-child; compose inside a `Mge_UiScrollView` to scroll it.
 - [ ] `MgeScrollController` (separate handle) + `Mge_ScrollController(void)` /
       `Mge_ScrollOffset(ctl)` / `Mge_ScrollExtent(ctl)`. **Deferred:** the scroll
       view is its own controller for now; a shared handle only earns its keep
       with `NestedScrollView` (below), which needs it to link an outer + inner
       scrollable.
-- [ ] `Mge_UiListViewBuilder(parent, int count, MgeUiWidget (*item)(int i,
-      void*), void* user)` (virtualized -- only visible items built) /
-      `Mge_UiGridViewBuilder` / `Mge_UiLayoutBuilder`. **Deferred:** all three
-      build a subtree *during* the layout pass; needs the re-entrancy audit
-      tracked in Phase 1b (a `build` callback that reallocs the node pool
-      mid-`layout_*`). The non-virtual list handles hundreds of rows fine.
-- [ ] Non-virtual `Mge_UiGridView(crossAxisCount, mainSpacing, crossSpacing,
-      childAspect)`. **Deferred:** straightforward once `Wrap` + scroll compose;
-      just not needed yet.
 - [ ] `MgeScrollPhysics` (clamping / bouncing) + overscroll glow + fling
-      momentum. **Deferred:** needs a per-frame velocity integrator; the current
-      drag is a hard clamp, which is fine for menus / panels.
+      momentum. **Deferred to Phase 6** (animation): needs a per-frame velocity
+      integrator + a relayout-while-idle tick, the same machinery as animated
+      `Mge_UiScrollTo`. The current drag is a hard clamp, fine for menus / panels.
 - [ ] Animated `Mge_UiScrollTo(px, durationSec, MgeCurve)` /
       `Mge_ScrollAnimateToEdge`. **Deferred to Phase 6** (the animation /
       transition system) -- `Mge_UiNewFrame` already carries `dt` for it.

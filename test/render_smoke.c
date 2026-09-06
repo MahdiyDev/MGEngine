@@ -312,6 +312,53 @@ static void scene_ui_scroll(void)
     Mge_UiDestroy(outer);
 }
 
+// Phase 2b: a 5000-row Mge_UiListViewBuilder in a fixed box, scrolled near the
+// middle -- only the on-screen rows exist; window clips, thumb sits mid-track
+static MgeUiWidget vlist_row(int index, void* user)
+{
+    (void)user;
+    char buf[24];
+    snprintf(buf, sizeof buf, "row %d", index);
+    MgeUiWidget pad = Mge_UiPadding(Mge_EdgeInsetsSymmetric(10, 4));
+    MgeUiWidget row = Mge_UiContainer((MgeContainerStyle){
+        .expand = true,
+        .decoration = { .color = (Color){ 30 + (index * 11) % 160, 60, 130, 255 },
+            .borderRadius = Mge_BorderRadiusAll(4) } });
+    Mge_UiText(row, buf, (MgeTextStyle){ .size = 14, .color = Mge_Colors.white });
+    Mge_UiAddChild(pad, row);
+    return pad;
+}
+
+static void scene_ui_vlist(void)
+{
+    MgeUiWidget outer = Mge_UiCenter();
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){
+        .width = 280, .height = 200,
+        .decoration = { .color = (Color){ 20, 22, 30, 255 },
+            .border = Mge_BorderAll((Color){ 100, 120, 180, 255 }, 2.0f),
+            .borderRadius = Mge_BorderRadiusAll(8.0f) } });
+    Mge_UiAddChild(outer, box);
+
+    MgeUiWidget list = Mge_UiListViewBuilder(MGE_AXIS_VERTICAL, 5000, 34.0f,
+        vlist_row, NULL, (MgeScrollStyle){ 0 });
+    Mge_UiAddChild(box, list);
+
+    Mge_BeginDrawing();
+    Mge_ClearBackground((Color){ 8, 9, 12, 255 });
+    Mge_UiViewport(0, 0);
+    Mge_UiSetRoot(outer);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    Mge_UiScrollToIndex(list, 2500);
+    Mge_UiNewFrame(0.016f);
+    Mge_UiRender();
+    check("ui_vlist");
+    Mge_EndDrawing();
+
+    Mge_UiSetRoot(0);
+    Mge_UiDestroy(outer);
+}
+
 static void scene_cube_lit(void)
 {
     Camera3D cam = { .up = { 0, 1, 0 }, .fovy = 50.0f, .projection = CAMERA_PERSPECTIVE };
@@ -1130,6 +1177,7 @@ int main(void)
     scene_ui();
     scene_ui2();
     scene_ui_scroll();
+    scene_ui_vlist();
     scene_cube_lit();
     scene_shadow();
     scene_postfx();

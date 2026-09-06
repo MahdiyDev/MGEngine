@@ -685,6 +685,163 @@ TEST(click_drag_scrolls_the_content)
     Mge_UiDestroy(root);
 }
 
+// ---- Phase 2b: virtualization & grid ----
+
+struct build_probe {
+    int calls;      // total item-builder invocations
+    int lo, hi;     // min / max index seen this run
+    float rowH;
+};
+
+static void probe_reset(struct build_probe* p, float rowH)
+{
+    p->calls = 0;
+    p->lo = 1 << 30;
+    p->hi = -1;
+    p->rowH = rowH;
+}
+
+static MgeUiWidget probe_item(int index, void* user)
+{
+    struct build_probe* p = user;
+    p->calls++;
+    if (index < p->lo) p->lo = index;
+    if (index > p->hi) p->hi = index;
+    return Mge_UiSizedBox(60, p->rowH);
+}
+
+// LayoutBuilder callback: record the box width it is handed, add one child that
+// fills it.
+static float g_lb_seen_w;
+static int   g_lb_calls;
+static void build_fill(MgeUiWidget slot, MgeUiConstraints c, void* user)
+{
+    (void)user;
+    g_lb_seen_w = c.maxW;
+    g_lb_calls++;
+    Mge_UiAddChild(slot, Mge_UiSizedBox(c.maxW, 20));
+}
+
+TEST(layoutbuilder_builds_with_the_incoming_constraints)
+{
+    g_lb_seen_w = 0.0f;
+    g_lb_calls = 0;
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 240, .height = 80 });
+    MgeUiWidget b = Mge_UiLayoutBuilder(build_fill, NULL);
+    Mge_UiAddChild(box, b);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    CHECK_F(g_lb_seen_w, 240.0f);
+    CHECK_F(Mge_UiGetRect(b).width, 240.0f);
+    CHECK_F(Mge_UiGetRect(Mge_UiChildAt(b, 0)).width, 240.0f);
+
+    render(root, 800, 600); // rebuilds every pass
+    CHECK(g_lb_calls == 2);
+    Mge_UiDestroy(root);
+}
+
+TEST(listviewbuilder_builds_only_the_visible_window)
+{
+    struct build_probe p;
+    probe_reset(&p, 20.0f);
+    MgeUiWidget lv = Mge_UiListViewBuilder(MGE_AXIS_VERTICAL, 1000, 20.0f, probe_item, &p, (MgeScrollStyle){ 0 });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 120, .height = 100 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    CHECK_F(Mge_UiScrollMax(lv), 1000.0f * 20.0f - 100.0f);
+    CHECK(p.calls > 0 && p.calls < 20);   // ~5 visible + overscan, not 1000
+    CHECK(p.lo == 0);
+    Mge_UiDestroy(root);
+}
+
+TEST(listviewbuilder_scroll_moves_the_window)
+{
+    struct build_probe p;
+    probe_reset(&p, 20.0f);
+    MgeUiWidget lv = Mge_UiListViewBuilder(MGE_AXIS_VERTICAL, 1000, 20.0f, probe_item, &p, (MgeScrollStyle){ 0 });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 120, .height = 100 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    Mge_UiScrollTo(lv, 5000.0f); // row 250
+    probe_reset(&p, 20.0f);
+    render(root, 800, 600);
+    CHECK(p.lo <= 250 && p.hi >= 250); // window brackets row 250
+    CHECK(p.lo >= 245 && p.hi <= 260); // and only that neighbourhood
+    Mge_UiDestroy(root);
+}
+
+TEST(scroll_to_index_lands_the_line_at_the_top)
+{
+    struct build_probe p;
+    probe_reset(&p, 25.0f);
+    MgeUiWidget lv = Mge_UiListViewBuilder(MGE_AXIS_VERTICAL, 500, 25.0f, probe_item, &p, (MgeScrollStyle){ 0 });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 120, .height = 100 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    Mge_UiScrollToIndex(lv, 40);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(lv), 40.0f * 25.0f);
+
+    Mge_UiScrollToIndex(lv, 1 << 20); // way past the end
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(lv), Mge_UiScrollMax(lv));
+    Mge_UiDestroy(root);
+}
+
+TEST(gridviewbuilder_lays_a_virtualized_grid)
+{
+    struct build_probe p;
+    probe_reset(&p, 40.0f);
+    MgeUiWidget gv = Mge_UiGridViewBuilder(MGE_AXIS_VERTICAL, 3, 30, 40.0f, 40.0f, 4.0f, 4.0f,
+        probe_item, &p, (MgeScrollStyle){ 0 });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 140, .height = 100 });
+    Mge_UiAddChild(box, gv);
+    MgeUiWidget root = wrap(box, 800, 600);
+
+    CHECK_F(Mge_UiScrollMax(gv), (10.0f * 44.0f - 4.0f) - 100.0f); // 10 rows, last has no trailing gap
+    CHECK(p.calls > 0 && p.calls < 30);
+    // cell index 4 => row 1, col 1
+    MgeUiWidget c4 = Mge_UiChildAt(gv, 4);
+    CHECK(c4 != 0);
+    CHECK_F(Mge_UiGetRect(c4).x - Mge_UiGetRect(gv).x, 44.0f);
+    CHECK_F(Mge_UiGetRect(c4).y - Mge_UiGetRect(gv).y, 44.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(gridview_non_virtual_sizes_to_its_rows)
+{
+    MgeUiWidget gv = Mge_UiGridView(MGE_AXIS_VERTICAL, 3, 40.0f, 40.0f, 4.0f, 4.0f);
+    for (int k = 0; k < 7; k++)
+        Mge_UiAddChild(gv, fixed(10, 10)); // laid out tight to the cell anyway
+    MgeUiWidget root = wrap(gv, 800, 600);
+
+    CHECK_F(Mge_UiGetRect(gv).width, 3.0f * 40.0f + 2.0f * 4.0f);   // 3 columns
+    CHECK_F(Mge_UiGetRect(gv).height, 3.0f * 40.0f + 2.0f * 4.0f);  // 7 items => 3 rows
+    CHECK_F(Mge_UiGetRect(Mge_UiChildAt(gv, 4)).x - Mge_UiGetRect(gv).x, 44.0f);
+    CHECK_F(Mge_UiGetRect(Mge_UiChildAt(gv, 4)).y - Mge_UiGetRect(gv).y, 44.0f);
+    Mge_UiDestroy(root);
+}
+
+TEST(builder_survives_pool_growth_mid_layout)
+{
+    struct build_probe p;
+    probe_reset(&p, 4.0f);
+    MgeUiWidget lv = Mge_UiListViewBuilder(MGE_AXIS_VERTICAL, 100000, 4.0f, probe_item, &p, (MgeScrollStyle){ 0 });
+    MgeUiWidget box = Mge_UiContainer((MgeContainerStyle){ .width = 120, .height = 400 });
+    Mge_UiAddChild(box, lv);
+    MgeUiWidget root = wrap(box, 800, 600); // ~100 items built per frame, each an alloc
+
+    CHECK_F(Mge_UiScrollMax(lv), 100000.0f * 4.0f - 400.0f);
+    Mge_UiScrollToIndex(lv, 50000);
+    render(root, 800, 600);
+    CHECK_F(Mge_UiScrollOffset(lv), 50000.0f * 4.0f);
+    CHECK(Mge_UiChildCount(lv) > 90 && Mge_UiChildCount(lv) < 110);
+    Mge_UiDestroy(root);
+}
+
 int main(void)
 {
     MgeGL_Init(800, 600); // the batcher the paint pass feeds
@@ -728,5 +885,13 @@ int main(void)
     RUN(clip_rect_lays_out_passthrough);
     RUN(wheel_over_a_scroll_view_scrolls_it_and_captures_the_pointer);
     RUN(click_drag_scrolls_the_content);
+
+    RUN(layoutbuilder_builds_with_the_incoming_constraints);
+    RUN(listviewbuilder_builds_only_the_visible_window);
+    RUN(listviewbuilder_scroll_moves_the_window);
+    RUN(scroll_to_index_lands_the_line_at_the_top);
+    RUN(gridviewbuilder_lays_a_virtualized_grid);
+    RUN(gridview_non_virtual_sizes_to_its_rows);
+    RUN(builder_survives_pool_growth_mid_layout);
     return test_summary();
 }

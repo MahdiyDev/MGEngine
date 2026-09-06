@@ -143,6 +143,7 @@ at 16 px / opaque white.
 | layout | `Mge_UiRow` / `Mge_UiColumn` / `Mge_UiFlex(axis, MgeFlexStyle)` (main/cross alignment, `mainSize` MAX\|MIN, `spacing`); `Mge_UiExpanded(flex)` / `Mge_UiFlexible(flex, fit)` / `Mge_UiSpacer(flex)` inside a Row/Column; `Mge_UiCenter` / `Mge_UiAlign(a)` / `Mge_UiPadding(insets)` / `Mge_UiSizedBox(w,h)` / `Mge_UiConstrainedBox(c)`; `Mge_UiStack(fit, align)` + `Mge_UiPositioned(l,t,r,b,w,h)` (`MGE_UI_NONE` = unset) / `Mge_UiPositionedFill`; `Mge_UiVisibility(bool)` / `Mge_UiVisibilityMaintain` / `Mge_UiOffstage` + `Mge_UiSetVisible` |
 | layout tail | `Mge_UiWrap(MgeWrapStyle)` (children flow into runs); `Mge_UiTable(cols, n, rowSp, colSp)` + `Mge_UiTableRow` (per-column `MGE_COL_FIXED` px / `_FLEX` weight / `_INTRINSIC` widest-cell); `Mge_UiIntrinsicWidth` / `Mge_UiIntrinsicHeight`; `Mge_UiAspectRatio(r)` / `Mge_UiFractionallySizedBox(wf, hf, align)` / `Mge_UiUnconstrainedBox` / `Mge_UiLimitedBox(maxW, maxH)`; `Mge_UiIndexedStack(index)` + `Mge_UiSetStackIndex` |
 | scrolling | `Mge_UiScrollView(axis, MgeScrollStyle)` (one child, free on `axis`) / `Mge_UiListView(axis, style)` (items route into an internal Flex); needs a **bounded** viewport on the scroll axis — wrap it in a sized box. Mouse wheel when hovered, click-drag on the content, draggable thumb (hide via `MgeScrollStyle.noScrollbar`). `Mge_UiScrollOffset` / `Mge_UiScrollMax` / `Mge_UiScrollTo(px)` / `Mge_UiScrollToEdge(end)` / `Mge_UiScrollToChild(target)` (uses last frame's rects). `Mge_UiClipRect` clips its child to its own rect. |
+| virtualization & grid | `Mge_UiListViewBuilder(axis, count, itemExtent, MgeUiItemBuilder, user, style)` / `Mge_UiGridViewBuilder(axis, crossCount, count, cellW, cellH, mainGap, crossGap, …)` — only the lines that intersect the viewport (+1 overscan) are built each pass; fixed line extent, no off-screen measurement. `Mge_UiScrollToIndex(view, i)` (item handles are transient — don't use `…ToChild`). `Mge_UiGridView(axis, crossCount, cellW, cellH, mainGap, crossGap)` — non-virtual fixed-column grid, multi-child; scroll it by composing inside a `Mge_UiScrollView`. `Mge_UiLayoutBuilder(MgeUiLayoutCallback, user)` — the callback runs **during layout** with the box's constraints and adds one child; rebuilt every pass, never call `Mge_UiRender` from it. |
 | mutate | `Mge_UiSetText`, `Mge_UiSetContainerStyle`, `Mge_UiSetVisible`, `Mge_UiSetStackIndex`, `Mge_UiMarkNeedsBuild/Layout/Paint`; `Mge_UiGetRect(w)` reads the laid-out screen rect |
 | values | `Mge_Colors.<name>`, `Mge_EdgeInsets{All,Symmetric,LTRB}`, `Mge_Alignment(x,y)` + `MGE_ALIGN_*`, `Mge_ConstraintsTight/Loose`, `Mge_BorderAll`, `Mge_BorderRadiusAll`, `MgeFlexStyle`, `MgeWrapStyle`, `MgeTableColumn`, `MgeScrollStyle` |
 
@@ -153,8 +154,8 @@ are ignored). Flex is the standard model: inflexible children measure first,
 then `Mge_UiExpanded` / `Spacer` split the leftover main-axis space by `flex`
 factor. `Mge_UiCenter` / `Align` fill their box and place the child;
 `Mge_UiPadding` / `SizedBox` / `ConstrainedBox` are thin `Container` presets.
-`LayoutBuilder` and baseline alignment are still on the roadmap in
-[../todo/todo_gui.md](../todo/todo_gui.md).
+Baseline alignment, fling/bounce scroll physics, and rounded/shaped clips are
+still on the roadmap in [../todo/todo_gui.md](../todo/todo_gui.md).
 
 From a scene module, build the HUD in the optional `MgeScene_DrawGui(MgeSceneCtx*)`
 export (see [scene.md](scene.md#hot-reloadable-scene-modules-mge_dylibc)) — the host calls `Mge_UiNewFrame` / `Mge_UiRender` around it.

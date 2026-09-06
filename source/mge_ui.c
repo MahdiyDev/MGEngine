@@ -29,6 +29,8 @@ enum {
     NODE_LIMITED,
     NODE_SCROLL,
     NODE_CLIPRECT,
+    NODE_LAYOUTBUILDER,
+    NODE_GRIDVIEW,
 };
 
 #define MGE_UI_TABLE_MAX_COLS 16
@@ -86,7 +88,21 @@ typedef struct Node {
             float          contentExtent; // child size on `axis`
             float          viewExtent;    // viewport size on `axis`
             int32_t        innerFlex;     // Mge_UiListView: the flex children route into; else -1
+            uint8_t        kind;          // 0 normal | 1 list-builder | 2 grid-builder
+            int32_t        itemCount, crossCount;
+            float          itemExtent, cellW, cellH, mainGap, crossGap;
+            MgeUiItemBuilder build;
+            void*          user;
         } scroll;
+        struct {
+            MgeUiLayoutCallback build;
+            void*              user;
+        } layoutBuilder;
+        struct {
+            MgeAxis axis;
+            int32_t crossCount;
+            float   cellW, cellH, mainGap, crossGap;
+        } grid;
     } v;
 } Node;
 
@@ -121,6 +137,13 @@ static struct {
 // ---- helpers ----------------------------------------------------------
 
 static float clampf(float v, float lo, float hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static int clampi(int v, int lo, int hi)
 {
     if (v < lo) return lo;
     if (v > hi) return hi;
@@ -592,6 +615,68 @@ MgeUiWidget Mge_UiClipRect(void)
     return h_make(i);
 }
 
+// ---- virtualization & grid (Phase 2b) -----------------------------
+
+MgeUiWidget Mge_UiLayoutBuilder(MgeUiLayoutCallback build, void* user)
+{
+    int32_t i = alloc_node(NODE_LAYOUTBUILDER);
+    S.nodes[i].v.layoutBuilder.build = build;
+    S.nodes[i].v.layoutBuilder.user = user;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiListViewBuilder(MgeAxis axis, int itemCount, float itemExtent,
+    MgeUiItemBuilder build, void* user, MgeScrollStyle style)
+{
+    int32_t i = alloc_node(NODE_SCROLL);
+    S.nodes[i].v.scroll.axis = axis;
+    S.nodes[i].v.scroll.style = style;
+    S.nodes[i].v.scroll.innerFlex = -1; // the builder owns its children directly
+    S.nodes[i].v.scroll.kind = 1;
+    S.nodes[i].v.scroll.itemCount = itemCount;
+    S.nodes[i].v.scroll.itemExtent = itemExtent;
+    S.nodes[i].v.scroll.build = build;
+    S.nodes[i].v.scroll.user = user;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiGridViewBuilder(MgeAxis axis, int crossAxisCount, int itemCount,
+    float cellW, float cellH, float mainGap, float crossGap,
+    MgeUiItemBuilder build, void* user, MgeScrollStyle style)
+{
+    int32_t i = alloc_node(NODE_SCROLL);
+    S.nodes[i].v.scroll.axis = axis;
+    S.nodes[i].v.scroll.style = style;
+    S.nodes[i].v.scroll.innerFlex = -1;
+    S.nodes[i].v.scroll.kind = 2;
+    S.nodes[i].v.scroll.itemCount = itemCount;
+    S.nodes[i].v.scroll.crossCount = (crossAxisCount > 0) ? crossAxisCount : 1;
+    S.nodes[i].v.scroll.cellW = cellW;
+    S.nodes[i].v.scroll.cellH = cellH;
+    S.nodes[i].v.scroll.mainGap = mainGap;
+    S.nodes[i].v.scroll.crossGap = crossGap;
+    S.nodes[i].v.scroll.build = build;
+    S.nodes[i].v.scroll.user = user;
+    S.dirty = true;
+    return h_make(i);
+}
+
+MgeUiWidget Mge_UiGridView(MgeAxis axis, int crossAxisCount,
+    float cellW, float cellH, float mainGap, float crossGap)
+{
+    int32_t i = alloc_node(NODE_GRIDVIEW);
+    S.nodes[i].v.grid.axis = axis;
+    S.nodes[i].v.grid.crossCount = (crossAxisCount > 0) ? crossAxisCount : 1;
+    S.nodes[i].v.grid.cellW = cellW;
+    S.nodes[i].v.grid.cellH = cellH;
+    S.nodes[i].v.grid.mainGap = mainGap;
+    S.nodes[i].v.grid.crossGap = crossGap;
+    S.dirty = true;
+    return h_make(i);
+}
+
 static int32_t scroll_index(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -649,6 +734,21 @@ void Mge_UiScrollToChild(MgeUiWidget w, MgeUiWidget target)
     S.dirty = true;
 }
 
+void Mge_UiScrollToIndex(MgeUiWidget w, int index)
+{
+    int32_t i = scroll_index(w);
+    if (i < 0) return;
+    const bool horiz = (S.nodes[i].v.scroll.axis == MGE_AXIS_HORIZONTAL);
+    int line = (S.nodes[i].v.scroll.kind == 2 && S.nodes[i].v.scroll.crossCount > 0)
+        ? index / S.nodes[i].v.scroll.crossCount
+        : index;
+    float lineExtent = (S.nodes[i].v.scroll.kind == 2)
+        ? (horiz ? S.nodes[i].v.scroll.cellW : S.nodes[i].v.scroll.cellH) + S.nodes[i].v.scroll.mainGap
+        : S.nodes[i].v.scroll.itemExtent;
+    S.nodes[i].v.scroll.offset = clampf((float)line * lineExtent, 0.0f, scroll_max_i(i));
+    S.dirty = true;
+}
+
 Rectangle Mge_UiGetRect(MgeUiWidget w)
 {
     int32_t i = h_index(w);
@@ -698,6 +798,12 @@ void Mge_UiShutdown(void)
 }
 
 // ---- layout (box constraints: constraints down, sizes up) -----------
+//
+// Re-entrancy invariant: every layout_* reaches nodes by index only -- never
+// hold a `Node*` (or `&S.nodes[x]`) across a layout_node() call. layout_node may
+// grow the pool (alloc_node -> realloc), and a builder (NODE_SCROLL kind != 0 /
+// NODE_LAYOUTBUILDER) frees + rebuilds its own subtree mid-pass. Indices stay
+// valid across both; a builder only ever touches nodes at or below itself.
 
 static MgeUiSize layout_node(int32_t i, MgeUiConstraints c);
 
@@ -1148,6 +1254,75 @@ static MgeUiSize layout_unconstrained(int32_t i, MgeUiConstraints c)
     return (MgeUiSize){ w, h };
 }
 
+// Mge_UiListViewBuilder / Mge_UiGridViewBuilder: rebuild only the lines that
+// intersect the viewport (+1 line overscan) each pass; item `idx` sits at a
+// fixed line offset so no off-screen measurement is needed.
+static MgeUiSize layout_scroll_builder(int32_t i, MgeUiConstraints c,
+    bool horiz, float viewMain, float crossMax)
+{
+    const int kind = S.nodes[i].v.scroll.kind;
+    const int itemCount = S.nodes[i].v.scroll.itemCount;
+    const int cols = (kind == 2) ? S.nodes[i].v.scroll.crossCount : 1;
+    const float cellMain = (kind == 2)
+        ? (horiz ? S.nodes[i].v.scroll.cellW : S.nodes[i].v.scroll.cellH)
+        : S.nodes[i].v.scroll.itemExtent;
+    const float cellCross = (kind == 2)
+        ? (horiz ? S.nodes[i].v.scroll.cellH : S.nodes[i].v.scroll.cellW)
+        : crossMax;
+    const float mainGap = (kind == 2) ? S.nodes[i].v.scroll.mainGap : 0.0f;
+    const float crossGap = (kind == 2) ? S.nodes[i].v.scroll.crossGap : 0.0f;
+    const float lineExtent = fmaxf(1.0f, cellMain + mainGap);
+    const int lineCount = (cols > 0 && itemCount > 0) ? (itemCount + cols - 1) / cols : 0;
+
+    float contentExtent = (lineCount > 0) ? (float)lineCount * lineExtent - mainGap : 0.0f;
+    contentExtent = fmaxf(0.0f, contentExtent);
+    S.nodes[i].v.scroll.contentExtent = contentExtent;
+    S.nodes[i].v.scroll.viewExtent = viewMain;
+    const float offset = clampf(S.nodes[i].v.scroll.offset, 0.0f, fmaxf(0.0f, contentExtent - viewMain));
+    S.nodes[i].v.scroll.offset = offset;
+
+    const int first = clampi((int)floorf(offset / lineExtent) - 1, 0, lineCount);
+    const int last = clampi((int)ceilf((offset + viewMain) / lineExtent) + 1, 0, lineCount);
+
+    Mge_UiClearChildren(h_make(i)); // drop last frame's window
+
+    MgeUiItemBuilder build = S.nodes[i].v.scroll.build;
+    void* user = S.nodes[i].v.scroll.user;
+    const MgeUiConstraints cellC = (kind == 2)
+        ? Mge_ConstraintsTight(S.nodes[i].v.scroll.cellW, S.nodes[i].v.scroll.cellH)
+        : (horiz ? Mge_ConstraintsTight(cellMain, crossMax)
+                 : Mge_ConstraintsTight(crossMax, cellMain));
+
+    for (int ln = first; ln < last && build; ln++) {
+        for (int col = 0; col < cols; col++) {
+            const int idx = ln * cols + col;
+            if (idx >= itemCount) break;
+            MgeUiWidget w = build(idx, user);
+            if (h_index(w) < 0) continue;
+            Mge_UiAddChild(h_make(i), w); // may realloc the pool
+            int32_t ci = h_index(w);
+            if (ci < 0) continue;
+            layout_node(ci, cellC); // may realloc -- re-index via h_index next time
+            ci = h_index(w);
+            if (ci < 0) continue;
+            const float mainPos = (float)ln * lineExtent - offset;
+            const float crossPos = (float)col * (cellCross + crossGap);
+            S.nodes[ci].rect.x = horiz ? mainPos : crossPos;
+            S.nodes[ci].rect.y = horiz ? crossPos : mainPos;
+        }
+    }
+
+    float crossSize = (kind == 2)
+        ? (float)cols * cellCross + (float)(cols - 1) * crossGap
+        : crossMax;
+    crossSize = clampf(crossSize, horiz ? c.minH : c.minW, crossMax);
+    const float w = horiz ? viewMain : crossSize;
+    const float h = horiz ? crossSize : viewMain;
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
 // ScrollView: lay the child out with the scroll axis unbounded, keep the
 // viewport size, offset the child by -scroll on that axis.
 static MgeUiSize layout_scroll(int32_t i, MgeUiConstraints c)
@@ -1160,6 +1335,10 @@ static MgeUiSize layout_scroll(int32_t i, MgeUiConstraints c)
         return layout_passthrough(i, c);
     }
     const float crossMax = horiz ? c.maxH : c.maxW;
+
+    if (S.nodes[i].v.scroll.kind != 0)
+        return layout_scroll_builder(i, c, horiz, viewMain, crossMax);
+
     MgeUiConstraints cc = horiz
         ? (MgeUiConstraints){ 0.0f, MGE_UI_INF, 0.0f, crossMax }
         : (MgeUiConstraints){ 0.0f, crossMax, 0.0f, MGE_UI_INF };
@@ -1187,6 +1366,54 @@ static MgeUiSize layout_scroll(int32_t i, MgeUiConstraints c)
     return (MgeUiSize){ w, h };
 }
 
+// Non-virtual grid: `crossCount` equal cells per line, lines stack on `axis`.
+static MgeUiSize layout_gridview(int32_t i, MgeUiConstraints c)
+{
+    const bool horiz = (S.nodes[i].v.grid.axis == MGE_AXIS_HORIZONTAL);
+    const int cols = S.nodes[i].v.grid.crossCount;
+    const float cw = S.nodes[i].v.grid.cellW, ch = S.nodes[i].v.grid.cellH;
+    const float mainGap = S.nodes[i].v.grid.mainGap, crossGap = S.nodes[i].v.grid.crossGap;
+    const MgeUiConstraints cellC = Mge_ConstraintsTight(cw, ch);
+    const float cellMain = horiz ? cw : ch;
+    const float cellCross = horiz ? ch : cw;
+
+    int n = 0;
+    for (int32_t k = S.nodes[i].firstChild; k >= 0; k = S.nodes[k].nextSibling) {
+        layout_node(k, cellC); // may realloc -- k stays valid (index)
+        const int ln = n / cols, col = n % cols;
+        const float mainPos = (float)ln * (cellMain + mainGap);
+        const float crossPos = (float)col * (cellCross + crossGap);
+        S.nodes[k].rect.x = horiz ? mainPos : crossPos;
+        S.nodes[k].rect.y = horiz ? crossPos : mainPos;
+        n++;
+    }
+    const int rows = (n + cols - 1) / cols;
+    const int perRow = (n < cols) ? n : cols;
+    const float crossExtent = (perRow > 0)
+        ? (float)perRow * cellCross + (float)(perRow - 1) * crossGap
+        : 0.0f;
+    const float mainExtent = (rows > 0)
+        ? (float)rows * cellMain + (float)(rows - 1) * mainGap
+        : 0.0f;
+    const float w = clampf(horiz ? mainExtent : crossExtent, c.minW, c.maxW);
+    const float h = clampf(horiz ? crossExtent : mainExtent, c.minH, c.maxH);
+    S.nodes[i].rect.width = w;
+    S.nodes[i].rect.height = h;
+    return (MgeUiSize){ w, h };
+}
+
+// LayoutBuilder: rebuild the subtree with the incoming constraints, then size to
+// the (expected single) child like a passthrough.
+static MgeUiSize layout_layoutbuilder(int32_t i, MgeUiConstraints c)
+{
+    MgeUiLayoutCallback build = S.nodes[i].v.layoutBuilder.build;
+    void* user = S.nodes[i].v.layoutBuilder.user;
+    Mge_UiClearChildren(h_make(i));
+    if (build)
+        build(h_make(i), c, user); // adds one child; may realloc the pool
+    return layout_passthrough(i, c);
+}
+
 static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
 {
     switch (S.nodes[i].type) {
@@ -1201,6 +1428,8 @@ static MgeUiSize layout_node(int32_t i, MgeUiConstraints c)
     case NODE_FRACTIONAL: return layout_fractional(i, c);
     case NODE_UNCONSTRAINED: return layout_unconstrained(i, c);
     case NODE_SCROLL:    return layout_scroll(i, c);
+    case NODE_GRIDVIEW:  return layout_gridview(i, c);
+    case NODE_LAYOUTBUILDER: return layout_layoutbuilder(i, c);
     case NODE_LIMITED:
         if (c.maxW >= MGE_UI_INF) c.maxW = S.nodes[i].v.limited.maxW;
         if (c.maxH >= MGE_UI_INF) c.maxH = S.nodes[i].v.limited.maxH;

@@ -330,6 +330,38 @@ void  Mge_UiScrollTo(MgeUiWidget scrollView, float px);           // instant; cl
 void  Mge_UiScrollToEdge(MgeUiWidget scrollView, bool end);       // 0 or max
 void  Mge_UiScrollToChild(MgeUiWidget scrollView, MgeUiWidget target); // bring it into view
 
+// --- virtualization & grid (Phase 2b) ---
+
+// runs during layout with this box's incoming constraints; add exactly one child
+// to `slot`. Rebuilt every layout pass -- do NOT call Mge_UiRender from inside.
+typedef void (*MgeUiLayoutCallback)(MgeUiWidget slot, MgeUiConstraints c, void* user);
+MgeUiWidget Mge_UiLayoutBuilder(MgeUiLayoutCallback build, void* user);
+
+// returns a detached widget for item `index`; called only for on-screen items,
+// every layout pass. The returned handle is transient -- don't cache it.
+typedef MgeUiWidget (*MgeUiItemBuilder)(int index, void* user);
+
+// Virtualized list: only items whose line intersects the viewport (+1 line
+// overscan) are built. Item `index` occupies a fixed `itemExtent` px on `axis`;
+// the cross axis fills the viewport. Needs a bounded viewport (wrap in a box).
+MgeUiWidget Mge_UiListViewBuilder(MgeAxis axis, int itemCount, float itemExtent,
+    MgeUiItemBuilder build, void* user, MgeScrollStyle style);
+
+// Virtualized grid: `crossAxisCount` cells per line, each `cellW` x `cellH`,
+// `mainGap` / `crossGap` between them. Scrolls on `axis`.
+MgeUiWidget Mge_UiGridViewBuilder(MgeAxis axis, int crossAxisCount, int itemCount,
+    float cellW, float cellH, float mainGap, float crossGap,
+    MgeUiItemBuilder build, void* user, MgeScrollStyle style);
+
+// jump so item `index`'s line sits at the top / left of the viewport (clamped);
+// use this instead of Mge_UiScrollToChild on a builder view
+void Mge_UiScrollToIndex(MgeUiWidget builderView, int index);
+
+// Non-virtual fixed-column grid (equal cells, like a Wrap). Multi-child; compose
+// inside a Mge_UiScrollView to scroll it.
+MgeUiWidget Mge_UiGridView(MgeAxis axis, int crossAxisCount,
+    float cellW, float cellH, float mainGap, float crossGap);
+
 void Mge_UiSetText(MgeUiWidget w, const char* text);
 void Mge_UiSetContainerStyle(MgeUiWidget w, MgeContainerStyle style);
 void Mge_UiSetVisible(MgeUiWidget w, bool visible);      // on an Mge_UiVisibility node
