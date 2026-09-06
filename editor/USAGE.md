@@ -22,7 +22,7 @@ shipped library), split into one unit per concern:
 | `scene_runtime.c` / `.h` | `SceneRuntime`: loads the built module (via a `_live_<n>` copy), resolves `MgeScene_Init/Update/Shutdown`, tracks the scene dir's `.c` mtimes for hot reload |
 | `history.c` / `.h` | `History`: undo / redo as whole-`Scene` snapshots. `History_Record` at each mutation site (coalesced per edit burst), `History_Rest` refreshes the baseline when idle, `Scene_RestoreSnapshot` puts a snapshot back — reusing already-loaded material textures / the skybox by source path so an undo re-reads no files |
 | `play.c` / `.h` | Play mode: snapshot the scene, compile (async) + load the module, run `MgeScene_Update` each frame with `p->viewCam`, hot-reload on change, restore on Stop; the play-mode overlay strip + the build console |
-| `release.c` / `.h` | **Build Bundle**: compile every scene (Debug or Release cflags), `Mge_PakWrite` all project data (incl. `project.mgproject`) into `dist/packs/data.pak.NNN`, stage `dist/` — player + engine DLL at the root, scene modules as `dist/scenes/scene.<index>.dll` (no names) |
+| `release.c` / `.h` | **Build Bundle**: compile every scene (Debug or Release cflags), `Mge_PakWrite` all project data (incl. `project.mgproject`) into `dist/packs/data.pak.NNN`, stage `dist/` — player + engine DLL at the root, scene modules as `dist/scenes/scene.<index>.dll` (no names). Runs as a polled `ReleaseJob` (`Release_Start` / `_Poll` / `_Clear`) — one detached compile per scene, then the pak + runtime copy inline — so the editor keeps drawing and streams each scene's output live, same as Build / Play. `Release_Build` drives it synchronously for headless use |
 | `topbar.c` / `.h` | the **top** strip: a **Project** menu, a **Scene** dropdown (switch / new / add / save / new script), **Play** / **Build** / **Debug\|Release** toggle / **Console**, VIEW/EDIT, gizmo Move/Rot/Scl, World/Local space, a **Render** dropdown (MSAA / shadows / HDR / tone map / bloom) |
 | `hierarchy.c` / `.h` | the **left** panel: a fixed **Environment** row, then objects + lights. `+ add` menu, per-row select (ctrl-click = multi), **double-click to rename**, active toggle, `x` to delete, **drag to reorder** / Shift-drop to parent (children shown indented) |
 | `inspector.c` / `.h` | the **right** panel: type-aware inspector — Environment (sun + skybox + main camera), Object (active, primitive, transform, **parent** combo, material slots — drop an image on a thumbnail to assign it), Camera, Light. A multi-selection edits the primary + notes "group move only" |
@@ -231,6 +231,11 @@ anything.
 The engine DLL and player come from the SDK's matching config — run `make`
 (debug) and/or `make release` in the SDK first; the bundle build reports which
 one is missing.
+
+It runs **non-blocking**: each scene compiles as a detached process the editor
+polls, then the pak + copy happen in one frame. The window keeps drawing and the
+console streams each scene's compiler output as it goes; a second Build Bundle is
+rejected until the first finishes.
 
 Run `dist/<project>.exe`: it `chdir`s to its own folder, mounts
 `packs/data.pak.NNN`, reads `project.mgproject` + the `startupScene` (data +

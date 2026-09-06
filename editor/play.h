@@ -10,6 +10,7 @@
 #include "topbar.h"
 #include "scene_build.h"
 #include "scene_runtime.h"
+#include "release.h"
 
 enum { JOB_NONE = 0, JOB_BUILD, JOB_PLAY, JOB_RELOAD };
 
@@ -26,6 +27,9 @@ typedef struct Play {
     SceneBuildJob job;   // in-flight compile (runs as a separate process)
     int  jobPurpose;     // JOB_* -- what to do when the compile finishes
     long jobDigest;      // source digest captured when a hot-reload build started
+
+    ReleaseJob relJob;   // in-flight Build Bundle (polled, compiles scene by scene)
+    bool relRunning;
 
     char switchReq[64];  // last ctx.requestedScene we logged (editor Play only switches in the built game)
 } Play;

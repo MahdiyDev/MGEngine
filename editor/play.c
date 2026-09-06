@@ -60,7 +60,7 @@ static void start_job(Play* p, const Project* proj, int purpose)
         p->showConsole = true;
         return;
     }
-    if (p->jobPurpose != JOB_NONE) {
+    if (p->jobPurpose != JOB_NONE || p->relRunning) {
         BuildLog_Line(&p->log, "-- a build is already running --");
         p->showConsole = true;
         return;
@@ -159,10 +159,18 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s)
         return true;
 
     case TOPBAR_BUILD_RELEASE:
+        if (p->relRunning) {
+            BuildLog_Line(&p->log, "-- Build Bundle already running --");
+            p->showConsole = true;
+            return true;
+        }
         if (p->playing)
             Play_Action(p, TOPBAR_STOP, proj, s);
         cancel_job(p);
-        Release_Build(proj, p->releaseCfg, &p->log); // synchronous: ships every scene at once
+        if (Release_Start(&p->relJob, proj, p->releaseCfg, &p->log))
+            p->relRunning = true;
+        else
+            Release_Clear(&p->relJob);
         p->showConsole = true;
         return true;
 
@@ -194,6 +202,12 @@ bool Play_Action(Play* p, TopbarAction a, Project* proj, Scene* s)
 
 void Play_Frame(Play* p, Project* proj, Scene* s)
 {
+    // advance an in-flight Build Bundle (compiles scene by scene, then paks + stages)
+    if (p->relRunning && Release_Poll(&p->relJob)) {
+        Release_Clear(&p->relJob);
+        p->relRunning = false;
+    }
+
     // advance an in-flight compile (started by Build / Play / a hot-reload)
     if (p->jobPurpose != JOB_NONE && SceneBuild_Poll(&p->job))
         finish_job(p, proj, s);
@@ -298,6 +312,8 @@ void Play_DrawConsole(Play* p, Rectangle rect)
 
 void Play_Shutdown(Play* p, Scene* s)
 {
+    if (p->relRunning)
+        Release_Clear(&p->relJob);
     if (p->jobPurpose != JOB_NONE)
         SceneBuild_Clear(&p->job);
     if (p->playing) {

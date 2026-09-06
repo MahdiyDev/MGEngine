@@ -54,7 +54,7 @@ editor/                THE APP -- project / scene editor (docked panel shell aro
   scene_build.c/.h     compile a scene's *.c -> hot-reloadable .dll; BuildLog
   scene_runtime.c/.h   load / hot-reload a compiled scene module (SceneRuntime)
   play.c/.h            Play / Stop / Build + the build console
-  release.c/.h         "Build Bundle": compile every scene + pak all data (project.mgproject too) -> dist/packs/data.pak.NNN; scene modules -> dist/scenes/scene.N.dll
+  release.c/.h         "Build Bundle" (async: one polled compile per scene, then pak + stage): compile every scene + pak all data (project.mgproject too) -> dist/packs/data.pak.NNN; scene modules -> dist/scenes/scene.N.dll
   fileops.c/.h         Project + Scene menu actions + the unsaved-changes / name modals
   topbar.c/.h          top strip: Project menu, Scene dropdown, Play/Build/Console, mode, gizmo, Render
   hierarchy.c/.h       left panel: entity list, + add menu, rename / toggle / delete
